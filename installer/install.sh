@@ -81,7 +81,7 @@ server {
     listen [::]:80;
     server_name $DOMAIN;
     location /.well-known/acme-challenge/ { root /var/www/devone-acme; }
-    location / { proxy_pass http://127.0.0.1:8787; proxy_set_header Host $host; proxy_set_header X-Real-IP $remote_addr; }
+    location / { proxy_pass http://127.0.0.1:8787; proxy_set_header Host \$host; proxy_set_header X-Real-IP \$remote_addr; }
 }
 EOF
 ln -sfn /etc/nginx/sites-available/devone-panel /etc/nginx/sites-enabled/devone-panel
