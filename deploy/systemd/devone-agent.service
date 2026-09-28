@@ -1,0 +1,20 @@
+[Unit]
+Description=DevOne Server Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/devone/current/agent
+EnvironmentFile=-/etc/devone/devone.env
+ExecStart=/usr/bin/node /opt/devone/current/agent/dist/index.js
+Restart=on-failure
+RestartSec=3
+PrivateTmp=true
+ProtectHome=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target
