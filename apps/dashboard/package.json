@@ -1,0 +1,21 @@
+{
+  "name": "@devone/dashboard",
+  "private": true,
+  "version": "1.0.0-alpha.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "check": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "test": "node -e \"console.log('dashboard tests: scaffold ready')\""
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^5.0.4",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "vite": "^7.1.5",
+    "typescript": "^5.9.2"
+  },
+  "devDependencies": {}
+}
