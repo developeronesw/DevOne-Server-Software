@@ -51,7 +51,7 @@ function hashSession(token: string) {
 }
 
 export function hasOwner() {
-  return Number(db.prepare("SELECT COUNT(*) AS count FROM users WHERE role = 'owner'").get().count) > 0;
+  return Number((db.prepare("SELECT COUNT(*) AS count FROM users WHERE role = 'owner'").get() as { count: number }).count) > 0;
 }
 
 export function createOwner(email: string, password: string) {
