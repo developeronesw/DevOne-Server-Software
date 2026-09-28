@@ -1,0 +1,91 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap");
+
+:root {
+  font-family: Inter, system-ui, sans-serif;
+  color: #25212d;
+  background: #f4f1f7;
+  font-synthesis: none;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; }
+button, a { font: inherit; }
+
+.shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 248px 1fr;
+  gap: 22px;
+  padding: 20px;
+  background:
+    radial-gradient(circle at 85% 5%, rgba(197, 125, 255, .20), transparent 28%),
+    radial-gradient(circle at 20% 90%, rgba(255, 151, 92, .16), transparent 26%),
+    #f4f1f7;
+}
+
+.glass {
+  background: rgba(255,255,255,.72);
+  border: 1px solid rgba(255,255,255,.9);
+  box-shadow: 0 18px 45px rgba(55, 37, 72, .08);
+  backdrop-filter: blur(18px);
+}
+
+.sidebar {
+  border-radius: 24px;
+  padding: 22px 14px;
+  position: sticky;
+  top: 20px;
+  height: calc(100vh - 40px);
+}
+
+.brand { display:flex; align-items:center; gap:12px; padding: 4px 10px 28px; }
+.brand-mark {
+  width:40px; height:40px; display:grid; place-items:center; border-radius:13px;
+  background: linear-gradient(135deg,#8c55ff,#ff8a5c); color:#fff; font:700 20px "Space Grotesk";
+}
+.brand strong, .brand small { display:block; }
+.brand strong { font:700 17px "Space Grotesk"; }
+.brand small { color:#8c8494; font-size:11px; margin-top:2px; }
+
+nav { display:grid; gap:5px; }
+nav a { padding:11px 13px; border-radius:12px; color:#70697b; font-size:13px; cursor:pointer; }
+nav a.active { background:rgba(140,85,255,.10); color:#7042d5; font-weight:600; }
+
+.content { min-width:0; }
+.topbar { min-height:78px; border-radius:22px; padding:15px 22px; display:flex; align-items:center; justify-content:space-between; }
+.eyebrow { color:#8b8196; font-size:10px; font-weight:700; letter-spacing:.14em; }
+h1,h2,h3 { font-family:"Space Grotesk",sans-serif; margin:0; }
+h1 { font-size:22px; margin-top:4px; }
+.status-pill { padding:9px 12px; border-radius:999px; background:#f1faf5; color:#377b59; font-size:12px; }
+.status-pill span { display:inline-block; width:7px; height:7px; border-radius:50%; background:#4bb47b; margin-right:7px; }
+
+.hero { padding:42px 8px 26px; max-width:850px; }
+.hero h2 { font-size:clamp(30px,4vw,48px); line-height:1.04; margin:10px 0 14px; }
+.hero p { color:#716a79; line-height:1.7; max-width:720px; margin:0; }
+
+.metrics, .grid { display:grid; gap:14px; grid-template-columns:repeat(4,1fr); }
+.card { border-radius:20px; padding:20px; }
+.metrics .card span, .metrics .card small { display:block; color:#898190; font-size:11px; }
+.metrics .card strong { display:block; font:700 28px "Space Grotesk"; margin:10px 0 5px; }
+
+.grid { grid-template-columns:2fr 1fr; margin-top:14px; }
+.wide { min-height:230px; }
+.card-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.card-heading h3 { font-size:17px; }
+button { border:0; border-radius:11px; padding:9px 12px; background:#7c4ee8; color:#fff; cursor:pointer; font-weight:600; font-size:12px; }
+button.secondary { background:#eee9f7; color:#6740b8; }
+.empty { min-height:150px; display:grid; place-items:center; color:#9b93a2; font-size:13px; }
+.muted { color:#777080; font-size:13px; line-height:1.6; }
+
+@media (max-width: 900px) {
+  .shell { grid-template-columns:1fr; }
+  .sidebar { position:static; height:auto; }
+  nav { display:flex; overflow:auto; }
+  nav a { white-space:nowrap; }
+  .metrics { grid-template-columns:repeat(2,1fr); }
+}
+@media (max-width: 600px) {
+  .shell { padding:10px; gap:10px; }
+  .grid, .metrics { grid-template-columns:1fr; }
+  .topbar { align-items:flex-start; gap:12px; flex-direction:column; }
+}
