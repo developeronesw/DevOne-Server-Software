@@ -1,0 +1,16 @@
+{
+  "name": "devone-server-software",
+  "version": "1.0.0-alpha.1",
+  "private": true,
+  "packageManager": "pnpm@10.15.1",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "check": "pnpm -r check",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint",
+    "dev": "pnpm --filter @devone/dashboard dev"
+  }
+}
