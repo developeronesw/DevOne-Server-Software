@@ -9,11 +9,12 @@ User=root
 Group=root
 WorkingDirectory=/opt/devone/current/agent
 EnvironmentFile=-/etc/devone/devone.env
-ExecStart=/usr/bin/node /opt/devone/current/agent/dist/index.js
+ExecStart=/usr/bin/flock --nonblock /var/lib/devone-agent/agent.lock /usr/bin/node /opt/devone/current/agent/dist/index.js
 Restart=on-failure
 RestartSec=3
 PrivateTmp=true
-ProtectHome=true
+ProtectHome=tmpfs
+BindPaths=/home/devone-sites
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 
 [Install]

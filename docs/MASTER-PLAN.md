@@ -1,6 +1,6 @@
 # DevOne Server Software — Five-Phase Master Plan
 
-Status: LOCKED ROADMAP
+Status: LOCKED ROADMAP — FULL LEGACY FEATURE PARITY REQUIRED
 Target: Ubuntu 24.04 LTS x86-64
 Stack: Node.js + TypeScript + React + Vite + pnpm
 
@@ -87,6 +87,11 @@ Exit gate: DevOne Server 1.0 operates as a production-grade Linux control plane 
 10. Install/update operations preserve user data unless explicitly confirmed otherwise.
 11. Production uses a pinned release, not a moving Git branch.
 12. GitHub pushes do not automatically change production.
+
+## Legacy replacement acceptance
+The Node edition must replace all functional capabilities of the cumulative 0.7.0 legacy release and its hotfixes before it is presented as the finished replacement. Foundation installation alone is not the acceptance target. Each legacy workflow needs a working backend, UI, authorization checks, automated acceptance evidence and target-VPS verification. See CONVERSION-READINESS.md for the category inventory and LEGACY-SCAN.json for observed route evidence. Security boundaries remain mandatory; administration workflows must be reproduced without introducing an unrestricted root API.
+
+Performance improvement requires comparable measurements against the legacy release on equivalent hardware and workloads. Passing build/regression checks does not prove faster performance. Production acceptance includes full parity, measured performance, design verification and recovery tests before publication.
 
 ## Completion standard
 A phase is complete only after automated checks, build, security checks, required installation/runtime tests, acceptance tests, documentation review and Git verification all pass.

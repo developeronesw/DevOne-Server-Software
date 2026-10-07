@@ -1,3 +1,4 @@
+import { SiteManager } from "./sites.js";
 import { listServices, mutateService } from "./services.js";
 import { cpus, freemem, totalmem, uptime, loadavg, hostname } from "node:os";
 import { createServer } from "node:http";
@@ -6,12 +7,23 @@ const version = "1.0.0-alpha.3";
 const port = Number(process.env.DEVONE_AGENT_PORT ?? 8790);
 const token = process.env.DEVONE_AGENT_TOKEN ?? "";
 
+const sites = new SiteManager({registry:'/var/lib/devone-agent',base:'/home/devone-sites',nginx:'/etc/nginx/conf.d',panelDomain:new URL(process.env.DEVONE_PANEL_URL ?? 'http://localhost').hostname});
 const server = createServer(async (request, response) => {
   if (!token || request.headers.authorization !== `Bearer ${token}`) {
     response.writeHead(401, { "content-type": "application/json" });
     response.end(JSON.stringify({ error: "unauthorized" })); return;
   }
   const send = (code: number, value: unknown) => { response.writeHead(code, { "content-type": "application/json" }); response.end(JSON.stringify(value)); };
+  if ((request.method === "GET" && request.url === "/v1/sites") || (request.method === "POST" && ["/v1/sites", "/v1/sites/files"].includes(request.url ?? ""))) {
+    try {
+      if (request.method === "GET") { send(200,{sites:await sites.list()}); return; }
+      let body = "";
+      for await (const chunk of request) { body += chunk; if (Buffer.byteLength(body) > 1500000) { send(413,{error:"body_too_large"}); return; } }
+      const input = JSON.parse(body);
+      send(200,request.url === "/v1/sites" ? await sites.create(input) : await sites.files(input));
+    } catch (error) { const invalid = error instanceof Error && /^(invalid_|domain_in_use|site_limit|site_not_ready)/.test(error.message); send(invalid ? 400 : 503,{error:"site_operation_failed"}); }
+    return;
+  }
   if (request.method === "GET" && request.url === "/v1/services") { send(200, await listServices()); return; }
   if (request.method === "POST" && request.url === "/v1/services/action") {
     let body = "";

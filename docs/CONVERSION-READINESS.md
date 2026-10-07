@@ -21,8 +21,8 @@ Scope: the exact all-in-one distribution checked into this repository and the cu
 | Authentication and users | Legacy client/setup contract; backend compiled | Keep new SQLite/scrypt/session implementation; add role/user lifecycle and migration | Owner sign-in/logout and bootstrap protection implemented |
 | Live host monitoring | React metrics/history calls; compiled metrics backend | Node OS/host probes plus bounded persistent sampling | Basic memory/load/uptime/core count implemented; history/disk/network pending |
 | Services | Client service/action calls and host service layout | Explicit Agent service operations with argv validation, confirmation, auditing | Fixed allowlist discovery and queued start/stop/restart implemented |
-| Websites and domains | Site forms/API calls; config and ACL script | Rebuild adapters, Linux site identities, domain validation and rollback | Pending |
-| File manager and uploads | Client read/write/mkdir/upload calls; HF7 delete fix | Rebuild isolated path handling, symlink/traversal checks, streaming limits, ownership | Pending |
+| Websites and domains | Site forms/API calls; config and ACL script | Rebuild adapters, Linux site identities, domain validation and rollback | Static HTTP NGINX/files-only creation, Linux identities and guarded registry implemented; aliases, TLS, deletion and recovery tooling pending |
+| File manager and uploads | Client read/write/mkdir/upload calls; HF7 delete fix | Rebuild isolated path handling, symlink/traversal checks, streaming limits, ownership | React browse/preview/download/create/upload/delete wired through isolated worker; edit/rename/large uploads pending |
 | Runtimes and package manager | Software catalog/client, installer dependencies | Serialized jobs and versioned runtime adapters; no arbitrary root shell | Pending |
 | Databases | Client database CRUD; compiled backend | Engine-specific creation/users/permissions and secret storage | Pending |
 | TLS and VHost editor | SSL client routes; generated NGINX config | Adapter validation, ACME/cert renewal, backups and tested rollback | Node installer gateway only; managed-site TLS pending |
@@ -31,7 +31,7 @@ Scope: the exact all-in-one distribution checked into this repository and the cu
 | Cloudflare | Readable integration forms and API calls | Server-side encrypted credentials, scoped adapters and audited changes | Pending; external API contracts must be reverified during port |
 | Security center | Client firewall/WAF/scanner/status operations | Detect actual installed tools; narrowly scoped policy actions | Pending |
 | Hosting quotas, SFTP and tenant assignment | Portal/hosting clients, manifest and installer layout | Linux identity/cgroup/quota adapters and tenant authorization | Pending |
-| QA Center | Original Go API/Agent source, JS/CSS fragments, HF5 binary remediation | Translate source and tests; account for patch behavior and new routes | Foundation tests exist; QA Center port pending |
+| QA Center | Original Go API/Agent source, JS/CSS fragments, HF5 binary remediation | Translate source and tests; account for patch behavior and new routes | Automated runner, saved JSON evidence and release gate implemented; dashboard and live-host suites pending |
 | AI assistant | Readable UI, chat endpoint and confirmation/risk logic | New provider adapter and typed authorized operation plans | Pending; browser risk hints cannot authorize privileged actions |
 | Interactive terminal | Legacy root-terminal contracts | Redesign as authorized scoped operations under current roadmap | Legacy unrestricted root behavior will not be copied |
 | Updates, backups and migration | Bash backup/upgrade logic and release metadata | Versioned deployment, compatibility checks and explicit migration tooling | Legacy package bundled; Node updates/data migration pending |

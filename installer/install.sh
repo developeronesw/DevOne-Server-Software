@@ -31,7 +31,7 @@ if [[ -z "$ADMIN_PASSWORD" ]]; then read -r -s -p "Initial Owner password (12+ c
 
 log "Installing host prerequisites..."
 apt-get update
-DEBIAN_FRONTEND=noninteractive apt-get install -y curl ca-certificates git nginx certbot python3-certbot-nginx build-essential util-linux openssl
+DEBIAN_FRONTEND=noninteractive apt-get install -y curl ca-certificates git nginx certbot python3-certbot-nginx build-essential util-linux openssl acl
 
 if ! command -v node >/dev/null 2>&1 || [[ "$(node -p 'process.versions.node.split(".")[0]')" -lt 22 ]]; then
   log "Installing Node.js 22 LTS runtime..."
@@ -46,8 +46,13 @@ corepack prepare pnpm@10.15.1 --activate
 
 log "Creating DevOne service account and persistent directories..."
 id "$APP_USER" >/dev/null 2>&1 || useradd --system --home /var/lib/devone --create-home --shell /usr/sbin/nologin "$APP_USER"
-install -d -o "$APP_USER" -g "$APP_USER" "$INSTALL_ROOT" /var/lib/devone /var/log/devone /etc/devone /var/www/devone-acme
+install -d -o root -g root -m 755 "$INSTALL_ROOT"
+install -d -o "$APP_USER" -g "$APP_USER" /var/lib/devone /var/log/devone /var/www/devone-acme
+install -d -o root -g "$APP_USER" -m 750 /etc/devone
+chown root:"$APP_USER" /etc/devone
 chmod 750 /etc/devone
+install -d -o root -g root -m 700 /var/lib/devone-agent
+install -d -o root -g root -m 755 /home/devone-sites
 
 if [[ ! -d "$INSTALL_ROOT/current/.git" ]]; then
   git clone --no-checkout "$REPO_URL" "$INSTALL_ROOT/current"

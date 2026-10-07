@@ -1,3 +1,4 @@
+import { registerSiteRoutes } from "./sites.js";
 import { JobQueue, OutcomeUnknown } from "./jobs.js";
 import { Vault, validSecretName } from "./vault.js";
 import Fastify from "fastify";
@@ -134,11 +135,11 @@ app.post("/api/services/action", async (request, reply) => {
 });
 
 const vault = new Vault(db, process.env.DEVONE_MASTER_KEY_FILE ?? "/etc/devone/secrets.key");
-const jobs = new JobQueue(db, async input => {
+const jobs = new JobQueue(db, async (input, operation) => {
   if (!agentToken) throw new Error("agent_not_configured");
   let response: Response;
   try {
-    response = await fetch(`${agentUrl}/v1/services/action`, { method: "POST", headers: { Authorization: `Bearer ${agentToken}`, "Content-Type": "application/json" }, body: JSON.stringify(input), signal: AbortSignal.timeout(35000) });
+    response = await fetch(`${agentUrl}${operation === "site.create" ? "/v1/sites" : "/v1/services/action"}`, { method: "POST", headers: { Authorization: `Bearer ${agentToken}`, "Content-Type": "application/json" }, body: JSON.stringify(input), signal: AbortSignal.timeout(operation === "site.create" ? 120000 : 35000) });
   } catch { throw new OutcomeUnknown("agent_outcome_unknown"); }
   if (response.status >= 500) throw new OutcomeUnknown("agent_outcome_unknown");
   if (!response.ok) throw new Error("agent_operation_failed");
@@ -192,6 +193,7 @@ app.delete<{ Params: { name: string } }>("/api/secrets/:name", async (request, r
     return { ok: true };
   } catch { db.exec("ROLLBACK"); return reply.code(503).send({ error: "vault_unavailable" }); }
 });
+registerSiteRoutes(app, { requestUser, sameOrigin, agentUrl, agentToken, jobs, audit });
 jobs.start();
 app.addHook("onClose", async () => { await jobs.stop(); closeDb(); });
 const port = Number(process.env.PORT ?? 8787);

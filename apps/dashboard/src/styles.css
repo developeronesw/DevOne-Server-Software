@@ -95,3 +95,8 @@ form input { padding: 12px; border: 1px solid #ccd4dc; border-radius: 10px; font
 button:disabled { opacity: .6; cursor: wait; }
 table { width: 100%; border-collapse: collapse; text-align: left; }
 th, td { padding: 10px 8px; border-bottom: 1px solid #dce3eb; overflow-wrap: anywhere; }
+
+.file-workspace { margin-top: 1.5rem; border-top: 1px solid #dce3ed; padding-top: 1rem; }
+.file-preview { max-height: 24rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; background: #f4f6fa; color: #182334; padding: 1rem; border-radius: 12px; }
+textarea, select { font: inherit; width: 100%; box-sizing: border-box; padding: .7rem; border: 1px solid #dce3ed; border-radius: 8px; background: white; color: #182334; }
+textarea { min-height: 8rem; }

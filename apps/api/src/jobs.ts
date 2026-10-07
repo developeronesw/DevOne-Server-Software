@@ -2,13 +2,15 @@ import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 
 export type ServiceInput = { service: string; action: string };
+export type SiteInput = { domain: string; webServer: "nginx" | "none" };
+export type JobInput = ServiceInput | SiteInput;
 export type JobState = "queued" | "running" | "succeeded" | "failed" | "interrupted";
 export type Job = { id: string; requested_by: string; operation: string; input: string; state: JobState; error: string | null; created_at: string; started_at: string | null; finished_at: string | null };
 export class OutcomeUnknown extends Error {}
 export class JobQueue {
   private active: Promise<void> | null = null;
   private stopped = false;
-  constructor(private db: DatabaseSync, private execute: (input: ServiceInput) => Promise<void>, private audit: (actor: string | null, action: string, details: unknown) => void) {
+  constructor(private db: DatabaseSync, private execute: (input: JobInput, operation: string) => Promise<void>, private audit: (actor: string | null, action: string, details: unknown) => void) {
     db.exec(`CREATE TABLE IF NOT EXISTS jobs (
       id TEXT PRIMARY KEY, requested_by TEXT NOT NULL REFERENCES users(id),
       request_key TEXT NOT NULL, operation TEXT NOT NULL, input TEXT NOT NULL,
@@ -24,12 +26,15 @@ export class JobQueue {
       for (const row of interrupted) audit(row.requested_by, "job.interrupted", { id: row.id, error: "api_restart_outcome_unknown" });
     });
   }
-  enqueue(actor: string, key: string, input: ServiceInput): Job {
+  enqueue(actor: string, key: string, input: JobInput, operation = "service.action"): Job {
     if (!/^[a-zA-Z0-9_-]{16,128}$/.test(key)) throw new Error("invalid_request_key");
-    const serialized = JSON.stringify({ service: input.service, action: input.action });
+    if (!["service.action", "site.create"].includes(operation)) throw new Error("invalid_operation");
+    const serialized = operation === "service.action"
+      ? JSON.stringify({ service: (input as ServiceInput).service, action: (input as ServiceInput).action })
+      : JSON.stringify({ domain: (input as SiteInput).domain, webServer: (input as SiteInput).webServer });
     const existing = this.db.prepare("SELECT * FROM jobs WHERE requested_by=? AND request_key=?").get(actor, key) as Job | undefined;
     if (existing) {
-      if (existing.input !== serialized || existing.operation !== "service.action") throw new Error("request_key_conflict");
+      if (existing.input !== serialized || existing.operation !== operation) throw new Error("request_key_conflict");
       return this.get(existing.id)!;
     }
     if (this.stopped) throw new Error("queue_stopping");
@@ -37,8 +42,8 @@ export class JobQueue {
     if (pending.n >= 100) throw new Error("queue_full");
     const id = randomUUID();
     this.transaction(() => {
-      this.db.prepare("INSERT INTO jobs(id,requested_by,request_key,operation,input,state,created_at) VALUES(?,?,?,?,?,'queued',?)").run(id, actor, key, "service.action", serialized, new Date().toISOString());
-      this.audit(actor, "job.queued", { id, operation: "service.action", ...input });
+      this.db.prepare("INSERT INTO jobs(id,requested_by,request_key,operation,input,state,created_at) VALUES(?,?,?,?,?,'queued',?)").run(id, actor, key, operation, serialized, new Date().toISOString());
+      this.audit(actor, "job.queued", { id, operation, ...JSON.parse(serialized) });
     });
     this.start();
     return this.get(id)!;
@@ -69,7 +74,7 @@ export class JobQueue {
       let state: JobState = "succeeded", error: string | null = null;
       try {
         if (!role || !["owner", "admin"].includes(role.role)) throw new Error("authorization_revoked");
-        await this.execute(JSON.parse(job.input));
+        await this.execute(JSON.parse(job.input), job.operation);
       } catch (e) {
         state = e instanceof OutcomeUnknown ? "interrupted" : "failed";
         error = e instanceof Error && e.message === "authorization_revoked" ? "authorization_revoked" : state === "interrupted" ? "agent_outcome_unknown" : "agent_operation_failed";

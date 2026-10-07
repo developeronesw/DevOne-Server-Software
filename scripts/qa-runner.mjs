@@ -30,7 +30,7 @@ export function assess(results, pending) {
   return { automatedChecks: results.every(result => result.status === 'pass') ? 'pass' : 'fail', productionReady: results.every(result => result.status === 'pass') && pending.length === 0 };
 }
 const pending = [
-  { id: 'website-provisioning', status: 'not_implemented', detail: 'Isolated accounts, trusted registry, NGINX provisioning and API/dashboard integration.' },
+  { id: 'website-provisioning', status: 'partially_implemented', detail: 'Static NGINX/files-only creation and file workspace exist; site lifecycle parity and real VPS ownership/provisioning verification remain pending.' },
   { id: 'browser-workflows', status: 'not_verified', detail: 'Rendered dashboard navigation, forms and accessibility in a browser.' },
   { id: 'ubuntu-install-recovery', status: 'not_verified', detail: 'Fresh VPS install, TLS, systemd hardening, reboot recovery and upgrade/rollback.' },
   { id: 'backup-restore', status: 'not_verified', detail: 'Restore database and encryption key together on a disposable VPS.' },

@@ -68,3 +68,14 @@ test('a failed audit rolls back submission before a host action can run', async 
   assert.throws(()=>q.enqueue('owner','audit_failure_key_123',{service:'nginx',action:'start'}));
   assert.equal(q.list().length,0);assert.equal(calls,0);await q.stop();db.close();
 });
+test('website jobs retain operation identity and deduplicate without cross-operation reuse',async()=>{
+  const db=database(), executed=[];
+  const queue=new JobQueue(db,async(input,operation)=>{executed.push({input,operation});},()=>{});
+  try {
+    const input={domain:'static.example.com',webServer:'none'};
+    const job=queue.enqueue('owner','site_create_key_12345',input,'site.create');
+    assert.equal(queue.enqueue('owner','site_create_key_12345',input,'site.create').id,job.id);
+    assert.throws(()=>queue.enqueue('owner','site_create_key_12345',{service:'nginx',action:'start'}),/request_key_conflict/);
+    await queue.idle();assert.deepEqual(executed,[{input,operation:'site.create'}]);assert.equal(queue.get(job.id).state,'succeeded');
+  } finally {await queue.stop();db.close();}
+});
