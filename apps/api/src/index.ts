@@ -184,9 +184,13 @@ app.delete<{ Params: { name: string } }>("/api/secrets/:name", async (request, r
   if (user.role !== "owner") return reply.code(403).send({ error: "forbidden" });
   if (!request.headers.origin || !sameOrigin(request)) return reply.code(403).send({ error: "origin_forbidden" });
   if (!validSecretName(request.params.name)) return reply.code(400).send({ error: "invalid_secret" });
-  vault.remove(request.params.name);
-  audit(user.id, "secret.deleted", { name: request.params.name });
-  return { ok: true };
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    vault.remove(request.params.name);
+    audit(user.id, "secret.deleted", { name: request.params.name });
+    db.exec("COMMIT");
+    return { ok: true };
+  } catch { db.exec("ROLLBACK"); return reply.code(503).send({ error: "vault_unavailable" }); }
 });
 jobs.start();
 app.addHook("onClose", async () => { await jobs.stop(); closeDb(); });
