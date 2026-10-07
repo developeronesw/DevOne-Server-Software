@@ -67,3 +67,12 @@ test('launcher drops supplementary groups before GID and UID, and fails closed',
   const failed={...credentials,setgroups:()=>{throw new Error('denied');}};
   calls.length=0;assert.throws(()=>dropSiteIdentity(1001,1002,failed),/denied/);assert.equal(calls.length,0);
 });
+test('file dispatch serializes a site while bounding total queued requests',async()=>fixture(async(manager)=>{
+  const first='site_0123456789abcdef',second='site_fedcba9876543210';let active=0,max=0;
+  // Inject only the dispatch implementation to observe the scheduling boundary.
+  manager.performFiles=async()=>{max=Math.max(max,++active);await new Promise(resolve=>setTimeout(resolve,5));active--;return {ok:true};};
+  await Promise.all([manager.files({siteId:first}),manager.files({siteId:first}),manager.files({siteId:first})]);assert.equal(max,1);
+  const pending=Array.from({length:32},()=>manager.files({siteId:second}));
+  await assert.rejects(manager.files({siteId:second}),/files_busy/);await Promise.all(pending);
+  assert.equal(manager.filePending,0);assert.equal(manager.fileQueues.size,0);
+}));

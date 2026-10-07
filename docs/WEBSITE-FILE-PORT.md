@@ -10,7 +10,7 @@ Privileged identity metadata lives in `/var/lib/devone-agent` owned by root with
 
 ## File workspace
 
-The React workspace supports listing, directory navigation, UTF-8 preview, binary download, new text files, uploads up to 1 MiB, folder creation, file deletion and empty-directory deletion. Existing destinations are never overwritten. API operations require owner/admin and the configured Origin; mutations additionally require confirmation and record audit metadata without file contents.
+The React workspace supports listing, directory navigation, UTF-8 preview, binary download, new text files, uploads up to 1 MiB, folder creation, file deletion and empty-directory deletion. New files and moves never overwrite an existing destination. Existing text files can be saved with the SHA-256 revision returned when opened; stale revisions return HTTP 409 and leave the draft intact. Saves use a temporary file and atomic rename, retaining ordinary mode bits while inheriting the site directory ACL policy. File-only rename/move uses exclusive hard-link creation followed by removal of the source, preserving its inode permissions and ACLs. API operations require owner/admin and the configured Origin; mutations additionally require confirmation and record audit metadata without file contents.
 
 The Agent derives UID/GID and root from its registry and rechecks the passwd identity. The launcher clears supplementary groups, sets GID and UID, and only then loads the worker. Request JSON cannot choose UID, GID or root. The worker refuses root credentials and accepts only derived roots under `/home/devone-sites/site_<16 hex digits>/public`.
 
@@ -20,4 +20,10 @@ Directory descriptors and Linux `/proc/self/fd` anchor operations; every directo
 
 Temporary-directory tests exercise registry validation, domain conflicts, generated NGINX policy, serialization and failed provisioning. Host commands and ownership changes are injected fixtures: these tests do not create real users or modify host NGINX. Fastify tests cover authentication, role/Origin/confirmation checks, job dispatch and removal of caller-supplied identity/root fields. Existing file-boundary and persistence tests remain in the QA runner.
 
-Actual Ubuntu user creation, UID isolation, inherited ACLs, NGINX serving, systemd sandbox visibility and browser flows remain live-VPS acceptance checks. Existing-file editing, rename, large uploads, site deletion, aliases, HTTPS, PHP/Node/Python runtimes and other legacy modules remain unfinished. Full legacy parity and measured performance are mandatory release requirements.
+Actual Ubuntu user creation, UID isolation, inherited ACLs, NGINX serving, systemd sandbox visibility and browser flows remain live-VPS acceptance checks. Directory moves, large uploads, site deletion, aliases, HTTPS, PHP/Node/Python runtimes and other legacy modules remain unfinished. Full legacy parity and measured performance are mandatory release requirements.
+
+## Edit and move concurrency
+
+The Agent serializes all file operations per site, bounds the pending queue to 32 requests across sites, and limits active workers to four. Existing-file saves and file moves require a 64-character lowercase SHA-256 revision. A stale revision and an existing destination are distinct HTTP 409 errors. Requests cannot bypass the privileged identity boundary. Audit entries contain operation/path/destination metadata, never file contents.
+
+Revision checking protects competing DevOne requests, not arbitrary external writers: POSIX rename does not provide compare-and-swap against SFTP, shell or deployment writes. Pause those writers while editing. Saves recheck contents and inode before atomic publication, but this does not eliminate the final external-write race. File moves have a brief two-name interval; a crash between link and unlink may leave two hard-linked names requiring inspection. Moving directories is intentionally unsupported. These limits must be covered by the live recovery work before production acceptance.

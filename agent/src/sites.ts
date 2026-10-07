@@ -22,6 +22,8 @@ function validRecord(site: Site) {
 }
 export class SiteManager {
   private fileActive = 0;
+  private filePending = 0;
+  private fileQueues = new Map<string,Promise<unknown>>();
   private queue: Promise<unknown> = Promise.resolve();
   private readonly command: (command: string, args: string[]) => Promise<string>;
   constructor(private options: Options) {
@@ -107,11 +109,22 @@ export class SiteManager {
       throw new Error('site_provisioning_requires_inspection');
     }
   }
-  async files(input: unknown) {
-    const body = input as {siteId?:unknown;operation?:unknown;path?:unknown;content?:unknown;kind?:unknown} | null;
-    if (!body || typeof body.siteId !== 'string' || !['list','read','create','mkdir','remove'].includes(body.operation as string)) throw new Error('invalid_file_operation');
+  files(input: unknown) {
+    const siteId = (input as {siteId?:unknown} | null)?.siteId;
+    if (typeof siteId !== 'string' || !/^site_[a-f0-9]{16}$/.test(siteId)) return Promise.reject(new Error('invalid_site'));
+    if (this.filePending >= 32) return Promise.reject(new Error('files_busy'));
+    this.filePending++;
+    const operation = (this.fileQueues.get(siteId) ?? Promise.resolve()).catch(()=>{}).then(()=>this.performFiles(input));
+    this.fileQueues.set(siteId,operation);
+    return operation.finally(()=>{this.filePending--;if(this.fileQueues.get(siteId)===operation) this.fileQueues.delete(siteId);});
+  }
+  private async performFiles(input: unknown) {
+    const body = input as {siteId?:unknown;operation?:unknown;path?:unknown;content?:unknown;kind?:unknown;expectedRevision?:unknown;destination?:unknown} | null;
+    if (!body || typeof body.siteId !== 'string' || !['list','read','create','replace','rename','mkdir','remove'].includes(body.operation as string)) throw new Error('invalid_file_operation');
     relativeParts(body.path,body.operation === 'list');
-    if (body.operation === 'create' && (typeof body.content !== 'string' || body.content.length > Math.ceil(MAX_FILE_BYTES/3)*4)) throw new Error('invalid_content');
+    if (['create','replace'].includes(body.operation as string) && (typeof body.content !== 'string' || body.content.length > Math.ceil(MAX_FILE_BYTES/3)*4)) throw new Error('invalid_content');
+    if (['replace','rename'].includes(body.operation as string) && (typeof body.expectedRevision !== 'string' || !/^[a-f0-9]{64}$/.test(body.expectedRevision))) throw new Error('invalid_revision');
+    if (body.operation === 'rename') relativeParts(body.destination);
     const site = (await this.registry()).find(site => site.id === body.siteId && site.state === 'ready');
     if (!site || !site.uid || !site.gid) throw new Error('site_not_ready');
     const passwd = (await this.command('getent',['passwd',site.user])).trim().split(':');
@@ -122,9 +135,9 @@ export class SiteManager {
     this.fileActive++;
     try { return await new Promise<unknown>((resolve,reject) => {
       const child = execFile(process.execPath,[launcher],{timeout:15000,maxBuffer:MAX_FILE_BYTES*2,env:{PATH:'/usr/bin:/bin',DEVONE_SITE_ROOT:join(this.options.base,site.id,'public'),DEVONE_SITE_UID:String(site.uid),DEVONE_SITE_GID:String(site.gid)}},(error,stdout) => {
-        if (error) reject(new Error('file_operation_failed')); else { try { resolve(JSON.parse(stdout)); } catch { reject(new Error('file_operation_failed')); } }
+        try { const result = JSON.parse(stdout); if (result.error && ['file_conflict','destination_exists','invalid_revision','invalid_path','invalid_file','file_too_large','invalid_content'].includes(result.error)) reject(new Error(result.error)); else if (error || result.error) reject(new Error('file_operation_failed')); else resolve(result); } catch { reject(new Error('file_operation_failed')); }
       });
-      child.stdin?.on('error',()=>{}); child.stdin?.end(JSON.stringify({operation:body.operation,path:body.path,content:body.content,kind:body.kind}));
+      child.stdin?.on('error',()=>{}); child.stdin?.end(JSON.stringify({operation:body.operation,path:body.path,content:body.content,kind:body.kind,expectedRevision:body.expectedRevision,destination:body.destination}));
     }); } finally { this.fileActive--; }
   }
 }

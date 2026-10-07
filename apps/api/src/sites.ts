@@ -36,15 +36,17 @@ export function registerSiteRoutes(app: FastifyInstance, dependencies: Dependenc
   app.post('/api/sites/files',{bodyLimit:1500000},async (request,reply) => {
     const user = authorize(request,reply,true); if (!user) return;
     const body = request.body as Record<string,unknown> | null;
-    if (!body || typeof body.siteId !== 'string' || !/^site_[a-f0-9]{16}$/.test(body.siteId) || !['list','read','create','mkdir','remove'].includes(body.operation as string) || typeof body.path !== 'string' || body.path.length > 1024) return reply.code(400).send({error:'invalid_file_operation'});
+    if (!body || typeof body.siteId !== 'string' || !/^site_[a-f0-9]{16}$/.test(body.siteId) || !['list','read','create','replace','rename','mkdir','remove'].includes(body.operation as string) || typeof body.path !== 'string' || body.path.length > 1024) return reply.code(400).send({error:'invalid_file_operation'});
+    if (['replace','rename'].includes(body.operation as string) && (typeof body.expectedRevision !== 'string' || !/^[a-f0-9]{64}$/.test(body.expectedRevision))) return reply.code(400).send({error:'invalid_revision'});
+    if (body.operation === 'rename' && (typeof body.destination !== 'string' || body.destination.length > 1024)) return reply.code(400).send({error:'invalid_destination'});
     const mutation = !['list','read'].includes(body.operation as string);
     if (mutation && body.confirmed !== true) return reply.code(400).send({error:'confirmation_required'});
-    const details = { siteId:body.siteId, operation:body.operation, path:body.path };
+    const details = { siteId:body.siteId, operation:body.operation, path:body.path, ...(body.operation === 'rename' ? {destination:body.destination} : {}) };
     try {
       if (!agentToken) throw new Error();
       if (mutation) audit(user.id,'site.file.requested',details);
-      const response = await fetch(`${agentUrl}/v1/sites/files`,{method:'POST',headers:{Authorization:`Bearer ${agentToken}`,'Content-Type':'application/json'},body:JSON.stringify({siteId:body.siteId,operation:body.operation,path:body.path,content:body.content,kind:body.kind}),signal:AbortSignal.timeout(20000)});
-      if (!response.ok) { if (mutation) audit(user.id,'site.file.failed',details); return reply.code(response.status >= 500 ? 503 : 400).send({error:'file_operation_failed'}); }
+      const response = await fetch(`${agentUrl}/v1/sites/files`,{method:'POST',headers:{Authorization:`Bearer ${agentToken}`,'Content-Type':'application/json'},body:JSON.stringify({siteId:body.siteId,operation:body.operation,path:body.path,content:body.content,kind:body.kind,expectedRevision:body.expectedRevision,destination:body.destination}),signal:AbortSignal.timeout(20000)});
+      if (!response.ok) { if (mutation) audit(user.id,'site.file.failed',details); const result = await response.json() as {error?:string}; return reply.code(response.status === 409 ? 409 : response.status >= 500 ? 503 : 400).send({error:response.status === 409 && ['file_conflict','destination_exists'].includes(result.error ?? '') ? result.error : 'file_operation_failed'}); }
       const result = await response.json();
       if (mutation) audit(user.id,'site.file.completed',details);
       return result;

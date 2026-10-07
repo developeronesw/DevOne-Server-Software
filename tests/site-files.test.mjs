@@ -48,3 +48,43 @@ test('worker refuses privileged execution or untrusted root configuration', asyn
   assert.equal(result.status, 1);
   assert.deepEqual(JSON.parse(result.stdout), { error: 'file_operation_failed' });
 });
+test('text replacement detects stale revisions and rejects link/path escapes',async()=>{
+  const {revision}=await import('../agent/dist/site-files.js');
+  const {mkdir,stat,chmod}=await import('node:fs/promises');
+  const directory=await mkdtemp(join(tmpdir(),'devone-edit-')), root=join(directory,'public');
+  try {
+    await mkdir(root);const files=new SiteFiles(root),original=Buffer.from('first');
+    await files.create('index.html',original);await chmod(join(root,'index.html'),0o600);
+    const updated=await files.replace('index.html',Buffer.from('second'),revision(original));
+    assert.equal(updated.revision,revision(Buffer.from('second')));
+    assert.equal((await files.read('index.html')).toString(),'second');
+    assert.equal((await stat(join(root,'index.html'))).mode & 0o777,0o600);
+    await assert.rejects(files.replace('index.html',Buffer.from('stale draft'),revision(original)),/file_conflict/);
+    assert.equal((await files.read('index.html')).toString(),'second');
+    await assert.rejects(files.replace('index.html',Buffer.alloc(MAX_FILE_BYTES+1),updated.revision),/file_too_large/);
+    await writeFile(join(directory,'outside'),'outside');await symlink(join(directory,'outside'),join(root,'escape'));
+    await assert.rejects(files.replace('escape',Buffer.from('bad'),revision(Buffer.from('outside'))));
+    await link(join(directory,'outside'),join(root,'hardlink'));
+    await assert.rejects(files.replace('hardlink',Buffer.from('bad'),revision(Buffer.from('outside'))));
+    await assert.rejects(files.replace('../outside',Buffer.from('bad'),updated.revision),/invalid_path/);
+    assert.equal(await readFile(join(directory,'outside'),'utf8'),'outside');
+    assert.ok(!(await files.list()).some(entry=>entry.name.startsWith('.devone-')));
+  } finally {await rm(directory,{recursive:true,force:true});}
+});
+test('file moves preserve contents, refuse existing destinations and require current revision',async()=>{
+  const {revision}=await import('../agent/dist/site-files.js');const {mkdir}=await import('node:fs/promises');
+  const directory=await mkdtemp(join(tmpdir(),'devone-move-')),root=join(directory,'public');
+  try {
+    await mkdir(root);const files=new SiteFiles(root);await files.mkdir('assets');await files.create('old.txt',Buffer.from('data'));
+    const version=revision(Buffer.from('data'));
+    await assert.rejects(files.renameFile('old.txt','assets/new.txt','0'.repeat(64)),/file_conflict/);
+    await files.create('taken.txt',Buffer.from('keep'));
+    await assert.rejects(files.renameFile('old.txt','taken.txt',version));
+    assert.equal((await files.read('taken.txt')).toString(),'keep');assert.equal((await files.read('old.txt')).toString(),'data');
+    await files.renameFile('old.txt','assets/new.txt',version);
+    await assert.rejects(files.read('old.txt'));assert.equal((await files.read('assets/new.txt')).toString(),'data');
+    await symlink(root,join(root,'escape'));await assert.rejects(files.renameFile('assets/new.txt','escape/bad.txt',version));
+    await assert.rejects(files.renameFile('assets/new.txt','../outside',version),/invalid_path/);
+    await files.mkdir('folder');await assert.rejects(files.renameFile('folder','other',version));
+  } finally {await rm(directory,{recursive:true,force:true});}
+});
