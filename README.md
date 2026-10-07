@@ -95,3 +95,10 @@ inventory; it never executes bundled binaries or host installers.
 The legacy ZIP is stored as checksum-verified parts because the GitHub upload API
 limits large blobs. The legacy installer and verification scripts reassemble it
 automatically; alternatively run `python3 scripts/assemble-distribution.py`.
+
+## Jobs and credentials
+
+Service actions now return persistent jobs (HTTP 202) and appear in the dashboard
+job history. Owner-only encrypted credential storage is available for upcoming
+integrations. See [job and secrets behavior](docs/JOBS-AND-SECRETS.md), including
+restart recovery and master-key backup requirements.

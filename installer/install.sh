@@ -31,7 +31,7 @@ if [[ -z "$ADMIN_PASSWORD" ]]; then read -r -s -p "Initial Owner password (12+ c
 
 log "Installing host prerequisites..."
 apt-get update
-DEBIAN_FRONTEND=noninteractive apt-get install -y curl ca-certificates git nginx certbot python3-certbot-nginx build-essential
+DEBIAN_FRONTEND=noninteractive apt-get install -y curl ca-certificates git nginx certbot python3-certbot-nginx build-essential util-linux openssl
 
 if ! command -v node >/dev/null 2>&1 || [[ "$(node -p 'process.versions.node.split(".")[0]')" -lt 22 ]]; then
   log "Installing Node.js 22 LTS runtime..."
@@ -61,6 +61,7 @@ cat > "$ENV_FILE" <<EOF
 NODE_ENV=production
 PORT=8787
 DEVONE_DB_PATH=/var/lib/devone/devone.sqlite
+DEVONE_MASTER_KEY_FILE=/etc/devone/secrets.key
 DEVONE_PANEL_URL=https://$DOMAIN
 DEVONE_AGENT_URL=http://127.0.0.1:8790
 DEVONE_AGENT_PORT=8790
@@ -69,6 +70,9 @@ DEVONE_SETUP_TOKEN=$SETUP_TOKEN
 EOF
 chown root:"$APP_USER" "$ENV_FILE"
 chmod 640 "$ENV_FILE"
+
+log "Creating the encrypted-vault master key..."
+bash "$INSTALL_ROOT/current/scripts/provision-vault-key.sh"
 
 log "Installing dependencies and building DevOne..."
 cd "$INSTALL_ROOT/current"

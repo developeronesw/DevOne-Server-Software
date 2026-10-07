@@ -24,7 +24,7 @@ These are separate editions, not interchangeable components. Both currently use 
 - Real integration tests replace the top-level placeholder test command.
 
 ## Completion boundary
-The ZIP preserves existing legacy functionality; it does not supply TypeScript source for that functionality. The original QA API/Agent Go source is present; other primary backends and HF5 replacement QA components are compiled-only in the scanned bundle. See CONVERSION-READINESS.md for the verified inventory. The remaining Node work in phases 2–5 is pending. Encrypted secrets, durable jobs, fine-grained operation/RBAC enforcement, website/runtime/database/container adapters, optional gateway installation, Cloudflare, AI, enrollment and recoverable updates must be implemented and tested before calling the Node edition 1.0 complete.
+The ZIP preserves existing legacy functionality; it does not supply TypeScript source for that functionality. The original QA API/Agent Go source is present; other primary backends and HF5 replacement QA components are compiled-only in the scanned bundle. See CONVERSION-READINESS.md for the verified inventory. The remaining Node work in phases 2–5 is pending. Further operation/RBAC enforcement, website/runtime/database/container adapters, optional gateway installation, Cloudflare, AI, enrollment and recoverable updates must be implemented and tested before calling the Node edition 1.0 complete.
 
 Archive checks, syntax, build and API integration tests do not certify a fresh Ubuntu installation, TLS issuance, browser end-to-end behavior, reboot persistence or every managed application. Run legacy QA Center on an expendable test VPS before production qualification. No production server was modified by this commit.
 
@@ -41,4 +41,4 @@ operations; database/runtime adapters; deployments and containers; Cloudflare,
 hosting and AI; release-gate parity and migration tooling. Each port needs
 unauthorized, validation, failure and rollback coverage before exposure in UI.
 
-Service controls use a fixed unit allowlist and execFile arguments, not a shell. API mutations require owner/admin, same configured origin and explicit confirmation. Requested/completed/failed actions are audited. Service changes are synchronous in this initial port; durable jobs and operation recovery are still pending.
+Service controls use a fixed unit allowlist and execFile arguments, not a shell. API mutations require owner/admin, same configured origin and explicit confirmation. Requested/completed/failed actions are audited. Service changes now use persistent audited jobs with request deduplication and interrupted-state recovery; owner-only encrypted secrets are also implemented. See JOBS-AND-SECRETS.md.

@@ -1,5 +1,7 @@
+import { JobQueue, OutcomeUnknown } from "./jobs.js";
+import { Vault, validSecretName } from "./vault.js";
 import Fastify from "fastify";
-import { audit, closeDb, createOwner, hasOwner, login, logout, userFromToken } from "./auth.js";
+import { audit, db, closeDb, createOwner, hasOwner, login, logout, userFromToken } from "./auth.js";
 
 const app = Fastify({ logger: { redact: ["req.headers.authorization", "req.headers.cookie"] }, bodyLimit: 16384 });
 const version = "1.0.0-alpha.3";
@@ -120,16 +122,76 @@ app.post("/api/services/action", async (request, reply) => {
   if (!request.headers.origin || !sameOrigin(request)) return reply.code(403).send({ error: "origin_forbidden" });
   const body = request.body as { service?: unknown; action?: unknown; confirmed?: unknown } | null;
   if (!body || body.confirmed !== true || !["nginx", "apache2", "mariadb", "mysql", "postgresql", "redis-server", "docker"].includes(body.service as string) || !["start", "stop", "restart"].includes(body.action as string)) return reply.code(400).send({ error: "invalid_service_operation" });
-  audit(user.id, "service.operation_requested", { service: body.service, action: body.action });
+  const requestKey = (request.body as { requestKey?: unknown }).requestKey;
+  if (typeof requestKey !== "string") return reply.code(400).send({ error: "request_key_required" });
   try {
-    const result = await fetch(`${agentUrl}/v1/services/action`, { method: "POST", headers: { Authorization: `Bearer ${agentToken}`, "Content-Type": "application/json" }, body: JSON.stringify({ service: body.service, action: body.action }), signal: AbortSignal.timeout(35000) });
-    audit(user.id, "service.operation_completed", { service: body.service, action: body.action, ok: result.ok });
-    return reply.code(result.ok ? 200 : 503).send(result.ok ? { ok: true } : { error: "service_operation_failed" });
-  } catch { audit(user.id, "service.operation_failed", { service: body.service, action: body.action }); return reply.code(503).send({ error: "agent_unavailable" }); }
+    const job = jobs.enqueue(user.id, requestKey, { service: body.service as string, action: body.action as string });
+    return reply.code(202).send({ job });
+  } catch (e) {
+    const error = e instanceof Error ? e.message : "queue_error";
+    return reply.code(error === "request_key_conflict" ? 409 : error === "queue_full" || error === "queue_stopping" ? 503 : 400).send({ error });
+  }
 });
 
-app.addHook("onClose", async () => closeDb());
+const vault = new Vault(db, process.env.DEVONE_MASTER_KEY_FILE ?? "/etc/devone/secrets.key");
+const jobs = new JobQueue(db, async input => {
+  if (!agentToken) throw new Error("agent_not_configured");
+  let response: Response;
+  try {
+    response = await fetch(`${agentUrl}/v1/services/action`, { method: "POST", headers: { Authorization: `Bearer ${agentToken}`, "Content-Type": "application/json" }, body: JSON.stringify(input), signal: AbortSignal.timeout(35000) });
+  } catch { throw new OutcomeUnknown("agent_outcome_unknown"); }
+  if (response.status >= 500) throw new OutcomeUnknown("agent_outcome_unknown");
+  if (!response.ok) throw new Error("agent_operation_failed");
+}, audit);
+app.get("/api/jobs", async (request, reply) => {
+  const user = requestUser(request);
+  if (!user) return reply.code(401).send({ error: "unauthorized" });
+  return { jobs: jobs.list(["owner", "admin"].includes(user.role) ? undefined : user.id) };
+});
+app.get<{ Params: { id: string } }>("/api/jobs/:id", async (request, reply) => {
+  const user = requestUser(request);
+  if (!user) return reply.code(401).send({ error: "unauthorized" });
+  const job = jobs.get(request.params.id);
+  if (!job || (job.requested_by !== user.id && !["owner", "admin"].includes(user.role))) return reply.code(404).send({ error: "not_found" });
+  return { job };
+});
+app.get("/api/secrets", async (request, reply) => {
+  const user = requestUser(request);
+  if (!user) return reply.code(401).send({ error: "unauthorized" });
+  if (user.role !== "owner") return reply.code(403).send({ error: "forbidden" });
+  return { secrets: vault.list() };
+});
+app.put<{ Params: { name: string } }>("/api/secrets/:name", async (request, reply) => {
+  const user = requestUser(request);
+  if (!user) return reply.code(401).send({ error: "unauthorized" });
+  if (user.role !== "owner") return reply.code(403).send({ error: "forbidden" });
+  if (!request.headers.origin || !sameOrigin(request)) return reply.code(403).send({ error: "origin_forbidden" });
+  const value = (request.body as { value?: unknown } | null)?.value;
+  if (!validSecretName(request.params.name) || typeof value !== "string" || !value || Buffer.byteLength(value) > 8192) return reply.code(400).send({ error: "invalid_secret" });
+  try {
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      vault.put(request.params.name, value, user.id);
+      audit(user.id, "secret.updated", { name: request.params.name });
+      db.exec("COMMIT");
+    } catch (error) { db.exec("ROLLBACK"); throw error; }
+    return { ok: true };
+  } catch { return reply.code(503).send({ error: "vault_unavailable" }); }
+});
+app.delete<{ Params: { name: string } }>("/api/secrets/:name", async (request, reply) => {
+  const user = requestUser(request);
+  if (!user) return reply.code(401).send({ error: "unauthorized" });
+  if (user.role !== "owner") return reply.code(403).send({ error: "forbidden" });
+  if (!request.headers.origin || !sameOrigin(request)) return reply.code(403).send({ error: "origin_forbidden" });
+  if (!validSecretName(request.params.name)) return reply.code(400).send({ error: "invalid_secret" });
+  vault.remove(request.params.name);
+  audit(user.id, "secret.deleted", { name: request.params.name });
+  return { ok: true };
+});
+jobs.start();
+app.addHook("onClose", async () => { await jobs.stop(); closeDb(); });
 const port = Number(process.env.PORT ?? 8787);
+for (const signal of ["SIGTERM", "SIGINT"] as const) process.once(signal, () => { void app.close(); });
 app.listen({ host: "127.0.0.1", port }).catch((error) => {
   app.log.error(error);
   process.exit(1);

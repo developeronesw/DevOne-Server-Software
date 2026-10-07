@@ -93,3 +93,5 @@ form.card { max-width: 480px; margin: 8vh auto; }
 form label { display: grid; gap: 8px; margin: 20px 0; }
 form input { padding: 12px; border: 1px solid #ccd4dc; border-radius: 10px; font: inherit; }
 button:disabled { opacity: .6; cursor: wait; }
+table { width: 100%; border-collapse: collapse; text-align: left; }
+th, td { padding: 10px 8px; border-bottom: 1px solid #dce3eb; overflow-wrap: anywhere; }

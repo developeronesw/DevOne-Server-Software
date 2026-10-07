@@ -15,8 +15,13 @@ export async function listServices() {
     } catch { return { service, LoadState: "unknown", ActiveState: "unknown", SubState: "unknown" }; }
   }));
 }
+let serviceQueue: Promise<void> = Promise.resolve();
 export async function mutateService(body: unknown) {
   const { service, action } = serviceOperation(body);
-  await run("systemctl", [action, `${service}.service`], { timeout: 30000, maxBuffer: 16384 });
-  return { ok: true, service, action };
+  const operation = serviceQueue.then(async () => {
+    await run("systemctl", [action, `${service}.service`], { timeout: 30000, maxBuffer: 16384 });
+    return { ok: true, service, action };
+  });
+  serviceQueue = operation.then(() => undefined, () => undefined);
+  return operation;
 }

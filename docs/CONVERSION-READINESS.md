@@ -20,7 +20,7 @@ Scope: the exact all-in-one distribution checked into this repository and the cu
 | Hosting customer portal | HTML and readable JavaScript client | Build typed React portal; recreate tenant authorization backend | Pending |
 | Authentication and users | Legacy client/setup contract; backend compiled | Keep new SQLite/scrypt/session implementation; add role/user lifecycle and migration | Owner sign-in/logout and bootstrap protection implemented |
 | Live host monitoring | React metrics/history calls; compiled metrics backend | Node OS/host probes plus bounded persistent sampling | Basic memory/load/uptime/core count implemented; history/disk/network pending |
-| Services | Client service/action calls and host service layout | Explicit Agent service operations with argv validation, confirmation, auditing | Fixed allowlist discovery/start/stop/restart implemented |
+| Services | Client service/action calls and host service layout | Explicit Agent service operations with argv validation, confirmation, auditing | Fixed allowlist discovery and queued start/stop/restart implemented |
 | Websites and domains | Site forms/API calls; config and ACL script | Rebuild adapters, Linux site identities, domain validation and rollback | Pending |
 | File manager and uploads | Client read/write/mkdir/upload calls; HF7 delete fix | Rebuild isolated path handling, symlink/traversal checks, streaming limits, ownership | Pending |
 | Runtimes and package manager | Software catalog/client, installer dependencies | Serialized jobs and versioned runtime adapters; no arbitrary root shell | Pending |
@@ -46,7 +46,7 @@ Do not import the older UI wholesale and expose nonworking controls. Port one wo
 
 Keep third-party and proprietary notices associated with legacy assets. The legacy archive includes its own proprietary license notice; the root repository MIT notice does not establish a new license for those bundled assets. No license text is changed by this scan.
 
-Priority: jobs/audit/secrets and robust service operations; websites/files; databases/runtimes; deployments/containers; integrations/hosting/AI; full QA and release migration. Recovering original Core/Agent source would reduce reconstruction risk substantially.
+Durable service jobs and owner-only encrypted secrets are now implemented; see JOBS-AND-SECRETS.md. Remaining priority: websites/files; databases/runtimes; deployments/containers; integrations/hosting/AI; full QA and release migration. Recovering original Core/Agent source would reduce reconstruction risk substantially.
 
 ## Validation recorded
 

@@ -4,10 +4,11 @@ import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypt
 export type DevOneUser = { id: string; email: string; role: "owner" | "admin" | "operator" | "viewer" };
 
 const dbPath = process.env.DEVONE_DB_PATH ?? "/var/lib/devone/devone.sqlite";
-const db = new DatabaseSync(dbPath);
+export const db = new DatabaseSync(dbPath);
 
 db.exec(`
 PRAGMA foreign_keys = ON;
+PRAGMA busy_timeout = 5000;
 PRAGMA journal_mode = WAL;
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
