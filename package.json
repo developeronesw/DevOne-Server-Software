@@ -11,7 +11,9 @@
     "build": "pnpm -r build",
     "test": "pnpm build && node --test tests/*.test.mjs && python3 scripts/verify-distribution.py",
     "lint": "pnpm -r lint",
-    "dev": "pnpm --filter @devone/dashboard dev"
+    "dev": "pnpm --filter @devone/dashboard dev",
+    "qa": "node scripts/qa-runner.mjs",
+    "qa:release": "node scripts/qa-runner.mjs --release"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

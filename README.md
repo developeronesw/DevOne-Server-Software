@@ -102,3 +102,7 @@ Service actions now return persistent jobs (HTTP 202) and appear in the dashboar
 job history. Owner-only encrypted credential storage is available for upcoming
 integrations. See [job and secrets behavior](docs/JOBS-AND-SECRETS.md), including
 restart recovery and master-key backup requirements.
+
+## Automated QA
+
+Run `pnpm qa` for the automated regression checks and saved JSON evidence. Run `pnpm qa:release` for the stricter release gate, which remains blocked while unfinished features and VPS verification are pending. See [QA Center](docs/QA-CENTER.md).
