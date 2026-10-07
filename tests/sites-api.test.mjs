@@ -19,6 +19,18 @@ test('site API enforces roles, origins, confirmations and forwards only permitte
     assert.equal((await app.inject({method:'POST',url:'/api/sites',headers,payload:{...payload,domain:'bad;id.com'}})).statusCode,400);
     assert.equal((await app.inject({method:'POST',url:'/api/sites',headers,payload})).statusCode,202);
     assert.equal(queued[0][3],'site.create');
+    const lifecycle={siteId:'site_0123456789abcdef',action:'disable',expectedRevision:1,confirmed:true,requestKey:'lifecycle_key_12345'};
+    assert.equal((await app.inject({method:'POST',url:'/api/sites/action',headers,payload:{...lifecycle,confirmed:false}})).statusCode,400);
+    assert.equal((await app.inject({method:'POST',url:'/api/sites/action',headers,payload:lifecycle})).statusCode,202);
+    assert.equal(queued.at(-1)[3],'site.action');
+    const tls={siteId:lifecycle.siteId,action:'issue',expectedRevision:1,confirmed:true,requestKey:'tls_request_key_12345',email:'owner@example.com'};
+    assert.equal((await app.inject({method:'POST',url:'/api/sites/tls',headers,payload:tls})).statusCode,400);
+    assert.equal((await app.inject({method:'POST',url:'/api/sites/tls',headers,payload:{...tls,agreeTerms:true}})).statusCode,202);
+    assert.equal(queued.at(-1)[3],'site.tls');
+
+    assert.equal((await app.inject({method:'POST',url:'/api/sites/action',headers,payload:{...lifecycle,action:'delete'}})).statusCode,400);
+    assert.equal((await app.inject({method:'POST',url:'/api/sites/action',headers:{...headers,'x-role':'viewer'},payload:lifecycle})).statusCode,403);
+
     const file={siteId:'site_0123456789abcdef',operation:'create',path:'index.html',content:'aGVsbG8=',root:'/etc',uid:0};
     assert.equal((await app.inject({method:'POST',url:'/api/sites/files',headers,payload:file})).statusCode,400);
     assert.equal((await app.inject({method:'POST',url:'/api/sites/files',headers,payload:{...file,confirmed:true}})).statusCode,200);

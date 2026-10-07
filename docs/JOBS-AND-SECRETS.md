@@ -12,9 +12,9 @@ One API worker drains the queue in submission order. The Agent independently ser
 
 Queued jobs survive restart and their actor's current owner/admin role is checked again at execution. Running jobs at startup are marked interrupted and are never automatically replayed. Network timeouts and Agent 5xx responses have uncertain outcomes and are also interrupted. Inspect the host before deliberately submitting a new action. This is not an exactly-once or automatic rollback guarantee.
 
-`GET /api/jobs` and `GET /api/jobs/:id` require login. Owner/admin may inspect all jobs; other roles can inspect only their own. Job inputs contain service/action or site domain/web-server choice, never file contents or integration credentials. UI history is refreshed with the overview. No public cancel/retry endpoint is added.
+`GET /api/jobs` and `GET /api/jobs/:id` require login. Owner/admin may inspect all jobs; other roles can inspect only their own. Job inputs contain service/action, site domain/web-server choice, revision-checked site lifecycle requests, or certificate-operation metadata, never file contents or integration credentials. UI history is refreshed with the overview. No public cancel/retry endpoint is added.
 
-Graceful API shutdown waits for the active request (up to its Agent timeout (35 seconds for services, 120 seconds for website creation)) and leaves remaining jobs queued. The systemd stop timeout is 45 seconds.
+Graceful API shutdown waits for the active request (up to its Agent timeout (35 seconds for services, 120 seconds for site lifecycle, 240 seconds for certificate operations)) and leaves remaining jobs queued. The systemd stop timeout is 45 seconds.
 
 ## Secrets
 

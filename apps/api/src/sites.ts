@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import type { JobQueue } from './jobs.js';
+import type { JobQueue, SiteActionInput, SiteTlsInput } from './jobs.js';
 type Dependencies = { requestUser: (request: any) => {id:string;role:string} | undefined | null; sameOrigin: (request:any) => boolean; agentUrl:string; agentToken:string; jobs:JobQueue; audit:(actor:string|null,action:string,details?:unknown)=>void };
 function validDomain(value: unknown): value is string {
   return typeof value === 'string' && value.length <= 253 && value.includes('.') && /^[a-z]{2,63}$/.test(value.split('.').at(-1)!) && value.split('.').every(label => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label));
@@ -32,6 +32,28 @@ export function registerSiteRoutes(app: FastifyInstance, dependencies: Dependenc
       const code = error instanceof Error ? error.message : 'queue_error';
       return reply.code(code === 'request_key_conflict' ? 409 : ['queue_full','queue_stopping'].includes(code) ? 503 : 400).send({error:code});
     }
+  });
+  app.post('/api/sites/action',async(request,reply)=>{
+    const user = authorize(request,reply,true); if (!user) return;
+    const body = request.body as Record<string,unknown> | null;
+    if (!body || typeof body.siteId !== 'string' || !/^site_[a-f0-9]{16}$/.test(body.siteId) || !['update','disable','enable','delete'].includes(body.action as string) || body.confirmed !== true || typeof body.requestKey !== 'string' || !Number.isSafeInteger(body.expectedRevision) || Number(body.expectedRevision) < 1) return reply.code(400).send({error:'invalid_site_action'});
+    if (body.action === 'update' && (!validDomain(body.domain) || !Array.isArray(body.aliases) || body.aliases.length > 20 || !body.aliases.every(validDomain))) return reply.code(400).send({error:'invalid_site_domains'});
+    if (body.action === 'delete' && !validDomain(body.confirmDomain)) return reply.code(400).send({error:'delete_confirmation_required'});
+    const input:SiteActionInput={siteId:body.siteId,action:body.action as string,expectedRevision:body.expectedRevision as number};
+    if(body.action === 'update') {input.domain=body.domain as string;input.aliases=body.aliases as string[];}
+    if(body.action === 'delete') input.confirmDomain=body.confirmDomain as string;
+    try {return reply.code(202).send({job:jobs.enqueue(user.id,body.requestKey,input,'site.action')});}
+    catch(error) {const code=error instanceof Error ? error.message : 'queue_error';return reply.code(code === 'request_key_conflict' ? 409 : ['queue_full','queue_stopping'].includes(code) ? 503 : 400).send({error:code});}
+  });
+  app.post('/api/sites/tls',async(request,reply)=>{
+    const user=authorize(request,reply,true);if(!user) return;
+    const body=request.body as Record<string,unknown> | null;
+    if(!body || typeof body.siteId !== 'string' || !/^site_[a-f0-9]{16}$/.test(body.siteId) || !['issue','renew','disable'].includes(body.action as string) || body.confirmed !== true || typeof body.requestKey !== 'string' || !Number.isSafeInteger(body.expectedRevision) || Number(body.expectedRevision)<1) return reply.code(400).send({error:'invalid_tls_operation'});
+    if(body.action === 'issue' && (body.agreeTerms !== true || typeof body.email !== 'string' || body.email.length>254 || !/^[a-zA-Z0-9][a-zA-Z0-9._+%-]*@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,63}$/.test(body.email))) return reply.code(400).send({error:'tls_consent_required'});
+    const input:SiteTlsInput={siteId:body.siteId,action:body.action as string,expectedRevision:body.expectedRevision as number};
+    if(body.action === 'issue') {input.email=body.email as string;input.agreeTerms=true;}
+    try {return reply.code(202).send({job:jobs.enqueue(user.id,body.requestKey,input,'site.tls')});}
+    catch(error){const code=error instanceof Error ? error.message : 'queue_error';return reply.code(code === 'request_key_conflict' ? 409 : ['queue_full','queue_stopping'].includes(code) ? 503 : 400).send({error:code});}
   });
   app.post('/api/sites/files',{bodyLimit:1500000},async (request,reply) => {
     const user = authorize(request,reply,true); if (!user) return;

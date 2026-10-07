@@ -18,3 +18,7 @@ Each check reports PASS, FAIL or BLOCKED, elapsed time, exit status and a normal
 | Glass QA Center dashboard | Pending dashboard integration; command-line runner available now |
 
 This is the initial QA infrastructure, not full legacy feature parity. Browser workflows, target-VPS performance, fresh installation, TLS, reboot recovery, backup restoration and real host isolation remain explicitly unverified. The runner never applies remediation automatically. Full host CRUD must eventually run on a disposable QA VPS, with a separate opt-in profile, rather than against customer resources.
+
+## Legacy parity inventory
+
+`qa/legacy-parity.json` accounts for every route literal observed in the fixed legacy bundle, tied to its archive hash. Partial mappings identify Node equivalents without claiming complete parity. `scripts/verify-parity.mjs` rejects missing/duplicate entries, a changed baseline, invalid mappings and unsupported acceptance claims. Verified entries require sanitized committed evidence comparing legacy and Node behavior on a disposable VPS, including security and UI checks. The QA release gate independently remains blocked while any entry lacks acceptance. Route strings alone are only a lower-bound inventory; non-route workflows and the existing whole-platform acceptance blockers also remain mandatory.

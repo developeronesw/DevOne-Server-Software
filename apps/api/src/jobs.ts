@@ -3,7 +3,9 @@ import type { DatabaseSync } from "node:sqlite";
 
 export type ServiceInput = { service: string; action: string };
 export type SiteInput = { domain: string; webServer: "nginx" | "none" };
-export type JobInput = ServiceInput | SiteInput;
+export type SiteActionInput = {siteId:string;action:string;expectedRevision:number;domain?:string;aliases?:string[];confirmDomain?:string};
+export type SiteTlsInput = {siteId:string;action:string;expectedRevision:number;email?:string;agreeTerms?:boolean};
+export type JobInput = ServiceInput | SiteInput | SiteActionInput | SiteTlsInput;
 export type JobState = "queued" | "running" | "succeeded" | "failed" | "interrupted";
 export type Job = { id: string; requested_by: string; operation: string; input: string; state: JobState; error: string | null; created_at: string; started_at: string | null; finished_at: string | null };
 export class OutcomeUnknown extends Error {}
@@ -28,10 +30,12 @@ export class JobQueue {
   }
   enqueue(actor: string, key: string, input: JobInput, operation = "service.action"): Job {
     if (!/^[a-zA-Z0-9_-]{16,128}$/.test(key)) throw new Error("invalid_request_key");
-    if (!["service.action", "site.create"].includes(operation)) throw new Error("invalid_operation");
+    if (!["service.action", "site.create", "site.action", "site.tls"].includes(operation)) throw new Error("invalid_operation");
     const serialized = operation === "service.action"
       ? JSON.stringify({ service: (input as ServiceInput).service, action: (input as ServiceInput).action })
-      : JSON.stringify({ domain: (input as SiteInput).domain, webServer: (input as SiteInput).webServer });
+      : operation === "site.create" ? JSON.stringify({ domain: (input as SiteInput).domain, webServer: (input as SiteInput).webServer })
+      : operation === "site.tls" ? JSON.stringify({siteId:(input as SiteTlsInput).siteId,action:(input as SiteTlsInput).action,expectedRevision:(input as SiteTlsInput).expectedRevision,email:(input as SiteTlsInput).email,agreeTerms:(input as SiteTlsInput).agreeTerms})
+      : JSON.stringify({siteId:(input as SiteActionInput).siteId,action:(input as SiteActionInput).action,expectedRevision:(input as SiteActionInput).expectedRevision,domain:(input as SiteActionInput).domain,aliases:(input as SiteActionInput).aliases,confirmDomain:(input as SiteActionInput).confirmDomain});
     const existing = this.db.prepare("SELECT * FROM jobs WHERE requested_by=? AND request_key=?").get(actor, key) as Job | undefined;
     if (existing) {
       if (existing.input !== serialized || existing.operation !== operation) throw new Error("request_key_conflict");

@@ -14,18 +14,20 @@ const server = createServer(async (request, response) => {
     response.end(JSON.stringify({ error: "unauthorized" })); return;
   }
   const send = (code: number, value: unknown) => { response.writeHead(code, { "content-type": "application/json" }); response.end(JSON.stringify(value)); };
-  if ((request.method === "GET" && request.url === "/v1/sites") || (request.method === "POST" && ["/v1/sites", "/v1/sites/files"].includes(request.url ?? ""))) {
+  if ((request.method === "GET" && request.url === "/v1/sites") || (request.method === "POST" && ["/v1/sites", "/v1/sites/action", "/v1/sites/tls", "/v1/sites/files"].includes(request.url ?? ""))) {
     try {
       if (request.method === "GET") { send(200,{sites:await sites.list()}); return; }
+      request.setEncoding("utf8");
       let body = "";
       for await (const chunk of request) { body += chunk; if (Buffer.byteLength(body) > 1500000) { send(413,{error:"body_too_large"}); return; } }
       const input = JSON.parse(body);
-      send(200,request.url === "/v1/sites" ? await sites.create(input) : await sites.files(input));
-    } catch (error) { const invalid = error instanceof Error && /^(invalid_|domain_in_use|site_limit|site_not_ready|file_too_large)/.test(error.message); const conflict = error instanceof Error && ["file_conflict","destination_exists"].includes(error.message); send(conflict ? 409 : invalid ? 400 : 503,{error:conflict && error instanceof Error ? error.message : "site_operation_failed"}); }
+      send(200,request.url === "/v1/sites" ? await sites.create(input) : request.url === "/v1/sites/action" ? await sites.action(input) : request.url === "/v1/sites/tls" ? await sites.tls(input) : await sites.files(input));
+    } catch (error) { const invalid = error instanceof Error && /^(invalid_|domain_in_use|site_limit|site_not_ready|file_too_large)/.test(error.message); const conflict = error instanceof Error && ["file_conflict","destination_exists","site_revision_conflict"].includes(error.message); send(conflict ? 409 : invalid ? 400 : 503,{error:conflict && error instanceof Error ? error.message : "site_operation_failed"}); }
     return;
   }
   if (request.method === "GET" && request.url === "/v1/services") { send(200, await listServices()); return; }
   if (request.method === "POST" && request.url === "/v1/services/action") {
+    request.setEncoding("utf8");
     let body = "";
     try {
       for await (const chunk of request) { body += chunk; if (Buffer.byteLength(body) > 4096) { send(413, { error: "body_too_large" }); return; } }

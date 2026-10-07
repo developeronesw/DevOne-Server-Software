@@ -6,6 +6,7 @@ async function main() {
   if (!process.getuid || process.getuid() === 0 || !process.getgid || process.getgid() === 0) throw new Error("unprivileged_worker_required");
   const root = process.env.DEVONE_SITE_ROOT;
   if (!root || !/^\/home\/devone-sites\/site_[a-f0-9]{16}\/public$/.test(root)) throw new Error("invalid_site_root");
+  process.stdin.setEncoding("utf8");
   let input = "";
   for await (const chunk of process.stdin) {
     input += chunk;
@@ -25,6 +26,9 @@ async function main() {
       result = { ok:true, ...(result as object | undefined) }; break;
     }
     case "rename": result = {ok:true,...await files.renameFile(request.path,request.destination ?? "",request.expectedRevision ?? "")}; break;
+    case "purge":
+      if (process.env.DEVONE_SITE_PURGE !== "1") throw new Error("invalid_operation");
+      await files.purge(); result={ok:true}; break;
     case "mkdir": await files.mkdir(request.path); result = { ok: true }; break;
     case "remove":
       if (request.kind !== "file" && request.kind !== "directory") throw new Error("invalid_kind");

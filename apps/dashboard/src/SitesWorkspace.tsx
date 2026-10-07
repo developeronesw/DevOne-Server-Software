@@ -1,11 +1,21 @@
 import { useEffect, useState, type FormEvent } from 'react';
-type Site = {id:string;domain:string;user:string;webServer:string;state:string};
+type Site = {id:string;domain:string;user:string;webServer:string;state:string;aliases?:string[];revision?:number;tls?:boolean};
 type Entry = {name:string;kind:'file'|'directory'|'blocked'};
 async function api(path:string,body?:unknown) {
   const response = await fetch(path,body === undefined ? undefined : {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   const result = await response.json();
   if (!response.ok) throw new Error(result.error === 'file_conflict' ? 'File changed since you opened it. Keep your draft, then reopen the file to review the changes.' : result.error === 'destination_exists' ? 'That destination already exists. Choose another name.' : result.error ?? 'Request failed');
   return result;
+}
+async function waitForJob(id:string) {
+  const deadline=Date.now()+300000;
+  while(Date.now()<deadline) {
+    const {job}=await api(`/api/jobs/${encodeURIComponent(id)}`);
+    if(job.state === 'succeeded') return;
+    if(['failed','interrupted'].includes(job.state)) throw new Error(`Operation ${job.state}. Check Recent jobs and inspect the site before retrying.`);
+    await new Promise(resolve=>setTimeout(resolve,1000));
+  }
+  throw new Error('Operation is still pending. Check Recent jobs before requesting another change.');
 }
 function base64(bytes:Uint8Array) {
   let value = ''; for (let start = 0; start < bytes.length; start += 8192) value += String.fromCharCode(...bytes.subarray(start,start+8192));
@@ -82,9 +92,35 @@ export function SitesWorkspace() {
   async function create(event:FormEvent) {
     event.preventDefault(); if(!window.confirm(`Create ${domain} with an isolated Linux account?`)) return;
     setBusy(true);setError('');
-    try {const {job}=await api('/api/sites',{domain,webServer,confirmed:true,requestKey:crypto.randomUUID()});setNotice(`Website creation queued: ${job.id}. Track its result in Recent jobs.`);setDomain('');await refresh();}
+    try {const {job}=await api('/api/sites',{domain,webServer,confirmed:true,requestKey:crypto.randomUUID()});setNotice(`Website creation queued: ${job.id}. Track its result in Recent jobs.`);setDomain('');await waitForJob(job.id);setNotice('Website created.');await refresh();}
     catch(error) {setError(error instanceof Error ? error.message : 'Creation failed');} finally {setBusy(false);}
   }
-  const site = sites.find(site=>site.id === selected && site.state === 'ready');
-  return <article className="card glass" id="websites"><h3>Websites and files</h3><p>Create an HTTP static website or an isolated file workspace. Runtime applications and site HTTPS are pending.</p>{error && <p role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}<form onSubmit={event=>void create(event)}><label>Domain<input required value={domain} onChange={event=>setDomain(event.target.value)} placeholder="example.com" maxLength={253} /></label><label>Web server<select value={webServer} onChange={event=>setWebServer(event.target.value)}><option value="nginx">NGINX · static website</option><option value="none">Files only</option></select></label><button disabled={busy}>Create website</button></form><table><thead><tr><th>Domain</th><th>Status</th><th>Files</th></tr></thead><tbody>{sites.map(site=><tr key={site.id}><td>{site.domain}</td><td>{site.state}</td><td><button disabled={site.state !== 'ready'} onClick={()=>setSelected(site.id)}>Manage files</button></td></tr>)}</tbody></table>{site && <FileWorkspace key={site.id} site={site} />}<p className="muted">Provisioning failures require inspection. DevOne preserves partial resources for recovery.</p></article>;
+  async function siteAction(site:Site,action:string) {
+    const input:Record<string,unknown>={siteId:site.id,action,expectedRevision:site.revision ?? 1,confirmed:true,requestKey:crypto.randomUUID()};
+    if(action === 'update') {
+      const domain=window.prompt('Primary domain:',site.domain);if(!domain) return;
+      const aliases=window.prompt('Aliases/subdomains (comma separated, maximum 20):',(site.aliases ?? []).join(', '));if(aliases === null) return;
+      input.domain=domain.trim();input.aliases=aliases.split(',').map(value=>value.trim()).filter(Boolean);
+    }
+    if(action === 'delete') {
+      const typed=window.prompt(`Permanently delete ${site.domain}, its Linux account and all site files? Type ${site.domain} to confirm. Take a backup first.`);
+      if(typed !== site.domain) return;input.confirmDomain=typed;
+    } else if(!window.confirm(`${action} ${site.domain}?`)) return;
+    setBusy(true);setError('');
+    try {const {job}=await api('/api/sites/action',input);setNotice(`Website operation queued: ${job.id}. Track its result in Recent jobs.`);if(action === 'delete') setSelected('');await waitForJob(job.id);setNotice(`Website ${action} completed.`);await refresh();}
+    catch(error) {setError(error instanceof Error ? error.message : 'Site operation failed');}finally{setBusy(false);}
+  }
+  async function tlsAction(site:Site,action:string) {
+    const input:Record<string,unknown>={siteId:site.id,action,expectedRevision:site.revision ?? 1,confirmed:true,requestKey:crypto.randomUUID()};
+    if(action === 'issue') {
+      const email=window.prompt('Certificate contact email:');if(!email) return;
+      if(!window.confirm('Agree to the Let’s Encrypt Subscriber Agreement and request a certificate for the primary domain and aliases? DNS must point here and port 80 must be reachable.')) return;
+      input.email=email;input.agreeTerms=true;
+    } else if(!window.confirm(`${action} HTTPS for ${site.domain}?`)) return;
+    setBusy(true);setError('');
+    try {const {job}=await api('/api/sites/tls',input);setNotice(`Certificate operation queued: ${job.id}. Track its result in Recent jobs.`);await waitForJob(job.id);setNotice('Certificate operation completed.');await refresh();}
+    catch(error){setError(error instanceof Error ? error.message : 'TLS operation failed');}finally{setBusy(false);}
+  }
+  const site = sites.find(site=>site.id === selected);
+  return <article className="card glass" id="websites"><h3>Websites and files</h3><p>Create an HTTP static website or an isolated file workspace. Manage static websites, aliases and HTTPS. Application runtimes are pending. <a href="https://letsencrypt.org/repository/" target="_blank" rel="noreferrer">Certificate terms</a></p>{error && <p role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}<form onSubmit={event=>void create(event)}><label>Domain<input required value={domain} onChange={event=>setDomain(event.target.value)} placeholder="example.com" maxLength={253} /></label><label>Web server<select value={webServer} onChange={event=>setWebServer(event.target.value)}><option value="nginx">NGINX · static website</option><option value="none">Files only</option></select></label><button disabled={busy}>Create website</button></form><table><thead><tr><th>Domain</th><th>Status</th><th>Actions</th></tr></thead><tbody>{sites.map(site=><tr key={site.id}><td>{site.domain}</td><td>{site.state}</td><td><button disabled={busy || !['ready','disabled'].includes(site.state)} onClick={()=>setSelected(site.id)}>Manage files</button>{["ready","disabled"].includes(site.state) && <><button disabled={busy} onClick={()=>void siteAction(site,"update")}>Edit domains</button><button disabled={busy} onClick={()=>void siteAction(site,site.state === "ready" ? "disable" : "enable")}>{site.state === "ready" ? "Disable" : "Enable"}</button><button disabled={busy} onClick={()=>void siteAction(site,"delete")}>Delete site</button>{site.webServer === "nginx" && site.state === "ready" && <><button disabled={busy} onClick={()=>void tlsAction(site,site.tls ? "renew" : "issue")}>{site.tls ? "Check renewal" : "Enable HTTPS"}</button>{site.tls && <button disabled={busy} onClick={()=>void tlsAction(site,"disable")}>Disable HTTPS</button>}</>}</>}</td></tr>)}</tbody></table>{site && <fieldset disabled={busy || !["ready","disabled"].includes(site.state)} style={{border:0,padding:0,margin:0}}><FileWorkspace key={site.id} site={site} /></fieldset>}<p className="muted">Provisioning failures require inspection. DevOne preserves partial resources for recovery.</p></article>;
 }

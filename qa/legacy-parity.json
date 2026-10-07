@@ -1,0 +1,667 @@
+{
+  "schemaVersion": 1,
+  "legacyArchiveSha256": "ea43a046325fc7fb3657a6dca69d31df5478cfb959ee86c8c9fc61d12fe1c3b4",
+  "caveat": "Static string inventory; dynamic routes may be truncated and route presence does not establish runtime behavior.",
+  "requirement": "All legacy capabilities require functional, security, UI and live-VPS acceptance; these route literals are only a lower-bound inventory.",
+  "routes": [
+    {
+      "legacy": "/api/ai/chat",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/dashboard",
+      "equivalent": [
+        "/api/system/status"
+      ],
+      "status": "partial",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/databases",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/databases/",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/databases/${x.id}",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/events/stats",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/files",
+      "equivalent": [
+        "/api/sites/files"
+      ],
+      "status": "partial",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/files/mkdir",
+      "equivalent": [
+        "/api/sites/files"
+      ],
+      "status": "partial",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/files/read?site_id=",
+      "equivalent": [
+        "/api/sites/files"
+      ],
+      "status": "partial",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/files/read?site_id=${encodeURIComponent",
+      "equivalent": [
+        "/api/sites/files"
+      ],
+      "status": "partial",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/files/upload?site_id=${encodeURIComponent",
+      "equivalent": [
+        "/api/sites/files"
+      ],
+      "status": "partial",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/files/write",
+      "equivalent": [
+        "/api/sites/files"
+      ],
+      "status": "partial",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/files?site_id=${encodeURIComponent",
+      "equivalent": [
+        "/api/sites/files"
+      ],
+      "status": "partial",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/integrations",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/login",
+      "equivalent": [
+        "/api/auth/login"
+      ],
+      "status": "partial",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/logout",
+      "equivalent": [
+        "/api/auth/logout"
+      ],
+      "status": "partial",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/platform/apps/deploy",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/platform/catalog",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/platform/compose/deploy",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/platform/containers",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/platform/containers/action",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/platform/containers/deploy",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/platform/jobs",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/platform/jobs/clear",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/platform/jobs/remove",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/platform/projects",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/platform/projects/action",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/platform/projects/dependencies",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/platform/projects/deploy",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/platform/source/upload",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/qa/",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/qa/run",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/qa/runs",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/qa/runs/",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/qa/settings",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/qa/status",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/services",
+      "equivalent": [
+        "/api/services"
+      ],
+      "status": "partial",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/services/action",
+      "equivalent": [
+        "/api/services/action"
+      ],
+      "status": "partial",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/session",
+      "equivalent": [
+        "/api/me"
+      ],
+      "status": "partial",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/settings",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/settings/panel-hostname",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/setup",
+      "equivalent": [
+        "/api/auth/setup"
+      ],
+      "status": "partial",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/setup/status",
+      "equivalent": [
+        "/api/setup/status"
+      ],
+      "status": "partial",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/sites",
+      "equivalent": [
+        "/api/sites",
+        "/api/sites/action"
+      ],
+      "status": "partial",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/sites/",
+      "equivalent": [
+        "/api/sites",
+        "/api/sites/action"
+      ],
+      "status": "partial",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/sites/${s.id}",
+      "equivalent": [
+        "/api/sites",
+        "/api/sites/action"
+      ],
+      "status": "partial",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/software",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/software/install",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/users",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v4/cloudflare/accounts",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v4/cloudflare/connect",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v4/cloudflare/disconnect",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v4/cloudflare/status",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v4/cloudflare/zones",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v4/cloudflare/zones/${this.state.zone}/dns",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v4/cloudflare/zones/${this.state.zone}/dns/${rec.id}",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v4/cloudflare/zones/${this.state.zone}/purge",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v4/cloudflare/zones/${this.state.zone}/settings/${id}",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v4/cloudflare/zones/${zone}",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v4/jobs",
+      "equivalent": [
+        "/api/jobs"
+      ],
+      "status": "partial",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v4/jobs/clear",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v4/jobs/remove",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v4/jobs/settings",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v4/security/action",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v4/security/status",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v4/ssl/issue",
+      "equivalent": [
+        "/api/sites",
+        "/api/sites/tls"
+      ],
+      "status": "partial",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v4/ssl/sites",
+      "equivalent": [
+        "/api/sites",
+        "/api/sites/tls"
+      ],
+      "status": "partial",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v4/terminal/exec",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v4/terminal/session/close",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v4/terminal/session/input",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v4/terminal/session/read",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v4/terminal/session/start",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v5/hosting/assign-database",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v5/hosting/assign-site",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v5/hosting/capacity",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v5/hosting/customers",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v5/hosting/customers/${encodeURIComponent",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v5/hosting/packages",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v5/hosting/packages/${encodeURIComponent",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v5/hosting/settings",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v5/hosting/sftp",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v5/hosting/status",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v5/portal/login",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v5/portal/logout",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v5/portal/session",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v5/profile",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v5/vhosts/restore",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v5/vhosts/save",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v5/vhosts/validate",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v5/vhosts?site_id=",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v5/vhosts?site_id=${encodeURIComponent",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v6/apps/catalog",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v6/apps/deploy",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v6/apps/installed",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v6/apps/jobs",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v6/apps/jobs/clear",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v6/apps/jobs/remove",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v6/apps/remove",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v6/apps/vault/import?app=devone-core",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v7/metrics/history?range=",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v7/metrics/history?range=${encodeURIComponent",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    },
+    {
+      "legacy": "/api/v7/metrics/history?range=1m",
+      "equivalent": [],
+      "status": "pending",
+      "acceptanceEvidence": []
+    }
+  ]
+}

@@ -47,12 +47,12 @@ corepack prepare pnpm@10.15.1 --activate
 log "Creating DevOne service account and persistent directories..."
 id "$APP_USER" >/dev/null 2>&1 || useradd --system --home /var/lib/devone --create-home --shell /usr/sbin/nologin "$APP_USER"
 install -d -o root -g root -m 755 "$INSTALL_ROOT"
-install -d -o "$APP_USER" -g "$APP_USER" /var/lib/devone /var/log/devone /var/www/devone-acme
+install -d -o "$APP_USER" -g "$APP_USER" /var/lib/devone /var/log/devone
 install -d -o root -g "$APP_USER" -m 750 /etc/devone
 chown root:"$APP_USER" /etc/devone
 chmod 750 /etc/devone
 install -d -o root -g root -m 700 /var/lib/devone-agent
-install -d -o root -g root -m 755 /home/devone-sites
+install -d -o root -g root -m 755 /home/devone-sites /var/www/devone-acme
 
 if [[ ! -d "$INSTALL_ROOT/current/.git" ]]; then
   git clone --no-checkout "$REPO_URL" "$INSTALL_ROOT/current"
@@ -89,8 +89,11 @@ pnpm --filter @devone/dashboard build
 log "Installing systemd services..."
 install -m 644 deploy/systemd/devone-api.service /etc/systemd/system/devone-api.service
 install -m 644 deploy/systemd/devone-agent.service /etc/systemd/system/devone-agent.service
+install -d -o root -g root -m 755 /etc/letsencrypt/renewal-hooks/deploy
+install -o root -g root -m 755 deploy/certbot/devone-nginx.sh /etc/letsencrypt/renewal-hooks/deploy/devone-nginx
 systemctl daemon-reload
 systemctl enable devone-api devone-agent
+systemctl enable --now certbot.timer
 
 log "Configuring HTTP bootstrap gateway..."
 cat > /etc/nginx/sites-available/devone-panel <<EOF

@@ -1,3 +1,4 @@
+import { parityStatus } from './verify-parity.mjs';
 import { spawn } from 'node:child_process';
 import { mkdir, writeFile, rename, readdir } from 'node:fs/promises';
 import { resolve, dirname } from 'node:path';
@@ -30,7 +31,7 @@ export function assess(results, pending) {
   return { automatedChecks: results.every(result => result.status === 'pass') ? 'pass' : 'fail', productionReady: results.every(result => result.status === 'pass') && pending.length === 0 };
 }
 const pending = [
-  { id: 'website-provisioning', status: 'partially_implemented', detail: 'Static NGINX/files-only creation and file workspace exist; site lifecycle parity and real VPS ownership/provisioning verification remain pending.' },
+  { id: 'website-provisioning', status: 'partially_implemented', detail: 'Static NGINX/files-only creation and file workspace exist; site lifecycle and Certbot adapters exist; complete hosting/runtime parity and real VPS verification remain pending.' },
   { id: 'browser-workflows', status: 'not_verified', detail: 'Rendered dashboard navigation, forms and accessibility in a browser.' },
   { id: 'ubuntu-install-recovery', status: 'not_verified', detail: 'Fresh VPS install, TLS, systemd hardening, reboot recovery and upgrade/rollback.' },
   { id: 'backup-restore', status: 'not_verified', detail: 'Restore database and encryption key together on a disposable VPS.' },
@@ -57,9 +58,13 @@ export async function main(args = process.argv.slice(2)) {
     else results.push({ id, status: 'blocked', reason: 'build_failed' });
   }
   await check('lint', 'pnpm', ['lint']);
+  await check('legacy-parity-inventory',process.execPath,['scripts/verify-parity.mjs']);
+  let parity;
+  try {parity=await parityStatus();}catch {parity={total:null,verified:null,outstanding:null,error:'parity_inventory_invalid'};}
+  const runPending=[...pending,...(parity.error ? [{id:'legacy-route-acceptance',status:'invalid',detail:'Legacy parity inventory could not be verified.'}] : parity.outstanding ? [{id:'legacy-route-acceptance',status:'unverified',detail:`${parity.outstanding} of ${parity.total} observed legacy route literals still require acceptance evidence.`}] : [])];
   await check('legacy-distribution-integrity', 'python3', ['scripts/verify-distribution.py']);
-  for (const file of ['installer/install.sh','installer/install-legacy.sh','scripts/provision-vault-key.sh']) await check(`shell-syntax:${file}`, 'bash', ['-n', file]);
-  const report = { schemaVersion: 1, runId: randomUUID(), completedAt: new Date().toISOString(), scope: 'isolated-development-regression', ...assess(results, pending), results, pending };
+  for (const file of ['installer/install.sh','installer/install-legacy.sh','scripts/provision-vault-key.sh','deploy/certbot/devone-nginx.sh']) await check(`shell-syntax:${file}`, 'bash', ['-n', file]);
+  const report = { schemaVersion: 1, runId: randomUUID(), completedAt: new Date().toISOString(), scope: 'isolated-development-regression', ...assess(results, runPending), results, pending:runPending, parity };
   const output = resolve(root, 'qa-reports'); await mkdir(output, { recursive: true, mode: 0o700 });
   const name = `${report.completedAt.replace(/[:.]/g, '-')}-${report.runId}`;
   await writeFile(resolve(output, `${name}.json`), JSON.stringify(report, null, 2), { mode: 0o600 });

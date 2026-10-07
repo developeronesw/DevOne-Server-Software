@@ -33,6 +33,7 @@ jobs:
       - run: bash -n installer/install.sh
       - run: bash -n installer/install-legacy.sh
       - run: bash -n scripts/provision-vault-key.sh
+      - run: bash -n deploy/certbot/devone-nginx.sh
       - run: python3 scripts/verify-distribution.py
       - run: test -f deploy/nginx/devone-panel.conf.template
       - run: test -f deploy/systemd/devone-api.service

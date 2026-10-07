@@ -1,5 +1,5 @@
 import { constants } from "node:fs";
-import { open, readdir, mkdir, unlink, rmdir, link, rename, lstat } from "node:fs/promises";
+import { open, readdir, opendir, mkdir, unlink, rmdir, link, rename, lstat } from "node:fs/promises";
 import type { FileHandle } from "node:fs/promises";
 import { randomUUID, createHash } from "node:crypto";
 
@@ -123,6 +123,27 @@ export class SiteFiles {
   async mkdir(path: string) {
     const parts = relativeParts(path), leaf = parts.pop()!;
     return anchored(this.root, parts, directory => mkdir(`${directory}/${leaf}`, { mode: 0o750 }));
+  }
+  async purge() {
+    let visited = 0;
+    const walk = async (directory:string,depth:number):Promise<void> => {
+      if(depth>64) throw new Error("tree_too_deep");
+      for await(const item of await opendir(directory)) {
+        const name=item.name;
+        if(++visited>100000) throw new Error("tree_too_large");
+        const entry=`${directory}/${name}`;let child:FileHandle;
+        try {child=await open(entry,constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);}
+        catch(error) {
+          const code=(error as NodeJS.ErrnoException).code;
+          if(code==='ENOENT') continue;
+          if(code!=='ENOTDIR' && code!=='ELOOP') throw error;
+          await unlink(entry);continue;
+        }
+        try {await walk(`/proc/self/fd/${child.fd}`,depth+1);}finally{await child.close();}
+        await rmdir(entry);
+      }
+    };
+    return anchored(this.root,[],directory=>walk(directory,0));
   }
   async remove(path: string, kind: "file" | "directory") {
     const parts = relativeParts(path), leaf = parts.pop()!;
