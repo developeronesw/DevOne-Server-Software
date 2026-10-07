@@ -1,0 +1,27 @@
+[
+  {
+    "source": "DevOne-Server-0.7.0-Phase7-R3-QA-Center-Linux.zip",
+    "sha256": "d2e62d157e5ef5e06b97cf9fec240762be0cedbef7a87deae47c77f0661357d9",
+    "folder": "DevOne-Server-0.7.0-Linux"
+  },
+  {
+    "source": "DevOne-Server-0.7.0-HF4-Release-Metadata-Traceability-Linux.zip",
+    "sha256": "8c4e6454a5a35c7e6cd77ad51d8470f414a6e02a38b71f48c73e2c9edbc346a4",
+    "folder": "DevOne-Server-0.7.0-HF4-Release-Metadata-Traceability-Linux"
+  },
+  {
+    "source": "DevOne-Server-0.7.0-HF5-QA-Release-Gate-Remediation-Linux.zip",
+    "sha256": "f91b136b8c6a4ff8921a0693645baf2faf7d5a31ccd07ffa05dbc57dac4a2605",
+    "folder": "DevOne-Server-0.7.0-HF5-QA-Release-Gate-Remediation-Linux"
+  },
+  {
+    "source": "DevOne-Server-0.7.0-HF7-File-Delete-Route-Alignment-Linux.zip",
+    "sha256": "2b0b47268c8fbebd5a4be79177697607932a900cb0d063857122f6f6cd56f489",
+    "folder": "DevOne-Server-0.7.0-HF7-File-Delete-Route-Alignment-Linux"
+  },
+  {
+    "source": "DevOne-Server-0.7.0-HF8-QA-Service-Recovery-Linux.zip",
+    "sha256": "00c8a40cca1ae96f2a952536fa429cdf9a7e2d9dbcae61ec44484109348a9a96",
+    "folder": "DevOne-Server-0.7.0-HF8-QA-Service-Recovery-Linux"
+  }
+]

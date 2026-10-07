@@ -7,6 +7,8 @@ const dbPath = process.env.DEVONE_DB_PATH ?? "/var/lib/devone/devone.sqlite";
 const db = new DatabaseSync(dbPath);
 
 db.exec(`
+PRAGMA foreign_keys = ON;
+PRAGMA journal_mode = WAL;
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   email TEXT NOT NULL UNIQUE,
@@ -56,7 +58,9 @@ export function hasOwner() {
 
 export function createOwner(email: string, password: string) {
   if (hasOwner()) throw new Error("owner_exists");
+  if (typeof email !== "string" || typeof password !== "string") throw new Error("invalid_credentials");
   if (!/^\S+@\S+\.\S+$/.test(email)) throw new Error("invalid_email");
+  if (password.length > 1024) throw new Error("password_too_long");
   if (password.length < 12) throw new Error("password_too_short");
   const userId = id();
   db.prepare("INSERT INTO users (id,email,password_hash,role,created_at) VALUES (?,?,?,?,?)")
@@ -66,6 +70,8 @@ export function createOwner(email: string, password: string) {
 }
 
 export function login(email: string, password: string) {
+  if (typeof email !== "string" || typeof password !== "string" || password.length > 1024) return null;
+  db.prepare("DELETE FROM sessions WHERE expires_at <= ?").run(Date.now());
   const row = db.prepare("SELECT * FROM users WHERE email = ?").get(email.trim().toLowerCase()) as any;
   if (!row || !passwordVerify(password, row.password_hash)) return null;
   const token = randomBytes(32).toString("base64url");

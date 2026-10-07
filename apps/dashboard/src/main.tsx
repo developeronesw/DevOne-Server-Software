@@ -1,79 +1,55 @@
-import { StrictMode } from "react";
+import { StrictMode, useEffect, useState, type FormEvent } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 
+type Status = { user: { email: string }; agent: { ok: boolean }; metrics: { ok: boolean; hostname?: string; cpuCount?: number; load?: number[]; memoryTotal?: number; memoryFree?: number; uptime?: number } };
 function App() {
-  return (
-    <main className="shell">
-      <aside className="sidebar glass">
-        <div className="brand">
-          <span className="brand-mark">D</span>
-          <div>
-            <strong>DevOne</strong>
-            <small>Server</small>
-          </div>
-        </div>
-        <nav>
-          <a className="active">Dashboard</a>
-          <a>Websites</a>
-          <a>Applications</a>
-          <a>Databases</a>
-          <a>Containers</a>
-          <a>Software</a>
-          <a>Cloudflare</a>
-          <a>DevOne AI</a>
-          <a>Settings</a>
-        </nav>
-      </aside>
-
-      <section className="content">
-        <header className="topbar glass">
-          <div>
-            <span className="eyebrow">SERVER CONTROL</span>
-            <h1>Good morning</h1>
-          </div>
-          <div className="status-pill"><span /> System healthy</div>
-        </header>
-
-        <section className="hero">
-          <div>
-            <span className="eyebrow">DEVONE SERVER 1.0</span>
-            <h2>Your server, managed beautifully.</h2>
-            <p>Management starts with a reliable foundation. Phase 1 is building the control plane, Agent boundary, security model, and deployment-ready dashboard.</p>
-          </div>
-        </section>
-
-        <section className="metrics">
-          {[
-            ["CPU", "—", "Waiting for Agent"],
-            ["Memory", "—", "Waiting for Agent"],
-            ["Storage", "—", "Waiting for Agent"],
-            ["Services", "—", "Waiting for Agent"]
-          ].map(([label, value, detail]) => (
-            <article className="card glass" key={label}>
-              <span>{label}</span>
-              <strong>{value}</strong>
-              <small>{detail}</small>
-            </article>
-          ))}
-        </section>
-
-        <section className="grid">
-          <article className="card glass wide">
-            <div className="card-heading"><h3>Websites</h3><button>+ Add Website</button></div>
-            <div className="empty">No websites have been configured yet.</div>
-          </article>
-          <article className="card glass">
-            <div className="card-heading"><h3>DevOne AI</h3></div>
-            <p className="muted">Connect Google Gemini from Settings to enable server diagnostics and controlled AI operations.</p>
-            <button className="secondary">Configure AI</button>
-          </article>
-        </section>
-      </section>
-    </main>
-  );
+  const [services, setServices] = useState<{service: string; ActiveState: string}[]>([]);
+  const [status, setStatus] = useState<Status | null>(null);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  async function refresh() {
+    try {
+      const response = await fetch("/api/system/status");
+      if (response.status === 401) { setStatus(null); return; }
+      if (!response.ok) throw new Error("Server status unavailable");
+      setStatus(await response.json()); setError("");
+      const serviceResponse = await fetch("/api/services");
+      if (serviceResponse.ok) setServices((await serviceResponse.json()).services);
+    } catch (e) { setError(e instanceof Error ? e.message : "Connection failed"); }
+    finally { setLoading(false); }
+  }
+  useEffect(() => { void refresh(); const timer = setInterval(() => void refresh(), 15000); return () => clearInterval(timer); }, []);
+  async function signIn(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setError("");
+    try {
+      const response = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password }) });
+      if (!response.ok) throw new Error(response.status === 429 ? "Too many attempts. Try again in a minute." : "Sign-in failed. Check your credentials.");
+      setPassword(""); await refresh();
+    } catch (e) { setError(e instanceof Error ? e.message : "Sign-in failed"); }
+    finally { setBusy(false); }
+  }
+  async function serviceAction(service: string, action: string) {
+    if (!window.confirm(`${action} ${service}? This can interrupt hosted applications and panel access.`)) return;
+    setBusy(true);
+    try {
+      const response = await fetch("/api/services/action", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ service, action, confirmed: true }) });
+      if (!response.ok) throw new Error("Service action failed. Check server logs.");
+      await refresh();
+    } catch (e) { setError(e instanceof Error ? e.message : "Service action failed"); }
+    finally { setBusy(false); }
+  }
+  async function signOut() {
+    try { const r = await fetch("/api/auth/logout", { method: "POST" }); if (!r.ok) throw new Error("Sign-out failed"); setStatus(null); }
+    catch { setError("Sign-out failed. Try again."); }
+  }
+  if (loading) return <main className="shell"><section className="content"><p>Connecting to DevOne…</p></section></main>;
+  if (!status) return <main className="shell"><section className="content"><form className="card glass" onSubmit={signIn}><span className="eyebrow">DEVONE SERVER</span><h1>Welcome back</h1><p>Sign in with the owner account created by your installer.</p><label>Email<input type="email" autoComplete="username" required value={email} onChange={e => setEmail(e.target.value)} /></label><label>Password<input type="password" autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)} /></label>{error && <p role="alert">{error}</p>}<button disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button></form></section></main>;
+  const m = status.metrics;
+  const metrics = [["CPU cores", m.ok ? String(m.cpuCount) : "Unavailable"], ["Memory used", m.ok ? `${(((m.memoryTotal ?? 0) - (m.memoryFree ?? 0)) / 1073741824).toFixed(2)} GiB` : "Unavailable"], ["Load (1 minute)", m.ok ? m.load?.[0]?.toFixed(2) ?? "Unavailable" : "Unavailable"], ["Uptime", m.ok ? `${Math.floor((m.uptime ?? 0) / 3600)} hours` : "Unavailable"]];
+  return <main className="shell"><aside className="sidebar glass"><div className="brand"><span className="brand-mark">D</span><div><strong>DevOne</strong><small>Server</small></div></div><nav><a className="active" href="#overview">Dashboard</a></nav><p className="muted">Node edition · Foundation</p></aside><section className="content" id="overview"><header className="topbar glass"><div><span className="eyebrow">SERVER CONTROL</span><h1>{m.hostname ?? "Your server"}</h1><small>{status.user.email}</small></div><button onClick={() => void signOut()}>Sign out</button></header>{error && <p role="alert">{error}</p>}<section className="hero"><h2>Server overview</h2><p>Agent: {status.agent.ok ? "Connected" : "Unavailable"}. Metrics refresh every 15 seconds.</p></section><section className="metrics">{metrics.map(([label, value]) => <article className="card glass" key={label}><span>{label}</span><strong>{value}</strong></article>)}</section><article className="card glass"><h3>Services</h3>{services.map(service => <div key={service.service}><strong>{service.service}</strong> · {service.ActiveState} {["start", "stop", "restart"].map(action => <button key={action} disabled={busy} onClick={() => void serviceAction(service.service, action)}>{action}</button>)}</div>)}</article><article className="card glass"><h3>Management modules</h3><p>The complete 0.7.0 distribution is available through the separate legacy installer. Websites, databases, containers, application installation and AI are pending ports to this Node edition.</p></article></section></main>;
 }
-
-createRoot(document.getElementById("root")!).render(
-  <StrictMode><App /></StrictMode>
-);
+createRoot(document.getElementById("root")!).render(<StrictMode><App /></StrictMode>);

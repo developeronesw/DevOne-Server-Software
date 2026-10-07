@@ -16,7 +16,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm install --frozen-lockfile
       - run: pnpm check
       - run: pnpm build
       - run: pnpm test
@@ -27,6 +27,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: bash -n installer/install.sh
+      - run: bash -n installer/install-legacy.sh
+      - run: python3 scripts/verify-distribution.py
       - run: test -f deploy/nginx/devone-panel.conf.template
       - run: test -f deploy/systemd/devone-api.service
       - run: test -f deploy/systemd/devone-agent.service

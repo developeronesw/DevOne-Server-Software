@@ -89,3 +89,7 @@ button.secondary { background:#eee9f7; color:#6740b8; }
   .grid, .metrics { grid-template-columns:1fr; }
   .topbar { align-items:flex-start; gap:12px; flex-direction:column; }
 }
+form.card { max-width: 480px; margin: 8vh auto; }
+form label { display: grid; gap: 8px; margin: 20px 0; }
+form input { padding: 12px; border: 1px solid #ccd4dc; border-radius: 10px; font: inherit; }
+button:disabled { opacity: .6; cursor: wait; }

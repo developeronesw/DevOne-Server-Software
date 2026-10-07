@@ -1,0 +1,717 @@
+{
+  "archive_sha256": "ea43a046325fc7fb3657a6dca69d31df5478cfb959ee86c8c9fc61d12fe1c3b4",
+  "scope": "Exact bundled Phase7 R3 + HF4/HF5/HF7/HF8 archive; other historical ZIPs were not scanned.",
+  "files": [
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/README.txt",
+      "size": 2171,
+      "sha256": "93fa4383c21c32d6189c2c0a70333780fb8cd2149ce40276f3d2526e740850f4",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/SOURCE-MANIFEST.json",
+      "size": 1167,
+      "sha256": "fea96b4b61df1dc174b680872606a46ceccdfb2bcfaba36032da2c9d5d328354",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/checksums.sha256",
+      "size": 12658,
+      "sha256": "de8b8644772232ec9f7f0658d52d1312a48bcb0e872cfcc4adfc027862b7e029",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/install.sh",
+      "size": 1641,
+      "sha256": "04e7d0b079dfec075f352f7109a1c7dbbd92a9f10549d306738e8b9129736726",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-HF4-Release-Metadata-Traceability-Linux/CHANGELOG.txt",
+      "size": 453,
+      "sha256": "4a8c8cd618c6c403c6f949478a9ae0e9e8ffcad63b247d4b2351de98ce3a2057",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-HF4-Release-Metadata-Traceability-Linux/README.txt",
+      "size": 672,
+      "sha256": "904cd6d34591d50d08a7591751718511e6f2c97bf1b2da35faff251d1390ff50",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-HF4-Release-Metadata-Traceability-Linux/checksums.sha256",
+      "size": 574,
+      "sha256": "da4933621676d7bcb97df3f4ad7c65a50deb0518726505271b28d8708e94d5af",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-HF4-Release-Metadata-Traceability-Linux/install.sh",
+      "size": 2313,
+      "sha256": "dfca81b9b41ca8bf2f8265cc09ec6459709168745609845d0c761faafb00d8b9",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-HF4-Release-Metadata-Traceability-Linux/server-manifest.json",
+      "size": 6398,
+      "sha256": "bdf4f2f216bf659a599595793e46612c39f7c76e770f368aa98276f15297d29b",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-HF4-Release-Metadata-Traceability-Linux/server-update.json",
+      "size": 1346,
+      "sha256": "bec730b6f3f4d11ea540c0a0cae5f09b0e49b7ee02f042734c22e0c3649002b4",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-HF4-Release-Metadata-Traceability-Linux/update.json",
+      "size": 878,
+      "sha256": "855c4fe692cca02c21dce451307dca201626ef4c54b88618a62fb2605f6df5fe",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-HF4-Release-Metadata-Traceability-Linux/verify.sh",
+      "size": 686,
+      "sha256": "621745602899035f483f1724c8fc9658c79445e0db9b5e8f8e031241d0a0e899",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-HF5-QA-Release-Gate-Remediation-Linux/CHANGELOG.txt",
+      "size": 1698,
+      "sha256": "1c0f58fe53ad5eb3781cedc4df090fd14c9e42eb716ee9ede2c4ab6d5c7c43dd",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-HF5-QA-Release-Gate-Remediation-Linux/README.txt",
+      "size": 622,
+      "sha256": "75e0dadbf5347cdfb098766c3a5b547458c4af369b076c776e8ae08e25bf53a0",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-HF5-QA-Release-Gate-Remediation-Linux/bin/devone-platform-guard",
+      "size": 6176920,
+      "sha256": "40bf65cf55acd6c74004162dee002fdf522e498b6f76ff4a119dbb793c08a790",
+      "kind": "compiled-executable"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-HF5-QA-Release-Gate-Remediation-Linux/bin/devone-qa-agent",
+      "size": 5443736,
+      "sha256": "69c5146f314d779cb69fabaaed02c261723603e40df844fd45df2a560e5430b5",
+      "kind": "compiled-executable"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-HF5-QA-Release-Gate-Remediation-Linux/bin/devone-qa-api",
+      "size": 5922968,
+      "sha256": "270a793a54831b49876cbd755d71ab2693ca4ee276645164f114d782996ef1ed",
+      "kind": "compiled-executable"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-HF5-QA-Release-Gate-Remediation-Linux/checksums.sha256",
+      "size": 961,
+      "sha256": "f1e1d70f7eb9470fb6da39f2ea52aeea483310e8aa675522d2e4a3e8c26ec356",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-HF5-QA-Release-Gate-Remediation-Linux/install.sh",
+      "size": 11425,
+      "sha256": "147f719763a2ca6ef0c55fbb65cf70d968d3bde60e8413a6f02760a9bf02dbbb",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-HF5-QA-Release-Gate-Remediation-Linux/metadata/qa-center-manifest.json",
+      "size": 1029,
+      "sha256": "bfb08d707f4945838e7f40e03430baa5089935587b57830e21500ee646b7de86",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-HF5-QA-Release-Gate-Remediation-Linux/metadata/server-manifest.json",
+      "size": 6398,
+      "sha256": "bdf4f2f216bf659a599595793e46612c39f7c76e770f368aa98276f15297d29b",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-HF5-QA-Release-Gate-Remediation-Linux/metadata/server-update.json",
+      "size": 1346,
+      "sha256": "bec730b6f3f4d11ea540c0a0cae5f09b0e49b7ee02f042734c22e0c3649002b4",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-HF5-QA-Release-Gate-Remediation-Linux/update.json",
+      "size": 545,
+      "sha256": "d3cf71dcffdd59fdf1154aecb64601c8c2b54294daa1c261de87efefa3534d5b",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-HF5-QA-Release-Gate-Remediation-Linux/verify.sh",
+      "size": 1683,
+      "sha256": "95f3fce47d87b91db85f989299ce0586c10756fa1979e8b4b7af6205bbd17ce8",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-HF7-File-Delete-Route-Alignment-Linux/CHANGELOG.txt",
+      "size": 1404,
+      "sha256": "5ee0ee383266af8f65a34dd3619bed91b7fce1f7c1650ad0aa6723aae2fe684a",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-HF7-File-Delete-Route-Alignment-Linux/README.txt",
+      "size": 546,
+      "sha256": "1e0c393910cbb55f76f4aa4f92a926de5b8c86b2a7f9bef41fe291880be5d54c",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-HF7-File-Delete-Route-Alignment-Linux/bin/devone-agent",
+      "size": 5795992,
+      "sha256": "80433321410ede27656a479b2a4ff844a0ebb669f89a807f43e8ce20e627ba8f",
+      "kind": "compiled-executable"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-HF7-File-Delete-Route-Alignment-Linux/checksums.sha256",
+      "size": 569,
+      "sha256": "5d1a7a9997a480a9192246f3b63c0dc646d5c3af5b74091cf20599a11d264f4e",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-HF7-File-Delete-Route-Alignment-Linux/install.sh",
+      "size": 7617,
+      "sha256": "687b3be46bf6e99bf658326c0e35ad03b3716f9b6e4f9f20a236149603670b00",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-HF7-File-Delete-Route-Alignment-Linux/metadata/hf7.json",
+      "size": 541,
+      "sha256": "d45f665651b1dbcbdcec261c90daf7208fb66d3bed38f3c378b6029ddd975b29",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-HF7-File-Delete-Route-Alignment-Linux/update.json",
+      "size": 352,
+      "sha256": "b526c3f94291a992197cf9c7d081e640a748feacb304d1a41f90a70a7083f524",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-HF7-File-Delete-Route-Alignment-Linux/verify.sh",
+      "size": 2220,
+      "sha256": "06f296186b06040c3b3a260e099e9eb1fde636521d7dc35497fca2e73f923576",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-HF8-QA-Service-Recovery-Linux/CHANGELOG.txt",
+      "size": 264,
+      "sha256": "ac8c58c97620a86970e481d2b1edae679f42e88e7699f7a83c4ad0ea5f5f444c",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-HF8-QA-Service-Recovery-Linux/README.txt",
+      "size": 744,
+      "sha256": "7308d4dd58a1968ee19a65a053417bd7fced41ac0a83ce31985486a412dadaab",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-HF8-QA-Service-Recovery-Linux/checksums.sha256",
+      "size": 388,
+      "sha256": "1cd0be15a77f6ea8ca15b002a4ac9108087639a78dc04ff5aa679113c41b3c81",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-HF8-QA-Service-Recovery-Linux/install.sh",
+      "size": 3576,
+      "sha256": "d101e32d962114577c8499b8d6d07e67d478e3e4a4b6fccef4050f88b9f86dd5",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-HF8-QA-Service-Recovery-Linux/update.json",
+      "size": 361,
+      "sha256": "e664eb7ebdceb407753ae5040a75151485fa55321197f7b0c5c0aa8bf2d59f5f",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-HF8-QA-Service-Recovery-Linux/verify.sh",
+      "size": 1293,
+      "sha256": "c26a769b9d116b551394545df7d5b79fd4cd429c313876928f590b6c26350025",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/CHANGELOG.txt",
+      "size": 13873,
+      "sha256": "9dd732e317596ff1e1d16bbba0e89d5addc7cef85fe3846e65f11852236ebaf0",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/LICENSE.txt",
+      "size": 875,
+      "sha256": "918d63fb81dc3e0e9e4d596ee14d752786d4953eb88f96ae1049e2cc038cee9e",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/README.txt",
+      "size": 8679,
+      "sha256": "700a4bc91cb9250b4050e9cb97cf3a069c3e5bacec6f2879f9a185aeb94f28a0",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/bin/devone-agent",
+      "size": 5795992,
+      "sha256": "507a6ff91b63961c7099e6cdd9c527a4650e9569b7c889b01453039c765ec169",
+      "kind": "compiled-executable"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/bin/devone-api",
+      "size": 6385816,
+      "sha256": "97a0cf8e33121813fcb70f17f0d343a4e21304a2a63af152e1983ddd75d553d8",
+      "kind": "compiled-executable"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/bin/devone-api-legacy",
+      "size": 6561944,
+      "sha256": "497bee085541910b8b86f72f991da86cbb5467d9560c40eda2a42a4194c06f53",
+      "kind": "compiled-executable"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/bin/devone-apps-agent",
+      "size": 5914776,
+      "sha256": "73465da3fe8e8d645e95b9e0b8e3b0610e409d30b9c27b118f5ede5df078a830",
+      "kind": "compiled-executable"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/bin/devone-apps-api",
+      "size": 6213784,
+      "sha256": "a8e9d2cfdb67ab6a8c5725ff714b1abb954b5f75fc7663190a977a7f9800d7ef",
+      "kind": "compiled-executable"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/bin/devone-hosting-agent",
+      "size": 5787800,
+      "sha256": "e27fa8a73b6172277cadfc21b31077abc6a4df545347cdff92ffca17504542ab",
+      "kind": "compiled-executable"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/bin/devone-hosting-api",
+      "size": 6246552,
+      "sha256": "998c55302973656e0882ea15515b2c55f83c7012dea173cfa3b76d7fc1ced5df",
+      "kind": "compiled-executable"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/bin/devone-metrics-api",
+      "size": 5865624,
+      "sha256": "e9f8a2b425ac6c299e6d417a512e29262a569cad2c77b3eb730f2beb3aa646f7",
+      "kind": "compiled-executable"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/bin/devone-ops-agent",
+      "size": 5787800,
+      "sha256": "152ccf8389fce0bdd0464e43e9bc8d19c51b0bcad90092516ac13134a3cce89f",
+      "kind": "compiled-executable"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/bin/devone-phase4-api",
+      "size": 6201496,
+      "sha256": "4c3646b287f54304bf215ed34590fe0471fbe66912d7d6088aa2682b4b725c2b",
+      "kind": "compiled-executable"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/bin/devone-platform-agent",
+      "size": 6582424,
+      "sha256": "864801ede28f32fa92f39510a00f09fe221b70cc0c13ab13b1c45522d4c4686a",
+      "kind": "compiled-executable"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/bin/devone-platform-api",
+      "size": 6213784,
+      "sha256": "11ae147e6610a2599629d81cae7d004b9bb0927b98f2267c3db1fef40a028de5",
+      "kind": "compiled-executable"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/bin/devone-web-permissions",
+      "size": 3367,
+      "sha256": "870bc20da12965d473c476ec7e402d3a2b018f3e8ac5731221c33660d6973f69",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/checksums.sha256",
+      "size": 5394,
+      "sha256": "8f13ba5c05a64c892df8bb970c66a69441739c047c6217dd543486106fa21495",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/install.sh",
+      "size": 50267,
+      "sha256": "c4784be021f33cb6a821b8b95cfeb05075edad49d73f97b493cdf5a399a8e2ec",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/manifest.json",
+      "size": 6866,
+      "sha256": "44d6ac474aba22b470cfb715ec93583456315c68dc04202773caf7fe77ef64df",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/panel/assets/devone.css",
+      "size": 81201,
+      "sha256": "af5749e115c69e84eeb6d1bd6d5f1c71011dfd2e749fd1ec8c204c7859b306da",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/panel/assets/devone.js",
+      "size": 230244,
+      "sha256": "2dd25a693b594486a5f89a57e7b1a50e0fe8b9396d13f034f00adb3573857375",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/panel/assets/hosting.js",
+      "size": 4939,
+      "sha256": "a5e77469db01e6d6b2eb5a4484095b8b7d6a8f65782e285802931d64df0ab0f0",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/panel/hosting.html",
+      "size": 434,
+      "sha256": "f93e2a2a5ef7dbed5cfc5ab2cae3813e057d7d14df320a331177799b6bf93a45",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/panel/index.html",
+      "size": 570,
+      "sha256": "9e56dccedfc80c156fa5eb5f892083fe123ba2c69a081200026965227111e52a",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/panel/vendor/react-dom.production.min.js",
+      "size": 102890,
+      "sha256": "c7a65157caebd9af7e108f1f1eb8b6e2c8fafb141d0f4c2a4d4dfd851c52ec9e",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/panel/vendor/react.production.min.js",
+      "size": 6588,
+      "sha256": "de59b0d4504aa0350c13775fec9b78859f3eda83dea21d60dded98bb7866d54a",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/qa/CHANGELOG.txt",
+      "size": 1072,
+      "sha256": "0aa4ea93b1f18ed8d33e4949b9b68bd230d1324a94da38c44521ecba8315fd0a",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/qa/README.txt",
+      "size": 3241,
+      "sha256": "4cee90a0a234e82551d325a506cc2f9a6ae341f874ba4d951cb2f1786b9269dc",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/qa/bin/devone-qa-agent",
+      "size": 5443736,
+      "sha256": "69c5146f314d779cb69fabaaed02c261723603e40df844fd45df2a560e5430b5",
+      "kind": "compiled-executable"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/qa/bin/devone-qa-api",
+      "size": 5918872,
+      "sha256": "9902f21e77ac5084e0cd1aaef668a9ec76dbf2939df1e1d228d4d89d9af7a92d",
+      "kind": "compiled-executable"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/qa/checksums.sha256",
+      "size": 1519,
+      "sha256": "72a15f2735609d995109d8f8020ac49d9a4ef8b09708a0033c6eb2e816bd04f5",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/qa/install.sh",
+      "size": 7399,
+      "sha256": "3b12e439036b67e00b0ff2e50763e5028003f52ec0041e4ea1dd9d7d580aaaab",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/qa/manifest.json",
+      "size": 1029,
+      "sha256": "31358904fbc5082c18f4e5d97b766b258504342bda0cc69a0f0b4bb97839a938",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/qa/panel/assets/qa-center.cssfrag",
+      "size": 4149,
+      "sha256": "3af808a1e4bdd47e7dee26a2ec69f397c8b99e1931d571c5edcb862be3ce00ea",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/qa/panel/assets/qa-center.jsfrag",
+      "size": 9110,
+      "sha256": "92516a04cd5b10b30b6a93499af6de5f5c099a0e438331d8a119f56b2b4377ad",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/qa/reference/LIVE-QA-CHECKLIST.txt",
+      "size": 9925,
+      "sha256": "1d6d1b3ba73a4724a4312aaf61ccdbd03db83bfa538193d8b3d10bab10508bbd",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/qa/source/qa-agent/go.mod",
+      "size": 40,
+      "sha256": "c5f45a48c041d00fdbd8254898d2aa4763d9a98d8850b44d3ffa71a985a5ba02",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/qa/source/qa-agent/main.go",
+      "size": 11087,
+      "sha256": "f2e4e67a25781f784f9062a667ccc6943cea6b9c0fe245f653a0e33a303a2c21",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/qa/source/qa-api/go.mod",
+      "size": 38,
+      "sha256": "4b968b11b6880b50a147135f681345f223c8eb056f049c7fc0eebc306bc5373b",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/qa/source/qa-api/main.go",
+      "size": 30831,
+      "sha256": "8f5d2fe786dc60132eaad6766518302437ceeed2d2f09c229dd851a4a30e7569",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/qa/tools/patch_panel.py",
+      "size": 2206,
+      "sha256": "f1b5ee4dc9f907f3ed56e8a5e44e605e0259487646f2da24946fade5a1eecce7",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/qa/uninstall.sh",
+      "size": 1759,
+      "sha256": "bbcda71fabee1eca1f3032626d4747c4c53bc15e54b37be9325c796264e558ea",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/qa/update.json",
+      "size": 337,
+      "sha256": "4b73b1dddf11558af7165a529d4cdd5705837c5f9b7b3cfb750134985aab6e20",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/reference/APPROVED-DASHBOARD-DESIGN-CONTRACT.png",
+      "size": 2515661,
+      "sha256": "d09de059d0ff7287864d2a513faf54d04d489f5c1db930311f543bed9201b00c",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/reference/PHASE1-LIVE-RENDER.png",
+      "size": 707511,
+      "sha256": "ab0d88aa85d2d97bd3e7c802453c01843b63276437fb62968ca9b70cd092d928",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/reference/PHASE4-TEST-PLAN.txt",
+      "size": 2378,
+      "sha256": "0b51b58eed0dfdebd2964daeb2590f9ce3b211859b6d6bb03a84e084996ec2b9",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/reference/PHASE5-TEST-PLAN.txt",
+      "size": 2880,
+      "sha256": "759b7994767e7b4292400062805c21690167cd77af5958adeaf66fa518ae53cd",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/reference/PHASE6-R1-METRICS-QA.txt",
+      "size": 951,
+      "sha256": "829ee3d446bdc4a7b529b6f91b82bd86d608b2a3cdad91883e6b1170a6f44b04",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/reference/PHASE6-R2-OVERVIEW-SHORTCUTS-QA.txt",
+      "size": 613,
+      "sha256": "f2389c2807662148665016f8d552a182507ba17a0d29d92ed35c96f199b87d85",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/reference/PHASE6-R3-GLASS-SHORTCUT-QA.txt",
+      "size": 1082,
+      "sha256": "393bc93a4fbd2e688e5a2c1a12343c03fb06fe54a3d5912f3ab34ad57f8c0c3c",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/reference/PHASE6-R4-CORE172-VAULT-QA.txt",
+      "size": 1034,
+      "sha256": "b6080023812b8053c6408de6bca246ed870359c120c9bc7cc572adb906f57b55",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/reference/PHASE6-TEST-PLAN.txt",
+      "size": 3138,
+      "sha256": "b463c964e70dfb9974951f4696c6bf6bedebea8ff3308de5d31f6185b7be6c13",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/reference/PHASE7-R1-GLOBAL-SEARCH-QA.txt",
+      "size": 3025,
+      "sha256": "e03bf8a73697c009169b09a9e3585599ced707e4a3166c5217a948b0b570cb05",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/reference/PHASE7-STATIC-QA.txt",
+      "size": 3787,
+      "sha256": "9995d0a346ca2f844c59b7996e168b002121b8334b3c81516ba41ed9b7d63ed7",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/reference/PHASE7-TEST-PLAN.txt",
+      "size": 5513,
+      "sha256": "71a056ba42f48820432cd46e24955b001a086581a3491572f2d02443933050c8",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/third-party/NOTICES.txt",
+      "size": 2905,
+      "sha256": "ea14a2b8a9a23057abc7bc4ddf44cff658a9925f9746ff5bb7ac91c773ea0014",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/uninstall.sh",
+      "size": 1854,
+      "sha256": "f23295ce36a30ef59bade89292d4e42bb26a676f8a15e8980823eb1cb863fd99",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/update.json",
+      "size": 1446,
+      "sha256": "debe6dcc2805749c5cf3d54b2c02d36cea9b3638665b1188d7e23204ea940b3a",
+      "kind": "file"
+    },
+    {
+      "path": "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/upgrade.sh",
+      "size": 130,
+      "sha256": "9b125e8f7b57eacefda7a9e9ca41dc8d983f65e5154f839f75eed6deb21c3855",
+      "kind": "file"
+    }
+  ],
+  "compiled_executables": [
+    "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-HF5-QA-Release-Gate-Remediation-Linux/bin/devone-platform-guard",
+    "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-HF5-QA-Release-Gate-Remediation-Linux/bin/devone-qa-agent",
+    "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-HF5-QA-Release-Gate-Remediation-Linux/bin/devone-qa-api",
+    "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-HF7-File-Delete-Route-Alignment-Linux/bin/devone-agent",
+    "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/bin/devone-agent",
+    "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/bin/devone-api",
+    "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/bin/devone-api-legacy",
+    "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/bin/devone-apps-agent",
+    "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/bin/devone-apps-api",
+    "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/bin/devone-hosting-agent",
+    "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/bin/devone-hosting-api",
+    "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/bin/devone-metrics-api",
+    "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/bin/devone-ops-agent",
+    "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/bin/devone-phase4-api",
+    "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/bin/devone-platform-agent",
+    "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/bin/devone-platform-api",
+    "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/qa/bin/devone-qa-agent",
+    "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/qa/bin/devone-qa-api"
+  ],
+  "backend_source_files": [
+    "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/qa/source/qa-agent/main.go",
+    "DevOne-Server-0.7.0-All-in-One/packages/DevOne-Server-0.7.0-Linux/qa/source/qa-api/main.go"
+  ],
+  "api_route_literals": [
+    "/api/ai/chat",
+    "/api/dashboard",
+    "/api/databases",
+    "/api/databases/",
+    "/api/databases/${x.id}",
+    "/api/events/stats",
+    "/api/files",
+    "/api/files/mkdir",
+    "/api/files/read?site_id=",
+    "/api/files/read?site_id=${encodeURIComponent",
+    "/api/files/upload?site_id=${encodeURIComponent",
+    "/api/files/write",
+    "/api/files?site_id=${encodeURIComponent",
+    "/api/integrations",
+    "/api/login",
+    "/api/logout",
+    "/api/platform/apps/deploy",
+    "/api/platform/catalog",
+    "/api/platform/compose/deploy",
+    "/api/platform/containers",
+    "/api/platform/containers/action",
+    "/api/platform/containers/deploy",
+    "/api/platform/jobs",
+    "/api/platform/jobs/clear",
+    "/api/platform/jobs/remove",
+    "/api/platform/projects",
+    "/api/platform/projects/action",
+    "/api/platform/projects/dependencies",
+    "/api/platform/projects/deploy",
+    "/api/platform/source/upload",
+    "/api/qa/",
+    "/api/qa/run",
+    "/api/qa/runs",
+    "/api/qa/runs/",
+    "/api/qa/settings",
+    "/api/qa/status",
+    "/api/services",
+    "/api/services/action",
+    "/api/session",
+    "/api/settings",
+    "/api/settings/panel-hostname",
+    "/api/setup",
+    "/api/setup/status",
+    "/api/sites",
+    "/api/sites/",
+    "/api/sites/${s.id}",
+    "/api/software",
+    "/api/software/install",
+    "/api/users",
+    "/api/v4/cloudflare/accounts",
+    "/api/v4/cloudflare/connect",
+    "/api/v4/cloudflare/disconnect",
+    "/api/v4/cloudflare/status",
+    "/api/v4/cloudflare/zones",
+    "/api/v4/cloudflare/zones/${this.state.zone}/dns",
+    "/api/v4/cloudflare/zones/${this.state.zone}/dns/${rec.id}",
+    "/api/v4/cloudflare/zones/${this.state.zone}/purge",
+    "/api/v4/cloudflare/zones/${this.state.zone}/settings/${id}",
+    "/api/v4/cloudflare/zones/${zone}",
+    "/api/v4/jobs",
+    "/api/v4/jobs/clear",
+    "/api/v4/jobs/remove",
+    "/api/v4/jobs/settings",
+    "/api/v4/security/action",
+    "/api/v4/security/status",
+    "/api/v4/ssl/issue",
+    "/api/v4/ssl/sites",
+    "/api/v4/terminal/exec",
+    "/api/v4/terminal/session/close",
+    "/api/v4/terminal/session/input",
+    "/api/v4/terminal/session/read",
+    "/api/v4/terminal/session/start",
+    "/api/v5/hosting/assign-database",
+    "/api/v5/hosting/assign-site",
+    "/api/v5/hosting/capacity",
+    "/api/v5/hosting/customers",
+    "/api/v5/hosting/customers/${encodeURIComponent",
+    "/api/v5/hosting/packages",
+    "/api/v5/hosting/packages/${encodeURIComponent",
+    "/api/v5/hosting/settings",
+    "/api/v5/hosting/sftp",
+    "/api/v5/hosting/status",
+    "/api/v5/portal/login",
+    "/api/v5/portal/logout",
+    "/api/v5/portal/session",
+    "/api/v5/profile",
+    "/api/v5/vhosts/restore",
+    "/api/v5/vhosts/save",
+    "/api/v5/vhosts/validate",
+    "/api/v5/vhosts?site_id=",
+    "/api/v5/vhosts?site_id=${encodeURIComponent",
+    "/api/v6/apps/catalog",
+    "/api/v6/apps/deploy",
+    "/api/v6/apps/installed",
+    "/api/v6/apps/jobs",
+    "/api/v6/apps/jobs/clear",
+    "/api/v6/apps/jobs/remove",
+    "/api/v6/apps/remove",
+    "/api/v6/apps/vault/import?app=devone-core",
+    "/api/v7/metrics/history?range=",
+    "/api/v7/metrics/history?range=${encodeURIComponent",
+    "/api/v7/metrics/history?range=1m"
+  ],
+  "route_caveat": "Static string inventory; dynamic routes may be truncated and route presence does not establish runtime behavior."
+}

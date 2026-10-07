@@ -10,3 +10,8 @@ coverage/
 .DS_Store
 .vscode/
 .idea/
+
+*.tsbuildinfo
+
+distributions/DevOne-Server-0.7.0-All-in-One.zip
+distributions/*.tmp

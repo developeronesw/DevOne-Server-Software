@@ -8,11 +8,17 @@ ENV_FILE="/etc/devone/devone.env"
 DOMAIN="${DEVONE_PANEL_DOMAIN:-}"
 ADMIN_EMAIL="${DEVONE_ADMIN_EMAIL:-}"
 ADMIN_PASSWORD="${DEVONE_ADMIN_PASSWORD:-}"
+SOURCE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+SOURCE_COMMIT="$(git -C "$SOURCE_DIR" rev-parse HEAD)"
 
 log() { printf '\n[DevOne] %s\n' "$*"; }
 fail() { echo "[DevOne] ERROR: $*" >&2; exit 1; }
 
 [[ $EUID -eq 0 ]] || fail "Run as root."
+[[ ! -f /etc/devone/api.json && ! -d /opt/devone/bin ]] || fail "Legacy edition detected; in-place conversion is unsupported."
+[[ ! -d /home/clp ]] || fail "CloudPanel detected; use a separate VPS."
+[[ ! -d /opt/devone/current ]] || fail "Existing Node installation detected. Updates require a versioned migration, not this fresh installer."
+[[ -z "$(git -C "$SOURCE_DIR" status --porcelain)" ]] || fail "Install from a clean committed checkout."
 source /etc/os-release
 [[ "${ID:-}" == "ubuntu" && "${VERSION_ID:-}" == "24.04" ]] || fail "DevOne 1.0 requires Ubuntu 24.04 LTS."
 [[ "$(dpkg --print-architecture)" == "amd64" ]] || fail "DevOne 1.0 requires amd64/x86-64."
@@ -33,7 +39,7 @@ if ! command -v node >/dev/null 2>&1 || [[ "$(node -p 'process.versions.node.spl
   DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs
 fi
 node_major="$(node -p 'process.versions.node.split(".")[0]')"
-[[ "$node_major" -ge 22 ]] || fail "Node.js 22+ is required."
+node -e 'const [a,b]=process.versions.node.split(".").map(Number); if(a<22 || (a===22 && b<13)) process.exit(1)' || fail "Node.js 22.13+ is required for Vite 8 and SQLite."
 
 corepack enable
 corepack prepare pnpm@10.15.1 --activate
@@ -44,11 +50,13 @@ install -d -o "$APP_USER" -g "$APP_USER" "$INSTALL_ROOT" /var/lib/devone /var/lo
 chmod 750 /etc/devone
 
 if [[ ! -d "$INSTALL_ROOT/current/.git" ]]; then
-  git clone "$REPO_URL" "$INSTALL_ROOT/current"
+  git clone --no-checkout "$REPO_URL" "$INSTALL_ROOT/current"
+  git -C "$INSTALL_ROOT/current" checkout --detach "$SOURCE_COMMIT"
 fi
-chown -R "$APP_USER:$APP_USER" "$INSTALL_ROOT/current"
+chown -R root:root "$INSTALL_ROOT/current"
 
-AGENT_TOKEN="${DEVONE_AGENT_TOKEN:-$(openssl rand -hex 32)}"
+AGENT_TOKEN="$(openssl rand -hex 32)"
+SETUP_TOKEN="$(openssl rand -hex 32)"
 cat > "$ENV_FILE" <<EOF
 NODE_ENV=production
 PORT=8787
@@ -57,13 +65,14 @@ DEVONE_PANEL_URL=https://$DOMAIN
 DEVONE_AGENT_URL=http://127.0.0.1:8790
 DEVONE_AGENT_PORT=8790
 DEVONE_AGENT_TOKEN=$AGENT_TOKEN
+DEVONE_SETUP_TOKEN=$SETUP_TOKEN
 EOF
 chown root:"$APP_USER" "$ENV_FILE"
 chmod 640 "$ENV_FILE"
 
 log "Installing dependencies and building DevOne..."
 cd "$INSTALL_ROOT/current"
-pnpm install
+pnpm install --frozen-lockfile
 pnpm --filter @devone/api build
 pnpm --filter @devone/agent build
 pnpm --filter @devone/dashboard build
@@ -85,7 +94,8 @@ server {
 }
 EOF
 ln -sfn /etc/nginx/sites-available/devone-panel /etc/nginx/sites-enabled/devone-panel
-rm -f /etc/nginx/sites-enabled/default
+
+# Preserve existing host VHosts, including the default site.
 nginx -t
 systemctl restart nginx devone-api devone-agent
 sleep 2
@@ -103,8 +113,16 @@ nginx -t
 systemctl reload nginx
 
 log "Initializing Owner account..."
-payload="$(python3 -c 'import json,sys; print(json.dumps({"email":sys.argv[1],"password":sys.argv[2]}))' "$ADMIN_EMAIL" "$ADMIN_PASSWORD")"
-curl -fsS -X POST "https://$DOMAIN/api/auth/setup" -H "Content-Type: application/json" --data "$payload" >/dev/null || fail "Owner account setup failed."
+# Pass credentials over stdin; never expose passwords in process arguments.
+export DEVONE_BOOTSTRAP_EMAIL="$ADMIN_EMAIL" DEVONE_BOOTSTRAP_PASSWORD="$ADMIN_PASSWORD"
+python3 - <<'PYSETUP' | curl -fsS -X POST http://127.0.0.1:8787/api/auth/setup -H "Content-Type: application/json" -H "X-DevOne-Setup-Token: $SETUP_TOKEN" --data-binary @- >/dev/null
+import json, os
+print(json.dumps({"email": os.environ["DEVONE_BOOTSTRAP_EMAIL"], "password": os.environ["DEVONE_BOOTSTRAP_PASSWORD"]}))
+PYSETUP
+unset DEVONE_BOOTSTRAP_EMAIL DEVONE_BOOTSTRAP_PASSWORD ADMIN_PASSWORD
+sed -i '/^DEVONE_SETUP_TOKEN=/d' "$ENV_FILE"
+systemctl restart devone-api
+
 
 log "DevOne Phase 1 installation complete."
 echo "Control panel: https://$DOMAIN"

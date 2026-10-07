@@ -1,0 +1,30 @@
+{
+  "archive": "distributions/DevOne-Server-0.7.0-All-in-One.zip",
+  "sha256": "ea43a046325fc7fb3657a6dca69d31df5478cfb959ee86c8c9fc61d12fe1c3b4",
+  "parts": [
+    {
+      "path": "distributions/legacy-parts/part-000",
+      "sha256": "fc2ad65f0b1ccdfe1fe18c587ad4246a06534b9f6b871c62befc3cc669b30e29"
+    },
+    {
+      "path": "distributions/legacy-parts/part-001",
+      "sha256": "77d3e4dff4860be52706e4ff231797ba915ecb256fcba2b4c807bb2c361eda85"
+    },
+    {
+      "path": "distributions/legacy-parts/part-002",
+      "sha256": "338817022c00b2591155b93de6110479922fc9ac483ac259a6e6f43b0ed019d7"
+    },
+    {
+      "path": "distributions/legacy-parts/part-003",
+      "sha256": "41643af176d62164b2cd9259c07775ba28ce771dd068861f57c6666eeee74bd8"
+    },
+    {
+      "path": "distributions/legacy-parts/part-004",
+      "sha256": "29e92474bfa2804593d952c2882c69bfe90880b04c5b502fdfd2dcea5234a755"
+    },
+    {
+      "path": "distributions/legacy-parts/part-005",
+      "sha256": "cb8947869495e057fd36972aac8edd9f02c8e36a1930933b8a87a786bca82d1b"
+    }
+  ]
+}

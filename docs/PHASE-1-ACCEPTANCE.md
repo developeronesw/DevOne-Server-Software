@@ -3,7 +3,7 @@
 Phase 1 is complete only when the following are verified.
 
 ## Automated
-- Node.js 22+ toolchain installs.
+- Node.js 22.13+ toolchain installs.
 - TypeScript check passes.
 - Dashboard builds.
 - API builds.

@@ -8,7 +8,7 @@ DevOne is designed as a modern, light glass-SaaS control panel that manages the 
 
 ### Core stack
 
-- React + TypeScript + Vite — dashboard
+- React + TypeScript + Vite 8 — dashboard
 - Node.js + TypeScript — API/control plane
 - DevOne Agent — privileged, policy-controlled host operations
 - pnpm workspaces — monorepo
@@ -26,16 +26,14 @@ The dashboard/API does not run as root. Privileged host operations are performed
 
 ## Development phases
 
-1. Foundation
-2. Server Management
-3. Web Hosting
-4. Software & Frameworks
-5. Databases
-6. Containers
-7. Deployment
-8. Cloudflare
-9. DevOne AI
-10. Hosting Platform
+1. Foundation & Secure Server Core
+2. Server Management & Software Center
+3. Web Hosting & Application Management
+4. Infrastructure, Databases, Containers & Cloudflare
+5. DevOne AI & Platform
+
+See `docs/MASTER-PLAN.md` for acceptance gates. Service management is the first
+Phase 2 port; the remaining roadmap is not claimed complete.
 
 The first release is intentionally focused on a reliable fresh Ubuntu installation, core API/Agent boundaries, authentication, health reporting, logging, and the dashboard shell.
 
@@ -44,7 +42,7 @@ The first release is intentionally focused on a reliable fresh Ubuntu installati
 Requirements:
 
 - Ubuntu 24.04 LTS or compatible Linux development environment
-- Node.js 22+
+- Node.js 22.13+
 - pnpm 10+
 
 Install dependencies:
@@ -64,3 +62,36 @@ pnpm check
 Official repository:
 
 https://github.com/developeronesw/DevOne-Server-Software
+
+## Complete legacy distribution
+
+The 0.7.0 cumulative server and applicable hotfixes are bundled in
+`distributions/DevOne-Server-0.7.0-All-in-One.zip`. On a **fresh dedicated Ubuntu
+24.04 LTS x86-64 VPS**, install with:
+
+```bash
+sudo apt-get install unzip
+sudo bash installer/install-legacy.sh
+```
+
+Open `https://YOUR_SERVER_IP:8443` and run QA Center after installation. Permit
+8443 in the provider firewall; hosted websites use 80/443. This installs the
+legacy edition, including its original UI. It does not restore customer data.
+Do not install over CloudPanel or the Node edition.
+
+The Node edition remains under development. It now has functional sign-in,
+logout, authenticated host metrics and allowlisted service controls, but its management modules are not yet
+ported. See [the comparison and remaining work](docs/LEGACY-COMPARISON.md).
+The fresh Node installer uses the exact clean checkout commit and refuses an
+existing installation; automated updates and legacy migration remain pending.
+
+## Conversion scan
+
+[Conversion readiness](docs/CONVERSION-READINESS.md) identifies reusable React
+assets, available QA Go source, compiled-only backends, current Node coverage
+and pending ports. Run `python3 scripts/scan-legacy.py` for a reproducible static
+inventory; it never executes bundled binaries or host installers.
+
+The legacy ZIP is stored as checksum-verified parts because the GitHub upload API
+limits large blobs. The legacy installer and verification scripts reassemble it
+automatically; alternatively run `python3 scripts/assemble-distribution.py`.
