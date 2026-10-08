@@ -88,3 +88,26 @@ test('file moves preserve contents, refuse existing destinations and require cur
     await files.mkdir('folder');await assert.rejects(files.renameFile('folder','other',version));
   } finally {await rm(directory,{recursive:true,force:true});}
 });
+
+test('file copies preserve source, create independent inode and reject conflicts',async()=>{
+  const {revision}=await import('../agent/dist/site-files.js');
+  const {mkdir,stat}=await import('node:fs/promises');
+  const directory=await mkdtemp(join(tmpdir(),'devone-copy-')),root=join(directory,'public');
+  try {
+    await mkdir(root);const files=new SiteFiles(root);
+    await files.mkdir('assets');
+    await files.create('source.txt',Buffer.from('original'));
+    const version=revision(Buffer.from('original'));
+    await assert.rejects(files.copyFile('source.txt','assets/copied.txt','0'.repeat(64)),/file_conflict/);
+    await files.copyFile('source.txt','assets/copied.txt',version);
+    assert.equal((await files.read('source.txt')).toString(),'original');
+    assert.equal((await files.read('assets/copied.txt')).toString(),'original');
+    assert.notEqual((await stat(join(root,'source.txt'))).ino,(await stat(join(root,'assets/copied.txt'))).ino);
+    await assert.rejects(files.copyFile('source.txt','assets/copied.txt',version));
+    await files.replace('assets/copied.txt',Buffer.from('changed'),version);
+    assert.equal((await files.read('source.txt')).toString(),'original');
+    await symlink(root,join(root,'escape'));
+    await assert.rejects(files.copyFile('source.txt','escape/outside.txt',version));
+    await assert.rejects(files.copyFile('../source.txt','assets/other.txt',version),/invalid_path/);
+  } finally {await rm(directory,{recursive:true,force:true});}
+});
