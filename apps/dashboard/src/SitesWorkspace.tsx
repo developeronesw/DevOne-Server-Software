@@ -100,9 +100,9 @@ export function SitesWorkspace() {
   async function refresh() {try {setSites((await api('/api/sites')).sites);setError('');} catch(error) {setError(error instanceof Error ? error.message : 'Sites unavailable');}}
   useEffect(()=>{void refresh();const timer=setInterval(()=>void refresh(),15000);return()=>clearInterval(timer);},[]);
   async function create(event:FormEvent) {
-    event.preventDefault(); if(!window.confirm(`Create ${domain} with an isolated Linux account?`)) return;
+    event.preventDefault();
     setBusy(true);setError('');
-    try {const {job}=await api('/api/sites',{domain,webServer,confirmed:true,requestKey:crypto.randomUUID()});setNotice(`Website creation queued: ${job.id}. Track its result in Recent jobs.`);setDomain('');await waitForJob(job.id);setNotice('Website created.');await refresh();}
+    try {await api('/api/sites/preflight',{domain,webServer});if(!window.confirm(`Create ${domain} with an isolated Linux account?`)) return;const {job}=await api('/api/sites',{domain,webServer,confirmed:true,requestKey:crypto.randomUUID()});setNotice(`Website creation queued: ${job.id}. Track its result in Recent jobs.`);setDomain('');await waitForJob(job.id);setNotice('Website created.');await refresh();}
     catch(error) {setError(error instanceof Error ? error.message : 'Creation failed');} finally {setBusy(false);}
   }
   async function siteAction(site:Site,action:string) {
@@ -117,7 +117,7 @@ export function SitesWorkspace() {
       if(typed !== site.domain) return;input.confirmDomain=typed;
     } else if(!window.confirm(`${action} ${site.domain}?`)) return;
     setBusy(true);setError('');
-    try {const {job}=await api('/api/sites/action',input);setNotice(`Website operation queued: ${job.id}. Track its result in Recent jobs.`);if(action === 'delete') setSelected('');await waitForJob(job.id);setNotice(`Website ${action} completed.`);await refresh();}
+    try {if(action === 'update') await api('/api/sites/preflight',{domain:input.domain,aliases:input.aliases,webServer:site.webServer,siteId:site.id,expectedRevision:site.revision ?? 1});const {job}=await api('/api/sites/action',input);setNotice(`Website operation queued: ${job.id}. Track its result in Recent jobs.`);if(action === 'delete') setSelected('');await waitForJob(job.id);setNotice(`Website ${action} completed.`);await refresh();}
     catch(error) {setError(error instanceof Error ? error.message : 'Site operation failed');}finally{setBusy(false);}
   }
   async function tlsAction(site:Site,action:string) {
