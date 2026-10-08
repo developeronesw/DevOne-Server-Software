@@ -22,6 +22,19 @@ export function registerSiteRoutes(app: FastifyInstance, dependencies: Dependenc
       return await response.json();
     } catch { return reply.code(503).send({error:'sites_unavailable'}); }
   });
+  // Advisory preflight; Agent repeats all validations when applying changes.
+  app.post('/api/sites/preflight',async (request,reply) => {
+    const user = authorize(request,reply,true); if (!user) return;
+    const body = request.body as Record<string,unknown> | null;
+    if (!body || !validDomain(body.domain) || !['nginx','none'].includes(body.webServer as string) || (body.aliases !== undefined && (!Array.isArray(body.aliases) || body.aliases.length > 20 || !body.aliases.every(validDomain))) || (body.siteId !== undefined && (typeof body.siteId !== 'string' || !/^site_[a-f0-9]{16}$/.test(body.siteId) || !Number.isSafeInteger(body.expectedRevision)))) return reply.code(400).send({error:'invalid_site_preflight'});
+    try {
+      if (!agentToken) throw new Error();
+      const response = await fetch(`${agentUrl}/v1/sites/preflight`,{method:'POST',headers:{Authorization:`Bearer ${agentToken}`,'Content-Type':'application/json'},body:JSON.stringify({domain:body.domain,aliases:body.aliases,webServer:body.webServer,siteId:body.siteId,expectedRevision:body.expectedRevision}),signal:AbortSignal.timeout(8000)});
+      const result = await response.json() as {error?:string};
+      if (!response.ok) return reply.code(response.status === 409 ? 409 : response.status === 400 ? 400 : 503).send({error:response.status === 409 && result.error === 'domain_in_use' ? 'domain_in_use' : 'preflight_failed'});
+      return result;
+    } catch {return reply.code(503).send({error:'preflight_unavailable'});}
+  });
   app.post('/api/sites',async (request,reply) => {
     const user = authorize(request,reply,true); if (!user) return;
     const body = request.body as Record<string,unknown> | null;
