@@ -88,7 +88,7 @@ export class SiteManager {
         return !own;
       }).join('\n');
       const names = [...filtered.matchAll(/\bserver_name\s+([^;]+);/g)].flatMap(match=>match[1].split(/\s+/).map(name=>name.replace(/^[\x27\x22]|[\x27\x22]$/g,'')));
-      if (names.some(name=>hosts.some(host=>name === host || name.startsWith('~') || name.charCodeAt(0) === 36 || (name.startsWith('*.') && host.endsWith(name.slice(1))) || (name.startsWith('.') && (host === name.slice(1) || host.endsWith(name))) || (name.endsWith('.*') && host.startsWith(name.slice(0,-1))))) throw new Error('domain_in_use');
+      if (names.some(name=>hosts.some(host=>name === host || name.startsWith('~') || name.charCodeAt(0) === 36 || (name.startsWith('*.') && host.endsWith(name.slice(1))) || (name.startsWith('.') && (host === name.slice(1) || host.endsWith(name))) || (name.endsWith('.*') && host.startsWith(name.slice(0,-1)))))) throw new Error('domain_in_use');
     }
     return {available:true,hosts,webServer:body.webServer,advisory:true};
   }
