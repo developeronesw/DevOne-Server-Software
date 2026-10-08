@@ -286,11 +286,11 @@ export class SiteManager {
   }
   private async performFiles(input: unknown) {
     const body = input as {siteId?:unknown;operation?:unknown;path?:unknown;content?:unknown;kind?:unknown;expectedRevision?:unknown;destination?:unknown} | null;
-    if (!body || typeof body.siteId !== 'string' || !['list','read','create','replace','rename','mkdir','remove'].includes(body.operation as string)) throw new Error('invalid_file_operation');
+    if (!body || typeof body.siteId !== 'string' || !['list','read','create','replace','rename','copy','mkdir','remove'].includes(body.operation as string)) throw new Error('invalid_file_operation');
     relativeParts(body.path,body.operation === 'list');
     if (['create','replace'].includes(body.operation as string) && (typeof body.content !== 'string' || body.content.length > Math.ceil(MAX_FILE_BYTES/3)*4)) throw new Error('invalid_content');
-    if (['replace','rename'].includes(body.operation as string) && (typeof body.expectedRevision !== 'string' || !/^[a-f0-9]{64}$/.test(body.expectedRevision))) throw new Error('invalid_revision');
-    if (body.operation === 'rename') relativeParts(body.destination);
+    if (['replace','rename','copy'].includes(body.operation as string) && (typeof body.expectedRevision !== 'string' || !/^[a-f0-9]{64}$/.test(body.expectedRevision))) throw new Error('invalid_revision');
+    if (body.operation === 'rename' || body.operation === 'copy') relativeParts(body.destination);
     const site = (await this.registry()).find(site => site.id === body.siteId && ['ready','disabled'].includes(site.state));
     if (!site || !site.uid || !site.gid) throw new Error('site_not_ready');
     const passwd = (await this.command('getent',['passwd',site.user])).trim().split(':');
