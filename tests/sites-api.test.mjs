@@ -14,6 +14,13 @@ test('site API enforces roles, origins, confirmations and forwards only permitte
     assert.equal((await app.inject({url:'/api/sites'})).statusCode,401);
     assert.equal((await app.inject({url:'/api/sites',headers:{'x-role':'viewer'}})).statusCode,403);
     assert.equal((await app.inject({url:'/api/sites',headers})).statusCode,200);
+    assert.equal((await app.inject({method:'POST',url:'/api/sites/preflight',headers,payload:{domain:'new.example.com',webServer:'none'}})).statusCode,200);
+    assert.equal(received.at(-1).url,'/v1/sites/preflight');
+    assert.equal((await app.inject({method:'POST',url:'/api/sites/preflight',headers:{'x-role':'viewer',origin:'https://panel.example.com'},payload:{domain:'new.example.com',webServer:'none'}})).statusCode,403);
+    assert.equal((await app.inject({method:'POST',url:'/api/sites/preflight',headers,payload:{domain:'bad..example.com',webServer:'nginx'}})).statusCode,400);
+    assert.equal((await app.inject({url:'/api/sites/site_0123456789abcdef/tls/status',headers})).statusCode,200);
+    assert.equal(received.at(-1).url,'/v1/sites/tls/status?siteId=site_0123456789abcdef');
+
     const payload={domain:'new.example.com',webServer:'none',confirmed:true,requestKey:'abcdefghijklmnop'};
     assert.equal((await app.inject({method:'POST',url:'/api/sites',headers:{'x-role':'owner'},payload})).statusCode,403);
     assert.equal((await app.inject({method:'POST',url:'/api/sites',headers,payload:{...payload,domain:'bad;id.com'}})).statusCode,400);
@@ -45,6 +52,10 @@ test('site API enforces roles, origins, confirmations and forwards only permitte
     conflict=false;
     assert.equal((await app.inject({method:'POST',url:'/api/sites/files',headers,payload:{...edit,operation:'rename',destination:'new.txt'}})).statusCode,200);
     assert.equal(received.at(-1).body.destination,'new.txt');assert.ok(!JSON.stringify(audits).includes(file.content));
+    assert.equal((await app.inject({method:'POST',url:'/api/sites/files',headers,payload:{...edit,operation:'copy',destination:'copy.txt'}})).statusCode,200);
+    assert.equal(received.at(-1).body.operation,'copy');
+    assert.equal(received.at(-1).body.destination,'copy.txt');
+
 
     assert.equal((await app.inject({method:'POST',url:'/api/sites/files',headers:{...headers,'x-role':'viewer'},payload:{...file,confirmed:true}})).statusCode,403);
   } finally {await app.close();await new Promise(resolve=>agent.close(resolve));}
