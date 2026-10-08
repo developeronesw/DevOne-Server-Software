@@ -148,3 +148,29 @@ test('live provisioning status differs from orphaned work after Agent restart',a
   assert.equal((await new SiteManager(options).list())[0].state,'needs_inspection');
   unblock();await pending;assert.equal((await manager.list())[0].state,'ready');
 }));
+
+test('domain preflight catches duplicates, wildcard conflicts and stale site edits',async()=>{
+  await fixture(async(manager)=>{
+    assert.equal((await manager.preflight({domain:'pre.example.com',webServer:'none'})).available,true);
+    const site=await manager.create({domain:'pre.example.com',webServer:'none'});
+    await assert.rejects(manager.preflight({domain:'pre.example.com',webServer:'none'}),/domain_in_use/);
+    await assert.rejects(manager.preflight({domain:'new.example.com',aliases:['new.example.com'],webServer:'none'}),/domain_in_use/);
+    await assert.rejects(manager.preflight({domain:'panel.example.com',webServer:'none'}),/domain_in_use/);
+    await assert.rejects(manager.preflight({domain:'new.example.com',webServer:'none',siteId:site.id,expectedRevision:9}),/site_not_ready/);
+    assert.equal((await manager.preflight({domain:'new.example.com',aliases:['alias.example.com'],webServer:'none',siteId:site.id,expectedRevision:1})).available,true);
+  });
+  await fixture(async(manager)=>{
+    await assert.rejects(manager.preflight({domain:'blocked.example.com',webServer:'nginx'}),/domain_in_use/);
+  },'server { server_name *.example.com; }');
+});
+test('read-only TLS status does not mistake unissued certificates for working HTTPS',async()=>fixture(async(manager,options)=>{
+  options.certificates=join(options.registry,'certificates');
+  manager=new SiteManager(options);
+  const site=await manager.create({domain:'cert.example.com',webServer:'nginx'});
+  const current=await manager.tlsStatus(site.id);
+  assert.equal(current.status,'missing');assert.equal(current.enabled,false);
+  assert.equal(current.daysRemaining,null);
+  await assert.rejects(manager.tlsStatus('../bad'),/invalid_site/);
+  const plain=await manager.create({domain:'files.example.com',webServer:'none'});
+  assert.equal((await manager.tlsStatus(plain.id)).status,'not_applicable');
+}));
