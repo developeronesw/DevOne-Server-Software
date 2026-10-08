@@ -1,8 +1,8 @@
 import { constants } from 'node:fs';
-import { open, mkdir, lstat, rename, chown, rmdir } from 'node:fs/promises';
+import { open, mkdir, lstat, rename, chown, rmdir, readFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { randomBytes, randomUUID, createHash } from 'node:crypto';
+import { randomBytes, randomUUID, createHash, X509Certificate } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { validateDomain, relativeParts, MAX_FILE_BYTES } from './site-files.js';
@@ -145,6 +145,25 @@ export class SiteManager {
     if (!site.tls) return http;
     const certificate = join(this.options.certificates ?? '/etc/letsencrypt/live',`devone-${site.id}`);
     return http+`server {\n listen 443 ssl;\n listen [::]:443 ssl;\n server_name ${hosts};\n ssl_certificate ${certificate}/fullchain.pem;\n ssl_certificate_key ${certificate}/privkey.pem;\n ssl_protocols TLSv1.2 TLSv1.3;\n${body}}\n`;
+  }
+
+  async tlsStatus(siteId: unknown) {
+    if (typeof siteId !== 'string' || !/^site_[a-f0-9]{16}$/.test(siteId)) throw new Error('invalid_site');
+    const site = (await this.registry()).find(site=>site.id === siteId);
+    if (!site) throw new Error('site_not_found');
+    if (site.webServer !== 'nginx') return {siteId,enabled:false,status:'not_applicable',expiresAt:null,daysRemaining:null};
+    const certificatePath = join(this.options.certificates ?? '/etc/letsencrypt/live',`devone-${site.id}`,'fullchain.pem');
+    try {
+      const certificate = new X509Certificate(await readFile(certificatePath));
+      const expires = Date.parse(certificate.validTo);
+      const domains = [site.domain,...(site.aliases ?? [])];
+      const coversDomains = domains.every(domain=>Boolean(certificate.checkHost(domain)));
+      const daysRemaining = Number.isFinite(expires) ? Math.floor((expires-Date.now())/86400000) : null;
+      const status = !coversDomains ? 'domain_mismatch' : daysRemaining === null ? 'invalid' : daysRemaining < 0 ? 'expired' : daysRemaining <= 30 ? 'expiring' : 'valid';
+      return {siteId,enabled:site.tls === true,status,expiresAt:Number.isFinite(expires) ? new Date(expires).toISOString() : null,daysRemaining,coversDomains};
+    } catch (error) {
+      return {siteId,enabled:site.tls === true,status:(error as NodeJS.ErrnoException).code === 'ENOENT' ? 'missing' : 'invalid',expiresAt:null,daysRemaining:null};
+    }
   }
   tls(input: unknown) { return this.serial(()=>this.certificate(input),(input as {siteId?:unknown}|null)?.siteId); }
   private async certificate(input: unknown) {
