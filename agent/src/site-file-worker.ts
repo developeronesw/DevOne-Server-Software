@@ -26,6 +26,7 @@ async function main() {
       result = { ok:true, ...(result as object | undefined) }; break;
     }
     case "rename": result = {ok:true,...await files.renameFile(request.path,request.destination ?? "",request.expectedRevision ?? "")}; break;
+    case "copy": result = {ok:true,...await files.copyFile(request.path,request.destination ?? "",request.expectedRevision ?? "")}; break;
     case "purge":
       if (process.env.DEVONE_SITE_PURGE !== "1") throw new Error("invalid_operation");
       await files.purge(); result={ok:true}; break;

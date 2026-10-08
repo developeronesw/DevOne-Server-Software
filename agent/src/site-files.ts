@@ -120,6 +120,35 @@ export class SiteFiles {
       return { revision: expectedRevision };
     }));
   }
+  // A file copy creates a separate inode, never links two customer paths.
+  // Revision checking rejects stale source snapshots; publication cannot
+  // overwrite an existing file, directory or symlink.
+  async copyFile(path: string, destination: string, expectedRevision: string) {
+    if (!/^[a-f0-9]{64}$/.test(expectedRevision)) throw new Error("invalid_revision");
+    const sourceParts = relativeParts(path), leaf = sourceParts.pop()!;
+    const targetParts = relativeParts(destination), targetLeaf = targetParts.pop()!;
+    return anchored(this.root, sourceParts, sourceDirectory => anchored(this.root, targetParts, async targetDirectory => {
+      const source = `${sourceDirectory}/${leaf}`;
+      const before = await lstat(source);
+      if (!before.isFile() || before.nlink !== 1) throw new Error("invalid_file");
+      const bytes = await readRegular(source);
+      if (revision(bytes) !== expectedRevision) throw new Error("file_conflict");
+      const latest = await lstat(source);
+      if (latest.ino !== before.ino || latest.dev !== before.dev || latest.mtimeMs !== before.mtimeMs || latest.size !== before.size || latest.nlink !== 1) throw new Error("file_conflict");
+      const temporary = `${targetDirectory}/.devone-${randomUUID()}`;
+      const handle = await open(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
+      try {
+        await handle.chmod(before.mode & 0o777);
+        await handle.writeFile(bytes);
+        await handle.sync();
+        await link(temporary, `${targetDirectory}/${targetLeaf}`);
+      } finally {
+        await handle.close();
+        await unlink(temporary);
+      }
+      return {revision:expectedRevision};
+    }));
+  }
   async mkdir(path: string) {
     const parts = relativeParts(path), leaf = parts.pop()!;
     return anchored(this.root, parts, directory => mkdir(`${directory}/${leaf}`, { mode: 0o750 }));

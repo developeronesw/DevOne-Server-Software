@@ -1,8 +1,8 @@
 import { constants } from 'node:fs';
-import { open, mkdir, lstat, rename, chown, rmdir } from 'node:fs/promises';
+import { open, mkdir, lstat, rename, chown, rmdir, readFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { randomBytes, randomUUID, createHash } from 'node:crypto';
+import { randomBytes, randomUUID, createHash, X509Certificate } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { validateDomain, relativeParts, MAX_FILE_BYTES } from './site-files.js';
@@ -66,6 +66,32 @@ export class SiteManager {
     });
     this.queue=operation.catch(()=>{});return operation;
   }
+  // Advisory only: queued changes revalidate conflicts before mutation.
+  async preflight(input: unknown) {
+    const body = input as {domain?:unknown;webServer?:unknown;aliases?:unknown;siteId?:unknown;expectedRevision?:unknown} | null;
+    if (!body || !['nginx','none'].includes(body.webServer as string)) throw new Error('invalid_web_server');
+    const domain = validateDomain(body.domain);
+    const aliases = body.aliases === undefined ? [] : body.aliases;
+    if (!Array.isArray(aliases) || aliases.length > 20 || aliases.some(alias=>validateDomain(alias) !== alias)) throw new Error('invalid_aliases');
+    const hosts = [domain,...aliases] as string[];
+    if (new Set(hosts).size !== hosts.length || hosts.includes(this.options.panelDomain)) throw new Error('domain_in_use');
+    const sites = await this.registry();
+    const existing = body.siteId === undefined ? null : sites.find(site=>site.id === body.siteId);
+    if (body.siteId !== undefined && (!existing || existing.revision !== body.expectedRevision || !['ready','disabled'].includes(existing.state) || existing.tls || existing.webServer !== body.webServer)) throw new Error('site_not_ready');
+    if (sites.some(site=>site.id !== existing?.id && [site.domain,...(site.aliases ?? [])].some(name=>hosts.includes(name)))) throw new Error('domain_in_use');
+    if (body.webServer === 'nginx') {
+      const config = await this.command('nginx',['-T']);
+      const ownPath = existing ? join(this.options.nginx,`devone-${existing.id}.conf`) : null;
+      let own = false;
+      const filtered = config.split('\n').filter(line=>{
+        if (line.startsWith('# configuration file ')) own = ownPath !== null && line === `# configuration file ${ownPath}:`;
+        return !own;
+      }).join('\n');
+      const names = [...filtered.matchAll(/\bserver_name\s+([^;]+);/g)].flatMap(match=>match[1].split(/\s+/).map(name=>name.replace(/^[\x27\x22]|[\x27\x22]$/g,'')));
+      if (names.some(name=>hosts.some(host=>name === host || name.startsWith('~') || name.charCodeAt(0) === 36 || (name.startsWith('*.') && host.endsWith(name.slice(1))) || (name.startsWith('.') && (host === name.slice(1) || host.endsWith(name))) || (name.endsWith('.*') && host.startsWith(name.slice(0,-1)))))) throw new Error('domain_in_use');
+    }
+    return {available:true,hosts,webServer:body.webServer,advisory:true};
+  }
   create(input: unknown) { return this.serial(()=>this.provision(input)); }
   private async provision(input: unknown) {
     const {domain,webServer} = siteInput(input);
@@ -123,6 +149,23 @@ export class SiteManager {
     if (!site.tls) return http;
     const certificate = join(this.options.certificates ?? '/etc/letsencrypt/live',`devone-${site.id}`);
     return http+`server {\n listen 443 ssl;\n listen [::]:443 ssl;\n server_name ${hosts};\n ssl_certificate ${certificate}/fullchain.pem;\n ssl_certificate_key ${certificate}/privkey.pem;\n ssl_protocols TLSv1.2 TLSv1.3;\n${body}}\n`;
+  }
+  async tlsStatus(siteId: unknown) {
+    if (typeof siteId !== 'string' || !/^site_[a-f0-9]{16}$/.test(siteId)) throw new Error('invalid_site');
+    const site = (await this.registry()).find(site=>site.id === siteId);
+    if (!site) throw new Error('site_not_found');
+    if (site.webServer !== 'nginx') return {siteId,enabled:false,status:'not_applicable',expiresAt:null,daysRemaining:null};
+    const certificatePath = join(this.options.certificates ?? '/etc/letsencrypt/live',`devone-${site.id}`,'fullchain.pem');
+    try {
+      const certificate = new X509Certificate(await readFile(certificatePath));
+      const expires = Date.parse(certificate.validTo);
+      const coversDomains = [site.domain,...(site.aliases ?? [])].every(domain=>Boolean(certificate.checkHost(domain)));
+      const daysRemaining = Number.isFinite(expires) ? Math.floor((expires-Date.now())/86400000) : null;
+      const status = !coversDomains ? 'domain_mismatch' : daysRemaining === null ? 'invalid' : daysRemaining < 0 ? 'expired' : daysRemaining <= 30 ? 'expiring' : 'valid';
+      return {siteId,enabled:site.tls === true,status,expiresAt:Number.isFinite(expires) ? new Date(expires).toISOString() : null,daysRemaining,coversDomains};
+    } catch (error) {
+      return {siteId,enabled:site.tls === true,status:(error as NodeJS.ErrnoException).code === 'ENOENT' ? 'missing' : 'invalid',expiresAt:null,daysRemaining:null};
+    }
   }
   tls(input: unknown) { return this.serial(()=>this.certificate(input),(input as {siteId?:unknown}|null)?.siteId); }
   private async certificate(input: unknown) {
@@ -245,11 +288,11 @@ export class SiteManager {
   }
   private async performFiles(input: unknown) {
     const body = input as {siteId?:unknown;operation?:unknown;path?:unknown;content?:unknown;kind?:unknown;expectedRevision?:unknown;destination?:unknown} | null;
-    if (!body || typeof body.siteId !== 'string' || !['list','read','create','replace','rename','mkdir','remove'].includes(body.operation as string)) throw new Error('invalid_file_operation');
+    if (!body || typeof body.siteId !== 'string' || !['list','read','create','replace','rename','copy','mkdir','remove'].includes(body.operation as string)) throw new Error('invalid_file_operation');
     relativeParts(body.path,body.operation === 'list');
     if (['create','replace'].includes(body.operation as string) && (typeof body.content !== 'string' || body.content.length > Math.ceil(MAX_FILE_BYTES/3)*4)) throw new Error('invalid_content');
-    if (['replace','rename'].includes(body.operation as string) && (typeof body.expectedRevision !== 'string' || !/^[a-f0-9]{64}$/.test(body.expectedRevision))) throw new Error('invalid_revision');
-    if (body.operation === 'rename') relativeParts(body.destination);
+    if (['replace','rename','copy'].includes(body.operation as string) && (typeof body.expectedRevision !== 'string' || !/^[a-f0-9]{64}$/.test(body.expectedRevision))) throw new Error('invalid_revision');
+    if (body.operation === 'rename' || body.operation === 'copy') relativeParts(body.destination);
     const site = (await this.registry()).find(site => site.id === body.siteId && ['ready','disabled'].includes(site.state));
     if (!site || !site.uid || !site.gid) throw new Error('site_not_ready');
     const passwd = (await this.command('getent',['passwd',site.user])).trim().split(':');

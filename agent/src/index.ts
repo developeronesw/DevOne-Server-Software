@@ -14,6 +14,25 @@ const server = createServer(async (request, response) => {
     response.end(JSON.stringify({ error: "unauthorized" })); return;
   }
   const send = (code: number, value: unknown) => { response.writeHead(code, { "content-type": "application/json" }); response.end(JSON.stringify(value)); };
+  if (request.method === "POST" && request.url === "/v1/sites/preflight") {
+    try {
+      request.setEncoding("utf8");
+      let body = "";
+      for await (const chunk of request) { body += chunk; if (Buffer.byteLength(body) > 4096) { send(413,{error:"body_too_large"}); return; } }
+      send(200,await sites.preflight(JSON.parse(body)));
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "site_preflight_failed";
+      send(["invalid_domain","invalid_aliases","invalid_web_server"].includes(code) ? 400 : ["domain_in_use","site_not_ready"].includes(code) ? 409 : 503,{error:["domain_in_use","site_not_ready"].includes(code) ? code : "site_preflight_failed"});
+    }
+    return;
+  }
+  if (request.method === "GET" && request.url?.startsWith("/v1/sites/tls/status?")) {
+    try {
+      const url = new URL(request.url,"http://127.0.0.1");
+      send(200,await sites.tlsStatus(url.searchParams.get("siteId")));
+    } catch { send(503,{error:"tls_status_unavailable"}); }
+    return;
+  }
   if ((request.method === "GET" && request.url === "/v1/sites") || (request.method === "POST" && ["/v1/sites", "/v1/sites/action", "/v1/sites/tls", "/v1/sites/files"].includes(request.url ?? ""))) {
     try {
       if (request.method === "GET") { send(200,{sites:await sites.list()}); return; }
