@@ -58,6 +58,16 @@ export function registerSiteRoutes(app: FastifyInstance, dependencies: Dependenc
     try {return reply.code(202).send({job:jobs.enqueue(user.id,body.requestKey,input,'site.action')});}
     catch(error) {const code=error instanceof Error ? error.message : 'queue_error';return reply.code(code === 'request_key_conflict' ? 409 : ['queue_full','queue_stopping'].includes(code) ? 503 : 400).send({error:code});}
   });
+  app.get<{Params:{siteId:string}}>('/api/sites/:siteId/tls/status',async (request,reply) => {
+    if (!authorize(request,reply)) return;
+    if (!/^site_[a-f0-9]{16}$/.test(request.params.siteId)) return reply.code(400).send({error:'invalid_site'});
+    try {
+      if (!agentToken) throw new Error();
+      const response = await fetch(`${agentUrl}/v1/sites/tls/status?siteId=${encodeURIComponent(request.params.siteId)}`,{headers:{Authorization:`Bearer ${agentToken}`},signal:AbortSignal.timeout(5000)});
+      if (!response.ok) throw new Error();
+      return await response.json();
+    } catch {return reply.code(503).send({error:'tls_status_unavailable'});}
+  });
   app.post('/api/sites/tls',async(request,reply)=>{
     const user=authorize(request,reply,true);if(!user) return;
     const body=request.body as Record<string,unknown> | null;
@@ -71,12 +81,12 @@ export function registerSiteRoutes(app: FastifyInstance, dependencies: Dependenc
   app.post('/api/sites/files',{bodyLimit:1500000},async (request,reply) => {
     const user = authorize(request,reply,true); if (!user) return;
     const body = request.body as Record<string,unknown> | null;
-    if (!body || typeof body.siteId !== 'string' || !/^site_[a-f0-9]{16}$/.test(body.siteId) || !['list','read','create','replace','rename','mkdir','remove'].includes(body.operation as string) || typeof body.path !== 'string' || body.path.length > 1024) return reply.code(400).send({error:'invalid_file_operation'});
-    if (['replace','rename'].includes(body.operation as string) && (typeof body.expectedRevision !== 'string' || !/^[a-f0-9]{64}$/.test(body.expectedRevision))) return reply.code(400).send({error:'invalid_revision'});
-    if (body.operation === 'rename' && (typeof body.destination !== 'string' || body.destination.length > 1024)) return reply.code(400).send({error:'invalid_destination'});
+    if (!body || typeof body.siteId !== 'string' || !/^site_[a-f0-9]{16}$/.test(body.siteId) || !['list','read','create','replace','rename','copy','mkdir','remove'].includes(body.operation as string) || typeof body.path !== 'string' || body.path.length > 1024) return reply.code(400).send({error:'invalid_file_operation'});
+    if (['replace','rename','copy'].includes(body.operation as string) && (typeof body.expectedRevision !== 'string' || !/^[a-f0-9]{64}$/.test(body.expectedRevision))) return reply.code(400).send({error:'invalid_revision'});
+    if (['rename','copy'].includes(body.operation as string) && (typeof body.destination !== 'string' || body.destination.length > 1024)) return reply.code(400).send({error:'invalid_destination'});
     const mutation = !['list','read'].includes(body.operation as string);
     if (mutation && body.confirmed !== true) return reply.code(400).send({error:'confirmation_required'});
-    const details = { siteId:body.siteId, operation:body.operation, path:body.path, ...(body.operation === 'rename' ? {destination:body.destination} : {}) };
+    const details = { siteId:body.siteId, operation:body.operation, path:body.path, ...(['rename','copy'].includes(body.operation as string) ? {destination:body.destination} : {}) };
     try {
       if (!agentToken) throw new Error();
       if (mutation) audit(user.id,'site.file.requested',details);
