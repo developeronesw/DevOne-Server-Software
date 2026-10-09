@@ -63,7 +63,7 @@ export async function main(args = process.argv.slice(2)) {
   try {parity=await parityStatus();}catch {parity={total:null,verified:null,outstanding:null,error:'parity_inventory_invalid'};}
   const runPending=[...pending,...(parity.error ? [{id:'legacy-route-acceptance',status:'invalid',detail:'Legacy parity inventory could not be verified.'}] : parity.outstanding ? [{id:'legacy-route-acceptance',status:'unverified',detail:`${parity.outstanding} of ${parity.total} observed legacy route literals still require acceptance evidence.`}] : [])];
   await check('legacy-distribution-integrity', 'python3', ['scripts/verify-distribution.py']);
-  for (const file of ['installer/install.sh','installer/install-legacy.sh','scripts/provision-vault-key.sh','deploy/certbot/devone-nginx.sh']) await check(`shell-syntax:${file}`, 'bash', ['-n', file]);
+  for (const file of ['installer/install.sh','installer/install-prerequisites.sh','installer/install-legacy.sh','scripts/provision-vault-key.sh','deploy/certbot/devone-nginx.sh']) await check(`shell-syntax:${file}`, 'bash', ['-n', file]);
   const report = { schemaVersion: 1, runId: randomUUID(), completedAt: new Date().toISOString(), scope: 'isolated-development-regression', ...assess(results, runPending), results, pending:runPending, parity };
   const output = resolve(root, 'qa-reports'); await mkdir(output, { recursive: true, mode: 0o700 });
   const name = `${report.completedAt.replace(/[:.]/g, '-')}-${report.runId}`;
