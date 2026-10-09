@@ -9,7 +9,6 @@ DOMAIN="${DEVONE_PANEL_DOMAIN:-}"
 ADMIN_EMAIL="${DEVONE_ADMIN_EMAIL:-}"
 ADMIN_PASSWORD="${DEVONE_ADMIN_PASSWORD:-}"
 SOURCE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-SOURCE_COMMIT="$(git -C "$SOURCE_DIR" rev-parse HEAD)"
 
 log() { printf '\n[DevOne] %s\n' "$*"; }
 fail() { echo "[DevOne] ERROR: $*" >&2; exit 1; }
@@ -18,7 +17,7 @@ fail() { echo "[DevOne] ERROR: $*" >&2; exit 1; }
 [[ ! -f /etc/devone/api.json && ! -d /opt/devone/bin ]] || fail "Legacy edition detected; in-place conversion is unsupported."
 [[ ! -d /home/clp ]] || fail "CloudPanel detected; use a separate VPS."
 [[ ! -d /opt/devone/current ]] || fail "Existing Node installation detected. Updates require a versioned migration, not this fresh installer."
-[[ -z "$(git -C "$SOURCE_DIR" status --porcelain)" ]] || fail "Install from a clean committed checkout."
+[[ -e "$SOURCE_DIR/.git" ]] || fail "Run from a Git checkout of the DevOne Server repository."
 source /etc/os-release
 [[ "${ID:-}" == "ubuntu" && "${VERSION_ID:-}" == "24.04" ]] || fail "DevOne 1.0 requires Ubuntu 24.04 LTS."
 [[ "$(dpkg --print-architecture)" == "amd64" ]] || fail "DevOne 1.0 requires amd64/x86-64."
@@ -31,6 +30,8 @@ if [[ -z "$ADMIN_PASSWORD" ]]; then read -r -s -p "Initial Owner password (12+ c
 
 log "Installing and validating all required host prerequisites..."
 bash "$SOURCE_DIR/installer/install-prerequisites.sh"
+SOURCE_COMMIT="$(git -C "$SOURCE_DIR" rev-parse --verify HEAD)" || fail "Source must be a valid committed checkout."
+[[ -z "$(git -C "$SOURCE_DIR" status --porcelain)" ]] || fail "Install from a clean committed checkout."
 PNPM="/opt/devone/toolchain/node_modules/.bin/pnpm"
 # Prefer the supported OS Node binary and private pnpm in all build subprocesses.
 export PATH="/opt/devone/toolchain/node_modules/.bin:/usr/bin:/bin:$PATH"
