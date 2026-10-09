@@ -31,6 +31,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: bash -n installer/install.sh
+      - run: bash -n installer/install-prerequisites.sh
       - run: bash -n installer/install-legacy.sh
       - run: bash -n scripts/provision-vault-key.sh
       - run: bash -n deploy/certbot/devone-nginx.sh
