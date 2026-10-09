@@ -63,6 +63,27 @@ Official repository:
 
 https://github.com/developeronesw/DevOne-Server-Software
 
+## Fresh Node installation (automatic prerequisites)
+
+On a **clean, dedicated Ubuntu 24.04 LTS amd64** test VPS, obtain this
+repository once with Git and run:
+
+```bash
+sudo bash installer/install.sh
+```
+
+The installer automatically installs/verifies NGINX, Certbot, Node.js 22.13+,
+npm, pinned pnpm, Git, Python 3 and the required build/security utilities.
+No separate system database server is needed for DevOne's SQLite state.
+The initial Git checkout requires Git (e.g. `sudo apt-get install -y git`);
+the installer handles everything after the checkout is present. Your panel
+domain must already resolve to the VPS, and ports 80/443 must be reachable.
+
+**This edition remains a developer preview.** Use a disposable VPS, not a
+server running CloudPanel, the legacy edition or production customer services.
+Read [installation and verification](docs/INSTALLATION.md) for the full
+prerequisites, exact-commit deployment and live acceptance limitations.
+
 ## Complete legacy distribution
 
 The 0.7.0 cumulative server and applicable hotfixes are bundled in
