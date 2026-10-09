@@ -9,7 +9,6 @@ DOMAIN="${DEVONE_PANEL_DOMAIN:-}"
 ADMIN_EMAIL="${DEVONE_ADMIN_EMAIL:-}"
 ADMIN_PASSWORD="${DEVONE_ADMIN_PASSWORD:-}"
 SOURCE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-SOURCE_COMMIT="$(git -C "$SOURCE_DIR" rev-parse HEAD)"
 
 log() { printf '\n[DevOne] %s\n' "$*"; }
 fail() { echo "[DevOne] ERROR: $*" >&2; exit 1; }
@@ -18,31 +17,25 @@ fail() { echo "[DevOne] ERROR: $*" >&2; exit 1; }
 [[ ! -f /etc/devone/api.json && ! -d /opt/devone/bin ]] || fail "Legacy edition detected; in-place conversion is unsupported."
 [[ ! -d /home/clp ]] || fail "CloudPanel detected; use a separate VPS."
 [[ ! -d /opt/devone/current ]] || fail "Existing Node installation detected. Updates require a versioned migration, not this fresh installer."
-[[ -z "$(git -C "$SOURCE_DIR" status --porcelain)" ]] || fail "Install from a clean committed checkout."
+[[ -e "$SOURCE_DIR/.git" ]] || fail "Run from a Git checkout of the DevOne Server repository."
 source /etc/os-release
 [[ "${ID:-}" == "ubuntu" && "${VERSION_ID:-}" == "24.04" ]] || fail "DevOne 1.0 requires Ubuntu 24.04 LTS."
 [[ "$(dpkg --print-architecture)" == "amd64" ]] || fail "DevOne 1.0 requires amd64/x86-64."
 
 if [[ -z "$DOMAIN" ]]; then read -r -p "Control-panel domain (example: panel.devonecms.com): " DOMAIN; fi
-[[ "$DOMAIN" =~ ^[A-Za-z0-9.-]+$ ]] || fail "Invalid panel domain."
+[[ "$DOMAIN" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ && ${#DOMAIN} -le 253 ]] || fail "A valid lowercase panel hostname is required."
 if [[ -z "$ADMIN_EMAIL" ]]; then read -r -p "Initial Owner email: " ADMIN_EMAIL; fi
+[[ "$ADMIN_EMAIL" =~ ^[a-zA-Z0-9][a-zA-Z0-9._+%-]*@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,63}$ ]] || fail "A valid Owner email address is required."
 if [[ -z "$ADMIN_PASSWORD" ]]; then read -r -s -p "Initial Owner password (12+ characters): " ADMIN_PASSWORD; echo; fi
 [[ "${#ADMIN_PASSWORD}" -ge 12 ]] || fail "Admin password must be at least 12 characters."
 
-log "Installing host prerequisites..."
-apt-get update
-DEBIAN_FRONTEND=noninteractive apt-get install -y curl ca-certificates git nginx certbot python3-certbot-nginx build-essential util-linux openssl acl
-
-if ! command -v node >/dev/null 2>&1 || [[ "$(node -p 'process.versions.node.split(".")[0]')" -lt 22 ]]; then
-  log "Installing Node.js 22 LTS runtime..."
-  curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
-  DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs
-fi
-node_major="$(node -p 'process.versions.node.split(".")[0]')"
-node -e 'const [a,b]=process.versions.node.split(".").map(Number); if(a<22 || (a===22 && b<13)) process.exit(1)' || fail "Node.js 22.13+ is required for Vite 8 and SQLite."
-
-corepack enable
-corepack prepare pnpm@10.15.1 --activate
+log "Installing and validating all required host prerequisites..."
+bash "$SOURCE_DIR/installer/install-prerequisites.sh"
+SOURCE_COMMIT="$(git -C "$SOURCE_DIR" rev-parse --verify HEAD)" || fail "Source must be a valid committed checkout."
+[[ -z "$(git -C "$SOURCE_DIR" status --porcelain)" ]] || fail "Install from a clean committed checkout."
+PNPM="/opt/devone/toolchain/node_modules/.bin/pnpm"
+# Prefer the supported OS Node binary and private pnpm in all build subprocesses.
+export PATH="/opt/devone/toolchain/node_modules/.bin:/usr/bin:/bin:$PATH"
 
 log "Creating DevOne service account and persistent directories..."
 id "$APP_USER" >/dev/null 2>&1 || useradd --system --home /var/lib/devone --create-home --shell /usr/sbin/nologin "$APP_USER"
@@ -81,10 +74,10 @@ bash "$INSTALL_ROOT/current/scripts/provision-vault-key.sh"
 
 log "Installing dependencies and building DevOne..."
 cd "$INSTALL_ROOT/current"
-pnpm install --frozen-lockfile
-pnpm --filter @devone/api build
-pnpm --filter @devone/agent build
-pnpm --filter @devone/dashboard build
+"$PNPM" install --frozen-lockfile
+"$PNPM" --filter @devone/api build
+"$PNPM" --filter @devone/agent build
+"$PNPM" --filter @devone/dashboard build
 
 log "Installing systemd services..."
 install -m 644 deploy/systemd/devone-api.service /etc/systemd/system/devone-api.service
@@ -92,7 +85,7 @@ install -m 644 deploy/systemd/devone-agent.service /etc/systemd/system/devone-ag
 install -d -o root -g root -m 755 /etc/letsencrypt/renewal-hooks/deploy
 install -o root -g root -m 755 deploy/certbot/devone-nginx.sh /etc/letsencrypt/renewal-hooks/deploy/devone-nginx
 systemctl daemon-reload
-systemctl enable devone-api devone-agent
+systemctl enable nginx devone-api devone-agent
 systemctl enable --now certbot.timer
 
 log "Configuring HTTP bootstrap gateway..."
@@ -116,7 +109,7 @@ curl -fsS http://127.0.0.1:8790/v1/health -H "Authorization: Bearer $AGENT_TOKEN
 
 log "Requesting HTTPS certificate..."
 if ! certbot certificates 2>/dev/null | grep -q "Domains:.*$DOMAIN"; then
-  certbot --nginx --non-interactive --agree-tos --register-unsafely-without-email -d "$DOMAIN" || fail "Certificate request failed. Verify DNS points to this server and ports 80/443 are open."
+  certbot --nginx --non-interactive --agree-tos --email "$ADMIN_EMAIL" -d "$DOMAIN" || fail "Certificate request failed. Verify DNS points to this server and ports 80/443 are open."
 fi
 
 log "Installing hardened HTTPS NGINX configuration..."
