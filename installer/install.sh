@@ -23,8 +23,9 @@ source /etc/os-release
 [[ "$(dpkg --print-architecture)" == "amd64" ]] || fail "DevOne 1.0 requires amd64/x86-64."
 
 if [[ -z "$DOMAIN" ]]; then read -r -p "Control-panel domain (example: panel.devonecms.com): " DOMAIN; fi
-[[ "$DOMAIN" =~ ^[A-Za-z0-9.-]+$ ]] || fail "Invalid panel domain."
+[[ "$DOMAIN" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ && ${#DOMAIN} -le 253 ]] || fail "A valid lowercase panel hostname is required."
 if [[ -z "$ADMIN_EMAIL" ]]; then read -r -p "Initial Owner email: " ADMIN_EMAIL; fi
+[[ "$ADMIN_EMAIL" =~ ^[a-zA-Z0-9][a-zA-Z0-9._+%-]*@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,63}$ ]] || fail "A valid Owner email address is required."
 if [[ -z "$ADMIN_PASSWORD" ]]; then read -r -s -p "Initial Owner password (12+ characters): " ADMIN_PASSWORD; echo; fi
 [[ "${#ADMIN_PASSWORD}" -ge 12 ]] || fail "Admin password must be at least 12 characters."
 
@@ -108,7 +109,7 @@ curl -fsS http://127.0.0.1:8790/v1/health -H "Authorization: Bearer $AGENT_TOKEN
 
 log "Requesting HTTPS certificate..."
 if ! certbot certificates 2>/dev/null | grep -q "Domains:.*$DOMAIN"; then
-  certbot --nginx --non-interactive --agree-tos --register-unsafely-without-email -d "$DOMAIN" || fail "Certificate request failed. Verify DNS points to this server and ports 80/443 are open."
+  certbot --nginx --non-interactive --agree-tos --email "$ADMIN_EMAIL" -d "$DOMAIN" || fail "Certificate request failed. Verify DNS points to this server and ports 80/443 are open."
 fi
 
 log "Installing hardened HTTPS NGINX configuration..."
