@@ -47,7 +47,7 @@ async function providerReply(id:ProviderId,model:string,key:string,prompt:string
       body:JSON.stringify({systemInstruction:{parts:[{text:providerInstruction}]},contents:[{role:"user",parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:800,temperature:0.2}})
     });
     if(!result.ok)throw Error("provider_unavailable");
-    const data=await result.json() as {candidates?:Array<{content?:{parts?:Array<{text?:string}>}}>}>;
+    const data=await result.json() as {candidates?:{content?:{parts?:{text?:string}[]}}[]};
     return data.candidates?.[0]?.content?.parts?.map(p=>p.text??"").join("\n").trim()??"";
   }
   const endpoint=id==="openai"?"https://api.openai.com/v1/chat/completions":id==="deepseek"?"https://api.deepseek.com/chat/completions":openClawUrl();
@@ -63,7 +63,7 @@ async function providerReply(id:ProviderId,model:string,key:string,prompt:string
     })
   });
   if(!response.ok)throw Error("provider_unavailable");
-  const data=await response.json() as {choices?:Array<{message?:{content?:string | Array<{type?:string;text?:string}>}}>}>;
+  const data=await response.json() as {choices?:{message?:{content?:string|{type?:string;text?:string}[]}}[]};
   const output=data.choices?.[0]?.message?.content;
   return typeof output==="string"?output.trim():Array.isArray(output)?output.map(p=>p.text??"").join("\n").trim():"";
 }
