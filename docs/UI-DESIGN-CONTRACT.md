@@ -1,48 +1,27 @@
-# DevOne Server — UI Design Contract
+# DevOne Server — Premium Light UI Contract
 
-Status: LOCKED — SOURCE OF TRUTH
+Approved design direction: bright professional glass-SaaS, based on the October 2026 design review.
 
-The official DevOne Server Glass UI recovered from the project Library is the visual source of truth for the new rebuild.
+## Principles
+- Pearl white, soft lavender and electric blue; translucent surfaces, precise layout, rounded cards, layered depth.
+- Typography: Manrope for headings and DM Sans for UI text, with safe system fallbacks.
+- Desktop / tablet / phone layouts; clear focus indicators and reduced-motion support.
+- No fabricated monitoring data, application inventory, activity history, or working integrations.
+- Never change backend authentication/session semantics to implement visual styling.
+- Action buttons must map to existing API endpoints; critical service/site actions retain confirmation and job tracking.
+- Features not available in the Node edition must appear as upcoming, not simulated operational screens.
 
-## Preserve
-- overall information hierarchy
-- navigation model
-- dashboard composition
-- glass-card and bento layouts
-- rounded surfaces and subtle borders
-- depth, shadow and restrained glow
-- metrics and server status
-- sites, databases, runtimes, files and VHosts
-- DNS, SSL, containers and deployments
-- authenticated terminal
-- DevOne AI
-- hosting/provider workflows
-- responsive behavior
-- premium SaaS feel
+## Implemented
+- Full-page split brand/owner login; responsive decorative server illustration, accessible password visibility and errors.
+- Premium dashboard shell; sidebar, status header, live resource cards, dynamic services/sites lists, queued activity and system details.
+- Dedicated service controls, website/file workspace, job activity, owner vault views using pre-existing endpoints.
+- Styling built with CSS and inline SVG; no new runtime dependencies.
 
-## Change only the theme
-Dark backgrounds become warm/off-white backgrounds.
-Dark glass becomes frosted white/light glass.
-Light text becomes dark high-contrast text.
-Heavy neon glow becomes restrained accent glow.
-Purple/orange/cyan accents remain part of the DevOne identity.
+## Current limitations
+- API metrics supply CPU cores, load averages, memory, uptime, not sampled CPU percentage or time-series analytics.
+- Apps, databases, backups, and full monitoring modules are not yet available in the Node edition.
+- Social sign-in and password reset were intentionally not advertised: no supported backend.
+- UI deployment to existing VPS is separate from pushing the source branch; the fresh-only installer is not an updater.
 
-## Do not turn it into
-- generic Bootstrap
-- flat white admin software
-- a dark UI with slightly lighter panels
-- a completely new visual language
-
-## Architecture separation
-The visual reference does not override the new implementation architecture:
-
-Browser -> React/Vite Dashboard -> Node.js/TypeScript API -> DevOne Agent -> Ubuntu host
-
-The old reference may contain historical Go/NGINX implementation details. Those are visual/reference context only unless explicitly adopted by the new architecture.
-
-## Acceptance rule
-Before accepting a UI feature, compare it against the official reference and ask:
-
-Does this look like DevOne Server translated from dark Glass to light Glass?
-
-If not, the UI is not complete.
+## Acceptance
+Build with pnpm --filter @devone/dashboard build. Check owner sign-in, auth failure, sign-out, live data, service operations, static website/file actions, responsive behavior, and keyboard operation on a test VPS.
