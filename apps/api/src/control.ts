@@ -18,7 +18,55 @@ type Deps = {
 type Metric = {hostname?:string;cpuCount?:number;load?:number[];memoryTotal?:number;memoryFree?:number;uptime?:number;ok?:boolean};
 type QaResult = {check:string;status:"pass"|"fail";detail:string};
 const backupFolder = process.env.DEVONE_BACKUP_DIR ?? "/var/lib/devone/backups";
-const model = process.env.DEVONE_AI_MODEL ?? "gemini-2.5-flash";
+type ProviderId = "gemini" | "openai" | "deepseek" | "openclaw";
+const providers = [
+  {id:"gemini",label:"Google Gemini",secret:"gemini.api_key",model:"gemini-2.5-flash"},
+  {id:"openai",label:"OpenAI API (ChatGPT models)",secret:"openai.api_key",model:"gpt-4.1-mini"},
+  {id:"deepseek",label:"DeepSeek",secret:"deepseek.api_key",model:"deepseek-flash"},
+  {id:"openclaw",label:"OpenClaw Gateway",secret:"openclaw.gateway_token",model:process.env.DEVONE_OPENCLAW_AGENT_MODEL??""}
+] as const;
+const providerInstruction="You are DevOne's advisory server diagnostics assistant. Analyze ONLY the user's question and the minimal server health snapshot supplied. Explain uncertainty and suggest checks a person can verify. This request must be treated as read-only. Do not claim to run commands, read private files, change host services, or access unknown infrastructure. Never request credentials.";
+const validModel = (model:unknown):model is string=>typeof model==="string" && model.length>=1 && model.length<=96 && /^[a-zA-Z0-9._/-]+$/.test(model);
+// OpenClaw may run gateway agent tools irrespective of client-side tools=[]. Administrators
+// MUST configure a dedicated no-tools gateway agent and use its pinned model alias.
+function openClawUrl():string|null{
+  const raw=process.env.DEVONE_OPENCLAW_BASE_URL??"";
+  if(!raw)return null;
+  try{
+    const url=new URL(raw);
+    if(url.protocol!=="https:"||!url.hostname||url.username||url.password||url.search||url.hash||url.pathname.replace(/\/$/,"")!=="/v1")return null;
+    return url.origin+"/v1/chat/completions";
+  }catch{return null;}
+}
+async function providerReply(id:ProviderId,model:string,key:string,prompt:string):Promise<string>{
+  const contents=[{role:"system",content:providerInstruction},{role:"user",content:prompt}];
+  if(id==="gemini"){
+    const result=await fetch("https://generativelanguage.googleapis.com/v1beta/models/"+encodeURIComponent(model)+":generateContent",{
+      method:"POST",redirect:"error",headers:{"Content-Type":"application/json","x-goog-api-key":key},
+      signal:AbortSignal.timeout(25000),
+      body:JSON.stringify({systemInstruction:{parts:[{text:providerInstruction}]},contents:[{role:"user",parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:800,temperature:0.2}})
+    });
+    if(!result.ok)throw Error("provider_unavailable");
+    const data=await result.json() as {candidates?:Array<{content?:{parts?:Array<{text?:string}>}}>}>;
+    return data.candidates?.[0]?.content?.parts?.map(p=>p.text??"").join("\n").trim()??"";
+  }
+  const endpoint=id==="openai"?"https://api.openai.com/v1/chat/completions":id==="deepseek"?"https://api.deepseek.com/chat/completions":openClawUrl();
+  if(!endpoint)throw Error("gateway_unconfigured");
+  const response=await fetch(endpoint,{
+    method:"POST",redirect:"error",headers:{"Content-Type":"application/json","Authorization":"Bearer "+key},
+    signal:AbortSignal.timeout(id==="openclaw"?45000:25000),
+    body:JSON.stringify({
+      model,stream:false,messages:contents,
+      ...(id==="deepseek"?{max_tokens:800}:{max_completion_tokens:800}),
+      // No client tools are requested; for OpenClaw, enforce no-tools server-side as well.
+      ...(id==="openclaw"?{tools:[],tool_choice:"none"}:{})
+    })
+  });
+  if(!response.ok)throw Error("provider_unavailable");
+  const data=await response.json() as {choices?:Array<{message?:{content?:string | Array<{type?:string;text?:string}>}}>}>;
+  const output=data.choices?.[0]?.message?.content;
+  return typeof output==="string"?output.trim():Array.isArray(output)?output.map(p=>p.text??"").join("\n").trim():"";
+}
 
 export function registerControlRoutes(app:FastifyInstance,deps:Deps) {
   const {db,vault,agentUrl,agentToken,requestUser,sameOrigin,audit} = deps;
@@ -174,48 +222,53 @@ export function registerControlRoutes(app:FastifyInstance,deps:Deps) {
   app.get("/api/ai/status",async(request,reply)=>{
     if(!authorize(request,reply))return;
     reply.header("Cache-Control","no-store");
-    const configured=(vault.list() as {name:string}[]).some(x=>x.name==="gemini.api_key");
-    return {provider:"Google Gemini",model,configured,mode:"read-only-advice",secretName:"gemini.api_key"};
+    const names=new Set((vault.list() as {name:string}[]).map(x=>x.name));
+    return {providers:providers.map(p=>({
+      id:p.id,label:p.label,secretName:p.secret,model:p.model,
+      configured:names.has(p.secret)&&(p.id!=="openclaw"||Boolean(openClawUrl()&&p.model)),
+      keyStored:names.has(p.secret),
+      endpointConfigured:p.id==="openclaw"?Boolean(openClawUrl()&&p.model):true,
+      securityNote:p.id==="openclaw"?"Only connect a dedicated OpenClaw agent with ALL command, web, file and mutation tools disabled. Gateway tokens can carry full operator authority.":""
+    })),mode:"advisory-diagnostics",secretsReturned:false};
   });
   app.post("/api/ai/diagnose",async(request,reply)=>{
     const user=authorize(request,reply,false,true);if(!user)return;
-    const body=request.body as {question?:unknown}|null;
+    const body=request.body as {question?:unknown;provider?:unknown;model?:unknown}|null;
     if(typeof body?.question!=="string"||body.question.trim().length<5||body.question.length>1600)return reply.code(400).send({error:"invalid_question"});
+    const selected=providers.find(p=>p.id===body.provider);
+    if(!selected)return reply.code(400).send({error:"invalid_ai_provider"});
+    let chosenModel:string=selected.model;
+    if(selected.id==="openclaw"){
+      if(!openClawUrl()||!chosenModel)return reply.code(409).send({error:"gateway_unconfigured"});
+      if(body.model!==undefined&&body.model!==chosenModel)return reply.code(400).send({error:"openclaw_agent_must_be_pinned"});
+    }else if(body.model!==undefined){
+      if(!validModel(body.model))return reply.code(400).send({error:"invalid_ai_model"});
+      chosenModel=body.model;
+    }
+    if(!validModel(chosenModel))return reply.code(409).send({error:"model_unconfigured"});
     const previous=lastAiStart.get(user.id)??0;
     if(Date.now()-previous<15000)return reply.code(429).send({error:"ai_rate_limited"});
     lastAiStart.set(user.id,Date.now());
     let key:string|undefined;
-    try{key=vault.get("gemini.api_key");}
+    try{key=vault.get(selected.secret);}
     catch{return reply.code(503).send({error:"vault_unavailable"});}
-    if(!key)return reply.code(409).send({error:"gemini_not_configured"});
+    if(!key)return reply.code(409).send({error:"ai_provider_not_configured"});
     try{
       const [metrics,services]=await Promise.all([
         agent("/v1/metrics",3000).catch(()=>({ok:false})),
         agent("/v1/services",3000).catch(()=>[])
       ]);
-      // Explicit, minimal host context: never send user records, secrets, IPs or logs to the model.
+      // Minimize shared data: hostnames, credentials, IPs, logs and user content are omitted.
       const snapshot={
         cpuCores:metrics.cpuCount??null,
         load1:metrics.load?.[0]??null,
         memoryPercent:metrics.memoryTotal?Math.round((1-metrics.memoryFree/metrics.memoryTotal)*100):null,
         serviceStates:(Array.isArray(services)?services:[]).map((v:any)=>({name:v.service,state:v.ActiveState}))
       };
-      const result=await fetch("https://generativelanguage.googleapis.com/v1beta/models/"+encodeURIComponent(model)+":generateContent",{
-        method:"POST",
-        headers:{"Content-Type":"application/json","x-goog-api-key":key},
-        signal:AbortSignal.timeout(20000),
-        body:JSON.stringify({
-          systemInstruction:{parts:[{text:"You are DevOne AI, a read-only diagnostics assistant. Analyze only the supplied non-secret server health summary. State uncertainty. Suggest verifiable checks and safe steps. Never claim to have made changes, executed commands, or inspected unavailable systems. Do not request credentials. No mutating operations are available."}]},
-          contents:[{role:"user",parts:[{text:JSON.stringify({snapshot,question:body.question.trim()})}]}],
-          generationConfig:{maxOutputTokens:700,temperature:0.2}
-        })
-      });
-      if(!result.ok)return reply.code(502).send({error:"ai_provider_unavailable"});
-      const data=await result.json() as {candidates?:Array<{content?:{parts?:Array<{text?:string}>}}>}>;
-      const answer=data.candidates?.[0]?.content?.parts?.map(x=>x.text??"").join("\n").trim()??"";
+      const answer=await providerReply(selected.id,chosenModel,key,JSON.stringify({snapshot,question:body.question.trim()}));
       if(!answer)return reply.code(502).send({error:"ai_empty_response"});
-      audit(user.id,"ai.diagnostic_requested",{provider:"gemini",mode:"read-only"});
-      return {answer:answer.slice(0,8000),mode:"read-only-advice",model};
+      audit(user.id,"ai.diagnostic_requested",{provider:selected.id,mode:"advisory"});
+      return {answer:answer.slice(0,8000),mode:"advisory-diagnostics",provider:selected.id,model:chosenModel};
     }catch{return reply.code(503).send({error:"ai_request_failed"});}
   });
 }
