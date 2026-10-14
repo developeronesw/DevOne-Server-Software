@@ -7,13 +7,14 @@ type Discovery = {checkedAt:string;runtimes:Runtime[];databases:Database[];capab
 type Sample = {checked_at:string;load1:number;load5:number;memory_percent:number;cpu_cores:number;uptime_seconds:number};
 type QA = {id:string;checkedAt:string;passed:boolean;scope:string;productionReady:boolean;results:{check:string;status:"pass"|"fail";detail:string}[]};
 type Backup = {id:string;createdAt:string;bytes:number};
+type AiProvider = {id:"gemini"|"openai"|"deepseek"|"openclaw";label:string;secretName:string;model:string;configured:boolean;keyStored:boolean;endpointConfigured:boolean;securityNote:string};
 const headings:Record<ControlView,{eyebrow:string;title:string;description:string}>={
   apps:{eyebrow:"APPLICATIONS",title:"Software & app runtimes",description:"Discover installed development runtimes and the host's software foundation."},
   databases:{eyebrow:"DATABASES",title:"Database engines",description:"Inspect installed database clients and services. Database creation and user management require the next controlled Agent phase."},
   backups:{eyebrow:"RECOVERY",title:"Control-plane backups",description:"Create and download consistent SQLite snapshots of DevOne's control database."},
   monitoring:{eyebrow:"OBSERVABILITY",title:"Server monitoring",description:"Real server metrics and recent history from your connected agent."},
   qa:{eyebrow:"QUALITY ASSURANCE",title:"Automatic QA Center",description:"Non-destructive live checks, scheduled every six hours, with retained results."},
-  ai:{eyebrow:"INTELLIGENCE",title:"DevOne AI",description:"Read-only Gemini diagnostics grounded in your current service and health data."}
+  ai:{eyebrow:"INTELLIGENCE",title:"DevOne AI",description:"Choose Gemini, OpenAI, DeepSeek, or a separately secured OpenClaw diagnostic agent."}
 };
 async function getJson<T>(path:string):Promise<T>{
   const response=await fetch(path,{credentials:"same-origin",cache:"no-store"});
@@ -47,8 +48,9 @@ export function ControlWorkspace({view,role}:{view:ControlView;role:string}) {
   const [qaRunning,setQaRunning]=useState(false);
   const [backups,setBackups]=useState<Backup[]>([]);
   const [backupWarning,setBackupWarning]=useState("");
-  const [aiConfigured,setAiConfigured]=useState(false);
-  const [aiModel,setAiModel]=useState("");
+  const [aiProviders,setAiProviders]=useState<AiProvider[]>([]);
+  const [selectedProvider,setSelectedProvider]=useState<AiProvider["id"]>("gemini");
+  const [modelInput,setModelInput]=useState("");
   const [question,setQuestion]=useState("");
   const [answer,setAnswer]=useState("");
   const [error,setError]=useState("");
@@ -66,8 +68,8 @@ export function ControlWorkspace({view,role}:{view:ControlView;role:string}) {
       setBackups(data.backups);setBackupWarning(data.warning);
     }
     if(view==="ai"){
-      const data=await getJson<{configured:boolean;model:string}>("/api/ai/status");
-      setAiConfigured(data.configured);setAiModel(data.model);
+      const data=await getJson<{providers:AiProvider[]}>("/api/ai/status");
+      setAiProviders(data.providers);
     }
   }
   useEffect(()=>{
@@ -95,10 +97,12 @@ export function ControlWorkspace({view,role}:{view:ControlView;role:string}) {
   }
   async function diagnose(){
     setBusy(true);setError("");setAnswer("");
-    try{const data=await sendJson<{answer:string}>("/api/ai/diagnose",{question});setAnswer(data.answer);}
+    try{const data=await sendJson<{answer:string}>("/api/ai/diagnose",{question,provider:selectedProvider,...(selectedProvider==="openclaw"?{}:{model:modelInput||selected?.model})});setAnswer(data.answer);}
     catch(e){setError(e instanceof Error?e.message:"AI provider unavailable.");}
     finally{setBusy(false);}
   }
+  const selected=aiProviders.find(p=>p.id===selectedProvider);
+  const providerReady=Boolean(selected?.configured);
   const header=headings[view];
   return <div className="ops-workspace">
     <div className="page-heading"><span className="overline">{header.eyebrow}</span><h1>{header.title}</h1><p>{header.description}</p></div>
@@ -125,9 +129,23 @@ export function ControlWorkspace({view,role}:{view:ControlView;role:string}) {
       {role==="owner"?<><article className="surface-card glass"><div className="section-heading"><div><h2>Control database snapshots</h2><p>SQLite online backup API · Consistent snapshots without stopping the server</p></div><button className="primary-button" disabled={busy} onClick={()=>void createBackup()}>{busy?"Creating…":"Create snapshot"}</button></div><p className="ops-warning">{backupWarning||"Backups exclude hosted sites, system configurations and the vault encryption key. Do not treat them as full-server recovery images."}</p></article>
       <article className="surface-card glass ops-panel-gap"><div className="section-heading"><h2>Available snapshots</h2><small className="ops-subtext">Owner-only downloads</small></div><div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Created</th><th>Size</th><th>Action</th></tr></thead><tbody>{backups.map(b=><tr key={b.id}><td>{new Date(b.createdAt).toLocaleString()}</td><td>{(b.bytes/1048576).toFixed(2)} MiB</td><td><a className="ops-download" href={"/api/backups/"+b.id+"/download"}>Download snapshot ↓</a></td></tr>)}</tbody></table>{!backups.length&&<p className="ops-empty">No snapshots yet.</p>}</div></article></>:<article className="surface-card glass"><h2>Owner permission required</h2><p>Backups are restricted to the Owner account.</p></article>}
     </>}
-    {view==="ai"&&<div className="ops-ai-grid"><section className="surface-card glass"><div className="section-heading"><div><h2>AI infrastructure assistant</h2><p>Model: {aiModel||"Google Gemini"}</p></div><span className={"state-chip "+(aiConfigured?"good":"neutral")}>{aiConfigured?"Configured":"Not configured"}</span></div>
-      <p className="ops-note">For security, DevOne AI only sees a minimal server-health summary. It cannot execute commands, alter services, read private files or disclose stored credentials.</p>
-      {aiConfigured?<><label className="ops-ai-label" htmlFor="ai-question">What would you like to diagnose?</label><textarea id="ai-question" value={question} onChange={e=>setQuestion(e.target.value)} maxLength={1600} placeholder="For example: Why might a high 1-minute load average indicate performance problems?"/><button className="primary-button" disabled={busy||question.trim().length<5} onClick={()=>void diagnose()}>{busy?"Analyzing…":"Analyze my server"}</button></>:<div className="ops-ai-setup"><h3>Connect Google Gemini</h3><p>In the <strong>Secure Vault</strong>, add a secret named <code>gemini.api_key</code> containing your Google AI Studio API key. Return here when saved.</p><button onClick={()=>void refresh().catch(()=>{})} className="ops-secondary">Check configuration</button></div>}
-      </section><section className="surface-card glass ops-ai-output"><h2>Diagnostic response</h2>{answer?<div className="ops-response" aria-live="polite">{answer}</div>:<p className="ops-empty">Your read-only diagnostic recommendations will appear here. Always verify suggestions before acting on production services.</p>}</section></div>}
+    {view==="ai"&&<div className="ops-ai-grid"><section className="surface-card glass">
+      <div className="section-heading"><div><h2>AI infrastructure assistant</h2><p>One DevOne workspace. Multiple model providers.</p></div><span className={"state-chip "+(providerReady?"good":"neutral")}>{providerReady?"Ready":"Needs setup"}</span></div>
+      <label className="ops-ai-label" htmlFor="ai-provider">AI connection</label>
+      <select id="ai-provider" value={selectedProvider} onChange={e=>{const next=e.target.value as AiProvider["id"];setSelectedProvider(next);setModelInput("");setAnswer("");setError("");}}>
+        {["gemini","openai","deepseek","openclaw"].map(id=><option key={id} value={id}>{aiProviders.find(p=>p.id===id)?.label??({"gemini":"Google Gemini","openai":"OpenAI API","deepseek":"DeepSeek","openclaw":"OpenClaw Gateway"} as Record<string,string>)[id]}</option>)}
+      </select>
+      <div className="ops-provider-status"><span className={"state-chip "+(providerReady?"good":"neutral")}>{selected?.keyStored?"Credential in vault":"API key not saved"}</span>{selectedProvider==="openclaw"&&<span className={"state-chip "+(selected?.endpointConfigured?"good":"neutral")}>{selected?.endpointConfigured?"Gateway configured":"Gateway not configured"}</span>}</div>
+      {selectedProvider!=="openclaw"&&<><label className="ops-ai-label" htmlFor="ai-model">Model identifier</label><input id="ai-model" value={modelInput} onChange={e=>setModelInput(e.target.value)} placeholder={selected?.model??"Choose your provider model"}/><p className="ops-subtext">Leave blank to use the default model: <strong>{selected?.model??"Loading…"}</strong>. The selected model must be available to your provider account.</p></>}
+      {selectedProvider==="openclaw"&&<p className="ops-warning"><strong>OpenClaw gateway security:</strong> Connect only a dedicated diagnostics agent with all host, shell, file, browser and other tools disabled on the gateway. A normal OpenClaw agent could perform actions even if DevOne requests only text. Configure its fixed HTTPS gateway URL and pinned agent model on the VPS; never expose the gateway token here.</p>}
+      <p className="ops-note">DevOne sends your question and a limited server-health snapshot to the selected provider. It does not intentionally send credentials, customer records, system logs or IP addresses. No DevOne host mutations are exposed to AI.</p>
+      {!providerReady?<div className="ops-ai-setup"><h3>Connect {selected?.label??"your provider"}</h3><p>Save your access credential in the Owner <strong>Secure Vault</strong> as <code>{selected?.secretName??"provider.api_key"}</code>. The value remains encrypted and never appears in API responses.</p>{selectedProvider==="openclaw"&&<p>Also set <code>DEVONE_OPENCLAW_BASE_URL</code> to your gateway's HTTPS <code>/v1</code> base URL and <code>DEVONE_OPENCLAW_AGENT_MODEL</code> to the dedicated no-tools agent ID (for example <code>openclaw/devone-diagnostics</code>), then restart the DevOne API.</p>}<button className="ops-secondary" onClick={()=>void refresh().catch(()=>{})}>Refresh connection status</button></div>:<>
+        <label className="ops-ai-label" htmlFor="ai-question">What would you like to diagnose?</label>
+        <textarea id="ai-question" value={question} onChange={e=>setQuestion(e.target.value)} maxLength={1600} placeholder="For example: What does my system load suggest about server performance?"/>
+        <button className="primary-button" disabled={busy||question.trim().length<5} onClick={()=>void diagnose()}>{busy?"Analyzing…":"Analyze with "+(selected?.label??"AI")}</button>
+      </>}
+      </section>
+      <section className="surface-card glass ops-ai-output"><h2>Diagnostic response</h2>{answer?<div className="ops-response" aria-live="polite">{answer}</div>:<p className="ops-empty">Provider responses appear here as advice. Verify any recommendation before making changes to your server.</p>}</section>
+    </div>}
   </div>;
 }
