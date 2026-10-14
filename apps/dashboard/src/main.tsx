@@ -1,4 +1,5 @@
 import { SitesWorkspace } from "./SitesWorkspace";
+import { SetupWizard } from "./SetupWizard";
 import { StrictMode, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
@@ -48,6 +49,7 @@ function App() {
   const [notice, setNotice] = useState("");
   const [services, setServices] = useState<{service: string; ActiveState: string}[]>([]);
   const [status, setStatus] = useState<Status | null>(null);
+  const [setupRequired, setSetupRequired] = useState<boolean | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -60,9 +62,15 @@ function App() {
   async function refresh() {
     try {
       const response = await fetch("/api/system/status");
-      if (response.status === 401) { setStatus(null); setSecretValue(""); setSecrets([]); setJobs([]); setSites([]); return; }
+      if (response.status === 401) {
+        setStatus(null); setSecretValue(""); setSecrets([]); setJobs([]); setSites([]);
+        const setupResponse = await fetch("/api/setup/status", { cache: "no-store" });
+        if (!setupResponse.ok) throw new Error("Initial setup status is unavailable");
+        setSetupRequired(Boolean((await setupResponse.json()).setupRequired));
+        return;
+      }
       if (!response.ok) throw new Error("Server status unavailable");
-      const nextStatus: Status = await response.json(); setStatus(nextStatus); setError("");
+      const nextStatus: Status = await response.json(); setStatus(nextStatus); setSetupRequired(false); setError("");
       const serviceResponse = await fetch("/api/services");
       if (serviceResponse.ok) setServices((await serviceResponse.json()).services);
       if (["owner", "admin"].includes(nextStatus.user.role)) {
@@ -128,6 +136,7 @@ function App() {
   ];
   if (status?.user.role === "owner") navItems.push({id:"secrets",label:"Secure Vault",icon:"lock"});
   if (loading) return <div className="loading-screen"><div className="loading-mark"><Glyph name="layers" /></div><strong>DEVONE <span>SERVER</span></strong><p>Establishing a secure connection…</p></div>;
+  if (setupRequired) return <SetupWizard onComplete={() => { setSetupRequired(false); setNotice("Owner account created. Welcome to DevOne Server."); void refresh(); }} />;
   if (!status) return (
     <main className="auth-screen">
       <header className="auth-masthead"><Brand /><span className="auth-masthead-detail">POWERFUL <span>·</span> SECURE <span>·</span> BUILT FOR DEVELOPERS</span></header>
