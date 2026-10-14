@@ -64,7 +64,7 @@ test('authentication, setup, origin, metrics, logout and rate-limit boundaries',
     const backupRow = await backupResponse.json();
     assert.ok(backupRow.bytes > 0);
     assert.equal((await secureGet('/api/backups/'+backupRow.id+'/download')).status, 200);
-    assert.equal((await secureGet('/api/backups/invalid/../../secrets')).status, 404);
+    assert.equal((await secureGet('/api/backups/not-a-valid-uuid/download')).status, 400);
     const liveQa = await securePost('/api/qa/run', {});
     assert.equal(liveQa.status, 200);
     assert.equal((await liveQa.json()).results.length, 7);
