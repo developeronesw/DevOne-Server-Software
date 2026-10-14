@@ -1,4 +1,5 @@
 import { SiteManager } from "./sites.js";
+import { discoverSoftware } from "./discovery.js";
 import { listServices, mutateService } from "./services.js";
 import { cpus, freemem, totalmem, uptime, loadavg, hostname } from "node:os";
 import { createServer } from "node:http";
@@ -42,6 +43,10 @@ const server = createServer(async (request, response) => {
       const input = JSON.parse(body);
       send(200,request.url === "/v1/sites" ? await sites.create(input) : request.url === "/v1/sites/action" ? await sites.action(input) : request.url === "/v1/sites/tls" ? await sites.tls(input) : await sites.files(input));
     } catch (error) { const invalid = error instanceof Error && /^(invalid_|domain_in_use|site_limit|site_not_ready|file_too_large)/.test(error.message); const conflict = error instanceof Error && ["file_conflict","destination_exists","site_revision_conflict"].includes(error.message); send(conflict ? 409 : invalid ? 400 : 503,{error:conflict && error instanceof Error ? error.message : "site_operation_failed"}); }
+    return;
+  }
+  if (request.method === "GET" && request.url === "/v1/discovery") {
+    try { send(200,await discoverSoftware()); } catch { send(503,{error:"discovery_unavailable"}); }
     return;
   }
   if (request.method === "GET" && request.url === "/v1/services") { send(200, await listServices()); return; }
