@@ -22,3 +22,8 @@ This is the initial QA infrastructure, not full legacy feature parity. Browser w
 ## Legacy parity inventory
 
 `qa/legacy-parity.json` accounts for every route literal observed in the fixed legacy bundle, tied to its archive hash. Partial mappings identify Node equivalents without claiming complete parity. `scripts/verify-parity.mjs` rejects missing/duplicate entries, a changed baseline, invalid mappings and unsupported acceptance claims. Verified entries require sanitized committed evidence comparing legacy and Node behavior on a disposable VPS, including security and UI checks. The QA release gate independently remains blocked while any entry lacks acceptance. Route strings alone are only a lower-bound inventory; non-route workflows and the existing whole-platform acceptance blockers also remain mandatory.
+
+
+## Live dashboard QA
+
+The dashboard now provides authenticated read-only probes for SQLite integrity, vault key, Agent health, services and sites, automatically at startup and every six hours, with saved reports. These do not substitute for full regression testing or the gated VPS release verification; see [Operations Modules](OPERATIONS-MODULES.md).
