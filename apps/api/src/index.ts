@@ -1,4 +1,5 @@
 import { registerSiteRoutes } from "./sites.js";
+import { registerControlRoutes } from "./control.js";
 import { JobQueue, OutcomeUnknown } from "./jobs.js";
 import { Vault, validSecretName } from "./vault.js";
 import Fastify from "fastify";
@@ -213,6 +214,7 @@ app.delete<{ Params: { name: string } }>("/api/secrets/:name", async (request, r
   } catch { db.exec("ROLLBACK"); return reply.code(503).send({ error: "vault_unavailable" }); }
 });
 registerSiteRoutes(app, { requestUser, sameOrigin, agentUrl, agentToken, jobs, audit });
+registerControlRoutes(app, {db,vault,agentUrl,agentToken,requestUser,sameOrigin,audit});
 jobs.start();
 app.addHook("onClose", async () => { await jobs.stop(); closeDb(); });
 const port = Number(process.env.PORT ?? 8787);
