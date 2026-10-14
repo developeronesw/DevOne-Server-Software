@@ -69,7 +69,12 @@ test('authentication, setup, origin, metrics, logout and rate-limit boundaries',
     assert.equal(liveQa.status, 200);
     assert.equal((await liveQa.json()).results.length, 7);
     assert.equal((await securePost('/api/qa/run', {})).status, 429);
-    assert.equal((await securePost('/api/ai/diagnose', {question:'Check my service status'})).status, 409);
+    assert.equal((await securePost('/api/ai/diagnose', {question:'Check my service status',provider:'gemini'})).status, 409);
+    const aiStatus = await (await secureGet('/api/ai/status')).json();
+    assert.deepEqual(aiStatus.providers.map(p=>p.id),['gemini','openai','deepseek','openclaw']);
+    assert.equal(aiStatus.secretsReturned,false);
+    assert.equal(aiStatus.providers.find(p=>p.id==='openclaw').endpointConfigured,false);
+    assert.equal((await securePost('/api/ai/diagnose', {question:'Check my service status',provider:'unapproved'})).status, 400);
 
     assert.equal(body.agent.ok, true); assert.equal(body.metrics.ok, true); assert.ok(body.metrics.memoryTotal > 0);
     assert.equal((await fetch(url + '/api/me', { headers: { Cookie: 'devone_session=%malformed' } })).status, 401);
