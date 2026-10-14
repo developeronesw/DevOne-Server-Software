@@ -17,14 +17,15 @@ test('API queues host actions once, keeps secrets private, enforces roles and pr
     if(req.url==='/v1/services/action'){calls++;await delay(50);res.writeHead(200,{'Content-Type':'application/json'}).end('{"ok":true}');return;}
     res.writeHead(200,{'Content-Type':'application/json'}).end(req.url==='/v1/services'?'[]':'{"ok":true}');
   }); mock.listen(0,'127.0.0.1');await once(mock,'listening');const port=await freePort();const url=`http://127.0.0.1:${port}`;
-  const env={...process.env,PORT:String(port),DEVONE_DB_PATH:join(dir,'state.sqlite'),DEVONE_MASTER_KEY_FILE:keyFile,DEVONE_PANEL_URL:'https://panel.example.test',DEVONE_SETUP_TOKEN:'setup-test',DEVONE_AGENT_TOKEN:'agent-test',DEVONE_AGENT_URL:`http://127.0.0.1:${mock.address().port}`};
+  const setupToken = 'b'.repeat(64); const setupTokenFile = join(dir,'owner-setup-token'); await writeFile(setupTokenFile,setupToken,{mode:0o600});
+  const env={...process.env,PORT:String(port),DEVONE_DB_PATH:join(dir,'state.sqlite'),DEVONE_MASTER_KEY_FILE:keyFile,DEVONE_PANEL_URL:'https://panel.example.test',DEVONE_SETUP_TOKEN_FILE:setupTokenFile,DEVONE_AGENT_TOKEN:'agent-test',DEVONE_AGENT_URL:`http://127.0.0.1:${mock.address().port}`};
   let child; const start=async()=>{child=spawn(process.execPath,['apps/api/dist/index.js'],{env,stdio:'ignore'});for(let i=0;i<100;i++){try{await fetch(url+'/api/health');return;}catch{}await delay(30);}throw new Error('Startup timeout');};
   const stop=async()=>{if(child?.exitCode===null){const exited=once(child,'exit');child.kill();await exited;}};
   let cookie=''; const req=(path,method='GET',body,extra={})=>fetch(url+path,{method,headers:{Cookie:cookie,Origin:'https://panel.example.test',...(body === undefined ? {} : {'Content-Type':'application/json'}),...extra},body:body===undefined?undefined:JSON.stringify(body)});
   try {
     await start();assert.equal((await req('/api/jobs')).status,401);assert.equal((await req('/api/secrets')).status,401);
     const credentials={email:'owner@example.test',password:'test-password-long-123'};
-    assert.equal((await req('/api/auth/setup','POST',credentials,{'X-DevOne-Setup-Token':'setup-test'})).status,200);
+    assert.equal((await req('/api/auth/setup','POST',credentials,{'X-DevOne-Setup-Token':setupToken})).status,200);
     const login=await req('/api/auth/login','POST',credentials);cookie=login.headers.get('set-cookie').split(';')[0];
     assert.equal((await req('/api/secrets/gemini.api_key','PUT',{value:'vault-private-value'})).status,200);
     const listed=await(await req('/api/secrets')).json();assert.deepEqual(Object.keys(listed.secrets[0]).sort(),['name','updated_at']);assert.ok(!JSON.stringify(listed).includes('vault-private-value'));

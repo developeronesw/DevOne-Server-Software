@@ -2,11 +2,20 @@ import { registerSiteRoutes } from "./sites.js";
 import { JobQueue, OutcomeUnknown } from "./jobs.js";
 import { Vault, validSecretName } from "./vault.js";
 import Fastify from "fastify";
+import { readFileSync, unlinkSync } from "node:fs";
+import { timingSafeEqual } from "node:crypto";
 import { audit, db, closeDb, createOwner, hasOwner, login, logout, userFromToken } from "./auth.js";
 
-const app = Fastify({ logger: { redact: ["req.headers.authorization", "req.headers.cookie"] }, bodyLimit: 16384 });
+const app = Fastify({ logger: { redact: ["req.headers.authorization", "req.headers.cookie", "req.headers.x-devone-setup-token"] }, bodyLimit: 16384 });
 const version = "1.0.0-alpha.3";
-const setupToken = process.env.DEVONE_SETUP_TOKEN ?? "";
+const setupTokenFile = process.env.DEVONE_SETUP_TOKEN_FILE ?? "/var/lib/devone/owner-setup-token";
+function setupTokenMatches(candidate: unknown) {
+  if (typeof candidate !== "string" || !/^[0-9a-f]{64}$/.test(candidate)) return false;
+  let secret: string;
+  try { secret = readFileSync(setupTokenFile, "utf8").trim(); } catch { return false; }
+  if (!/^[0-9a-f]{64}$/.test(secret)) return false;
+  return timingSafeEqual(Buffer.from(candidate, "hex"), Buffer.from(secret, "hex"));
+}
 const panelUrl = process.env.DEVONE_PANEL_URL ?? "http://127.0.0.1:8787";
 const agentUrl = process.env.DEVONE_AGENT_URL ?? "http://127.0.0.1:8790";
 const agentToken = process.env.DEVONE_AGENT_TOKEN ?? "";
@@ -54,16 +63,26 @@ async function agentHealth(path = "/v1/health") {
 }
 
 app.get("/api/health", async () => ({ ok: true, service: "devone-api", version }));
-app.get("/api/setup/status", async () => ({ setupRequired: !hasOwner(), panelUrl }));
+app.get("/api/setup/status", async (_request, reply) => {
+  reply.header("Cache-Control", "no-store");
+  return { setupRequired: !hasOwner(), panelUrl };
+});
 
 app.post("/api/auth/setup", async (request, reply) => {
-  if (!sameOrigin(request)) return reply.code(403).send({ error: "origin_forbidden" });
-  if (!setupToken || request.headers["x-devone-setup-token"] !== setupToken) return reply.code(403).send({ error: "setup_token_required" });
+  reply.header("Cache-Control", "no-store");
   if (hasOwner()) return reply.code(409).send({ error: "setup_complete" });
+  if (!request.headers.origin || !sameOrigin(request)) return reply.code(403).send({ error: "origin_forbidden" });
+  if (!setupTokenMatches(request.headers["x-devone-setup-token"])) return reply.code(403).send({ error: "setup_token_required" });
   const body = (request.body ?? {}) as { email?: string; password?: string };
   try {
-    const user = createOwner(body.email ?? "", body.password ?? "");
+    const email = body.email ?? "";
+    const password = body.password ?? "";
+    const user = createOwner(email, password);
     audit(user.id, "auth.setup_completed");
+    try { unlinkSync(setupTokenFile); } catch (error) { app.log.warn({ err: error }, "Could not remove completed setup token"); }
+    const session = login(email, password);
+    if (!session) return reply.code(503).send({ error: "setup_session_failed" });
+    setSessionCookie(reply, session.token);
     return reply.send({ ok: true, user });
   } catch (error) {
     const code = error instanceof Error ? error.message : "setup_failed";

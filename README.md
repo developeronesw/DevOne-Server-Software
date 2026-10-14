@@ -78,6 +78,9 @@ No separate system database server is needed for DevOne's SQLite state.
 The initial Git checkout requires Git (e.g. `sudo apt-get install -y git`);
 the installer handles everything after the checkout is present. Your panel
 domain must already resolve to the VPS, and ports 80/443 must be reachable.
+The installer asks only for the panel domain and prints a one-time private
+HTTPS link to complete initial Owner account setup in your browser.
+No Owner credentials are collected in the terminal.
 
 **This edition remains a developer preview.** Use a disposable VPS, not a
 server running CloudPanel, the legacy edition or production customer services.

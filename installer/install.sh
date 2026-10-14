@@ -6,8 +6,6 @@ INSTALL_ROOT="/opt/devone"
 APP_USER="devone"
 ENV_FILE="/etc/devone/devone.env"
 DOMAIN="${DEVONE_PANEL_DOMAIN:-}"
-ADMIN_EMAIL="${DEVONE_ADMIN_EMAIL:-}"
-ADMIN_PASSWORD="${DEVONE_ADMIN_PASSWORD:-}"
 SOURCE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 
 log() { printf '\n[DevOne] %s\n' "$*"; }
@@ -24,10 +22,6 @@ source /etc/os-release
 
 if [[ -z "$DOMAIN" ]]; then read -r -p "Control-panel domain (example: panel.devonecms.com): " DOMAIN; fi
 [[ "$DOMAIN" =~ ^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$ && ${#DOMAIN} -le 253 ]] || fail "A valid lowercase panel hostname is required."
-if [[ -z "$ADMIN_EMAIL" ]]; then read -r -p "Initial Owner email: " ADMIN_EMAIL; fi
-[[ "$ADMIN_EMAIL" =~ ^[a-zA-Z0-9][a-zA-Z0-9._+%-]*@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,63}$ ]] || fail "A valid Owner email address is required."
-if [[ -z "$ADMIN_PASSWORD" ]]; then read -r -s -p "Initial Owner password (12+ characters): " ADMIN_PASSWORD; echo; fi
-[[ "${#ADMIN_PASSWORD}" -ge 12 ]] || fail "Admin password must be at least 12 characters."
 
 log "Installing and validating all required host prerequisites..."
 bash "$SOURCE_DIR/installer/install-prerequisites.sh"
@@ -54,7 +48,6 @@ fi
 chown -R root:root "$INSTALL_ROOT/current"
 
 AGENT_TOKEN="$(openssl rand -hex 32)"
-SETUP_TOKEN="$(openssl rand -hex 32)"
 cat > "$ENV_FILE" <<EOF
 NODE_ENV=production
 PORT=8787
@@ -64,7 +57,7 @@ DEVONE_PANEL_URL=https://$DOMAIN
 DEVONE_AGENT_URL=http://127.0.0.1:8790
 DEVONE_AGENT_PORT=8790
 DEVONE_AGENT_TOKEN=$AGENT_TOKEN
-DEVONE_SETUP_TOKEN=$SETUP_TOKEN
+DEVONE_SETUP_TOKEN_FILE=/var/lib/devone/owner-setup-token
 EOF
 chown root:"$APP_USER" "$ENV_FILE"
 chmod 640 "$ENV_FILE"
@@ -109,27 +102,28 @@ curl -fsS http://127.0.0.1:8790/v1/health -H "Authorization: Bearer $AGENT_TOKEN
 
 log "Requesting HTTPS certificate..."
 if ! certbot certificates 2>/dev/null | grep -q "Domains:.*$DOMAIN"; then
-  certbot --nginx --non-interactive --agree-tos --email "$ADMIN_EMAIL" -d "$DOMAIN" || fail "Certificate request failed. Verify DNS points to this server and ports 80/443 are open."
+  # Administrator identity is created in HTTPS onboarding, not the shell.
+  # Renewal is automatic; owner may add an ACME contact email after setup.
+  certbot certonly --webroot -w /var/www/devone-acme \
+    --non-interactive --agree-tos --register-unsafely-without-email \
+    --cert-name "$DOMAIN" -d "$DOMAIN" || fail "Certificate request failed. Verify DNS points to this server and ports 80/443 are open."
 fi
 
+[[ -s "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" && -s "/etc/letsencrypt/live/$DOMAIN/privkey.pem" ]] || fail "TLS certificate files missing at expected path."
 log "Installing hardened HTTPS NGINX configuration..."
 sed "s/__DEVONE_PANEL_DOMAIN__/$DOMAIN/g" deploy/nginx/devone-panel.conf.template > /etc/nginx/sites-available/devone-panel
 nginx -t
 systemctl reload nginx
 
-log "Initializing Owner account..."
-# Pass credentials over stdin; never expose passwords in process arguments.
-export DEVONE_BOOTSTRAP_EMAIL="$ADMIN_EMAIL" DEVONE_BOOTSTRAP_PASSWORD="$ADMIN_PASSWORD"
-python3 - <<'PYSETUP' | curl -fsS -X POST http://127.0.0.1:8787/api/auth/setup -H "Content-Type: application/json" -H "X-DevOne-Setup-Token: $SETUP_TOKEN" --data-binary @- >/dev/null
-import json, os
-print(json.dumps({"email": os.environ["DEVONE_BOOTSTRAP_EMAIL"], "password": os.environ["DEVONE_BOOTSTRAP_PASSWORD"]}))
-PYSETUP
-unset DEVONE_BOOTSTRAP_EMAIL DEVONE_BOOTSTRAP_PASSWORD ADMIN_PASSWORD
-sed -i '/^DEVONE_SETUP_TOKEN=/d' "$ENV_FILE"
-systemctl restart devone-api
+# Check local HTTPS and dashboard before reporting ready.
+curl -fsS --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/api/health" >/dev/null \
+  || fail "Panel HTTPS API is not responding."
+curl -fsS --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/" >/dev/null \
+  || fail "Panel HTTPS dashboard is not responding."
 
-
-log "DevOne Phase 1 installation complete."
+log "Generating secure first-run browser setup link..."
+bash "$INSTALL_ROOT/current/scripts/issue-setup-link.sh"
+log "DevOne is installed. Complete initial setup in the browser."
 echo "Control panel: https://$DOMAIN"
-echo "Owner: $ADMIN_EMAIL"
-echo "API: http://127.0.0.1:8787 (internal only)"
+echo "After setup, register a certificate contact email for renewal notices:"
+echo "  sudo certbot update_account --email you@example.com"

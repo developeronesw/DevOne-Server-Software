@@ -17,6 +17,10 @@ test('fresh installer validates edition and OS before running its prerequisite i
   assert.ok(prerequisitesCall > 0 && commitLookup > prerequisitesCall && firstDevoneDirectory > commitLookup);
   assert.match(main,/PNPM="\/opt\/devone\/toolchain\/node_modules\/\.bin\/pnpm"/);
   assert.match(main,/systemctl enable nginx devone-api devone-agent/);
+  assert.doesNotMatch(main,/Initial Owner (?:email|password)/);
+  assert.match(main,/scripts\/issue-setup-link\.sh/);
+  assert.match(main,/certbot certonly --webroot/);
+  assert.match(main,/https:\/\/\$DOMAIN\/api\/health/);
 });
 
 test('signed distribution installs minimum Node, TLS, HTTP, git and OS utilities', () => {
@@ -37,7 +41,7 @@ test('signed distribution installs minimum Node, TLS, HTTP, git and OS utilities
 });
 
 test('installer syntax remains valid without installing packages', () => {
-  for (const script of ['installer/install.sh','installer/install-prerequisites.sh']) {
+  for (const script of ['installer/install.sh','installer/install-prerequisites.sh','scripts/issue-setup-link.sh']) {
     assert.doesNotThrow(() => execFileSync('bash',['-n',script],{stdio:'pipe'}));
   }
 });
