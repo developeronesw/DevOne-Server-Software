@@ -22,7 +22,7 @@ const model = process.env.DEVONE_AI_MODEL ?? "gemini-2.5-flash";
 
 export function registerControlRoutes(app:FastifyInstance,deps:Deps) {
   const {db,vault,agentUrl,agentToken,requestUser,sameOrigin,audit} = deps;
-  db.exec(\`
+  db.exec(`
     CREATE TABLE IF NOT EXISTS metric_samples(
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       checked_at TEXT NOT NULL,
@@ -35,7 +35,7 @@ export function registerControlRoutes(app:FastifyInstance,deps:Deps) {
       passed INTEGER NOT NULL, results TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS qa_reports_time ON qa_reports(checked_at DESC);
-  \`);
+  `);
   const authorize=(request:any,reply:any,ownerOnly=false,mutation=false):User|null=>{
     const user=requestUser(request);
     if(!user){ reply.code(401).send({error:"unauthorized"});return null; }
