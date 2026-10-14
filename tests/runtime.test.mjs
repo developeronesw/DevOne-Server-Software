@@ -3,6 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { mkdtemp, rm, writeFile, access } from 'node:fs/promises';
+import { randomBytes } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { once } from 'node:events';
@@ -16,7 +17,9 @@ test('authentication, setup, origin, metrics, logout and rate-limit boundaries',
   const tokenFile = join(dir, 'owner-setup-token');
   const token = 'a'.repeat(64);
   await writeFile(tokenFile, token, { mode: 0o600 });
-  const env = { ...process.env, PORT: String(port), DEVONE_AGENT_PORT: String(agentPort), DEVONE_AGENT_URL: agentUrl, DEVONE_AGENT_TOKEN: 'test-agent-token', DEVONE_SETUP_TOKEN_FILE: tokenFile, DEVONE_PANEL_URL: 'https://panel.example.test', DEVONE_DB_PATH: join(dir, 'state.sqlite') };
+  const masterKey = join(dir, 'vault.key');
+  await writeFile(masterKey, randomBytes(32), { mode: 0o600 });
+  const env = { ...process.env, PORT: String(port), DEVONE_AGENT_PORT: String(agentPort), DEVONE_AGENT_URL: agentUrl, DEVONE_AGENT_TOKEN: 'test-agent-token', DEVONE_SETUP_TOKEN_FILE: tokenFile, DEVONE_PANEL_URL: 'https://panel.example.test', DEVONE_DB_PATH: join(dir, 'state.sqlite'), DEVONE_BACKUP_DIR: join(dir, 'backups'), DEVONE_MASTER_KEY_FILE: masterKey };
   const children = ['agent/dist/index.js', 'apps/api/dist/index.js'].map(p => spawn(process.execPath, [p], { env, stdio: 'ignore' }));
   const post = (path, body, headers = {}) => fetch(url + path, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) });
   try {
@@ -46,6 +49,28 @@ test('authentication, setup, origin, metrics, logout and rate-limit boundaries',
     const cookie = setCookie.split(';')[0];
     const status = await fetch(url + '/api/system/status', { headers: { Cookie: cookie } });
     assert.equal(status.status, 200); const body = await status.json();
+    const secureGet = path => fetch(url + path, { headers: { Cookie: cookie } });
+    const securePost = (path, payload) => post(path, payload, { Cookie:cookie, Origin:'https://panel.example.test' });
+    assert.equal((await secureGet('/api/qa')).status, 200);
+    assert.equal((await secureGet('/api/monitoring')).status, 200);
+    assert.equal((await secureGet('/api/backups')).status, 200);
+    assert.equal((await secureGet('/api/ai/status')).status, 200);
+    assert.equal((await fetch(url + '/api/qa')).status, 401);
+    assert.equal((await post('/api/qa/run', {})).status, 401);
+    assert.equal((await securePost('/api/backups', {})).status, 400);
+    assert.equal((await post('/api/backups', {confirmed:true}, {Cookie:cookie,Origin:'https://evil.example.test'})).status, 403);
+    const backupResponse = await securePost('/api/backups', {confirmed:true});
+    assert.equal(backupResponse.status, 201);
+    const backupRow = await backupResponse.json();
+    assert.ok(backupRow.bytes > 0);
+    assert.equal((await secureGet('/api/backups/'+backupRow.id+'/download')).status, 200);
+    assert.equal((await secureGet('/api/backups/invalid/../../secrets')).status, 404);
+    const liveQa = await securePost('/api/qa/run', {});
+    assert.equal(liveQa.status, 200);
+    assert.equal((await liveQa.json()).results.length, 7);
+    assert.equal((await securePost('/api/qa/run', {})).status, 429);
+    assert.equal((await securePost('/api/ai/diagnose', {question:'Check my service status'})).status, 409);
+
     assert.equal(body.agent.ok, true); assert.equal(body.metrics.ok, true); assert.ok(body.metrics.memoryTotal > 0);
     assert.equal((await fetch(url + '/api/me', { headers: { Cookie: 'devone_session=%malformed' } })).status, 401);
     const db = new DatabaseSync(join(dir, 'state.sqlite'));
