@@ -1,4 +1,5 @@
 import { SiteManager } from "./sites.js";
+import { UpdatesManager } from "./updates.js";
 import { discoverSoftware } from "./discovery.js";
 import { inspectSecurity } from "./security.js";
 import { listServices, mutateService } from "./services.js";
@@ -9,6 +10,7 @@ const version = "1.0.0-alpha.3";
 const port = Number(process.env.DEVONE_AGENT_PORT ?? 8790);
 const token = process.env.DEVONE_AGENT_TOKEN ?? "";
 
+const updates = new UpdatesManager();
 const sites = new SiteManager({registry:'/var/lib/devone-agent',base:'/home/devone-sites',nginx:'/etc/nginx/conf.d',panelDomain:new URL(process.env.DEVONE_PANEL_URL ?? 'http://localhost').hostname});
 const server = createServer(async (request, response) => {
   if (!token || request.headers.authorization !== `Bearer ${token}`) {
@@ -16,6 +18,26 @@ const server = createServer(async (request, response) => {
     response.end(JSON.stringify({ error: "unauthorized" })); return;
   }
   const send = (code: number, value: unknown) => { response.writeHead(code, { "content-type": "application/json" }); response.end(JSON.stringify(value)); };
+  if (request.method === "GET" && request.url === "/v1/updates/status") {
+    try { send(200,await updates.status()); } catch { send(503,{error:"update_status_unavailable"}); }
+    return;
+  }
+  if (request.method === "POST" && request.url === "/v1/updates/apply") {
+    try {
+      request.setEncoding("utf8");
+      let body="";
+      for await (const part of request){body+=part;if(Buffer.byteLength(body)>512){send(413,{error:"body_too_large"});return;}}
+      const data=JSON.parse(body) as {targetSha?:unknown;confirmed?:unknown};
+      if(data.confirmed!==true){send(400,{error:"confirmation_required"});return;}
+      const result=await updates.start(data.targetSha);
+      send(202,{update:result});
+    } catch(error) {
+      const message=error instanceof Error?error.message:"update_unavailable";
+      const safe=["update_busy","invalid_update_target","update_worker_missing","release_checks_not_passed","update_target_changed","github_rate_limited","github_unavailable"].includes(message)?message:"update_unavailable";
+      send(safe==="update_busy"||safe==="update_target_changed"?409:safe==="invalid_update_target"?400:503,{error:safe});
+    }
+    return;
+  }
   if (request.method === "POST" && request.url === "/v1/sites/preflight") {
     try {
       request.setEncoding("utf8");
