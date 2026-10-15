@@ -1,7 +1,7 @@
 import type {FastifyInstance} from "fastify";
 import type {DatabaseSync} from "node:sqlite";
 import {randomUUID} from "node:crypto";
-import {verifyOwnerPassword} from "./auth.js";
+import {verifyOwnerStepUp} from "./auth.js";
 
 type User={id:string;role:string};
 type Dependencies={db:DatabaseSync;agentUrl:string;agentToken:string;requestUser:(r:any)=>User|null|undefined;sameOrigin:(r:any)=>boolean;audit:(id:string|null,event:string,detail?:unknown)=>void};
@@ -70,7 +70,7 @@ export function registerSecurityRoutes(app:FastifyInstance,deps:Dependencies){
  app.post<{Params:{siteId:string}}>("/api/shield/sites/:siteId",async(r,reply)=>{
    const user=authorized(r,reply,true);if(!user)return;
    if(user.role!=="owner")return reply.code(403).send({error:"owner_required"});
-   const raw=r.body as {expectedRevision?:unknown;policy?:unknown;confirmed?:unknown;password?:unknown}|null;
+   const raw=r.body as {expectedRevision?:unknown;policy?:unknown;confirmed?:unknown;password?:unknown;mfaCode?:unknown}|null;
    if(!/^site_[a-f0-9]{16}$/.test(r.params.siteId)||raw?.confirmed!==true||
      !Number.isSafeInteger(raw.expectedRevision)||Number(raw.expectedRevision)<1||
      typeof raw.password!=="string"||raw.password.length>1024||
@@ -86,7 +86,8 @@ export function registerSecurityRoutes(app:FastifyInstance,deps:Dependencies){
    if(current>entry.reset){entry.count=0;entry.reset=current+60000;}
    if(entry.count>=5)return reply.code(429).send({error:"shield_rate_limited"});
    entry.count++;changeAttempts.set(user.id,entry);
-   if(!verifyOwnerPassword(user.id,raw.password))return reply.code(403).send({error:"owner_password_invalid"});
+   const stepUp=verifyOwnerStepUp(user.id,raw.password,raw.mfaCode);
+   if(stepUp!=="ok")return reply.code(403).send({error:stepUp==="password_invalid"?"owner_password_invalid":stepUp});
    if(!agentToken)return reply.code(503).send({error:"agent_unavailable"});
    try{
      const response=await fetch(agentUrl+"/v1/sites/waf",{
@@ -103,6 +104,21 @@ export function registerSecurityRoutes(app:FastifyInstance,deps:Dependencies){
      audit(user.id,"shield.site_policy_updated",{siteId:r.params.siteId,mode:p.mode,rate:p.requestsPerSecond,burst:p.burst});
      return {site:result};
    }catch{return reply.code(503).send({error:"shield_result_requires_inspection"});}
+ });
+ let lastEvents:{time:number;data:unknown}|null=null;
+ app.get("/api/security/crowdsec/events",async(r,reply)=>{
+   if(!authorized(r,reply))return;
+   reply.header("Cache-Control","no-store");
+   if(lastEvents&&Date.now()-lastEvents.time<30000)return lastEvents.data;
+   try{
+     if(!agentToken)throw Error("agent_unavailable");
+     const response=await fetch(agentUrl+"/v1/security/crowdsec/events",{headers:{"Authorization":"Bearer "+agentToken},signal:AbortSignal.timeout(9000)});
+     if(!response.ok)throw Error("agent_unavailable");
+     const result=await response.json() as {hostWide?:unknown;alerts?:{sampleSize?:unknown;available?:unknown};decisions?:{sampleSize?:unknown;available?:unknown}};
+     if(result.hostWide!==true||typeof result.alerts?.available!=="boolean"||typeof result.decisions?.available!=="boolean"||
+       !Number.isInteger(result.alerts.sampleSize)||!Number.isInteger(result.decisions.sampleSize)||Number(result.alerts.sampleSize)>20||Number(result.decisions.sampleSize)>50)throw Error("invalid_events");
+     lastEvents={time:Date.now(),data:result};return result;
+   }catch{return reply.code(503).send({error:"crowdsec_events_unavailable"});}
  });
  app.get("/api/security/crowdsec",async(r,reply)=>{
    if(!authorized(r,reply))return;

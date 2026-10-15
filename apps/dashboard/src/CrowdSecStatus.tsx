@@ -1,3 +1,4 @@
+import {CrowdSecEvents} from "./CrowdSecEvents";
 import {useEffect,useState} from "react";
 type CrowdSec={checkedAt:string;phase:string;installed:boolean;engineActive:boolean;nginxActive:boolean;nginxBouncerConfigPresent:boolean;appSecAcquisitionPresent:boolean;logAcquisitionFilePresent:boolean;enforcementVerified:boolean;appSecVerified:boolean;guidance:string[];notes:string[]};
 export function CrowdSecStatus(){
@@ -18,6 +19,7 @@ export function CrowdSecStatus(){
   <div className="crowdsec-steps">{states.map(item=><div key={item.label}><span>{item.label}</span><strong className={"state-chip "+(item.value?"good":"neutral")}>{item.value?"Detected":"Not verified"}</strong></div>)}</div>
   {data&&<><p className="ops-warning">Request enforcement: not verified. WAF payload inspection: not verified. Configuration-file presence does not prove rules are active or functioning.</p><h3>Next deployment checks</h3><ol className="crowdsec-guide">{data.guidance.map(line=><li key={line}>{line}</li>)}</ol></>}
   <p className="ops-subtext">Official installation and integration instructions: <a href="https://docs.crowdsec.net/u/getting_started/installation/linux/" target="_blank" rel="noopener noreferrer">CrowdSec Security Engine ↗</a> · <a href="https://docs.crowdsec.net/docs/bouncers/nginx/" target="_blank" rel="noopener noreferrer">NGINX remediation component ↗</a></p>
+  <CrowdSecEvents/>
   {error&&<p role="alert" className="inline-error">{error}</p>}
  </article>;
 }

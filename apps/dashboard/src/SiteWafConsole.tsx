@@ -11,12 +11,12 @@ async function api<T>(path:string,init?:RequestInit):Promise<T>{
 export function SiteWafConsole({role}:{role:string}){
  const [data,setData]=useState<Shield|null>(null),[selected,setSelected]=useState("");
  const [policy,setPolicy]=useState<Policy>({mode:"off",requestsPerSecond:10,burst:20});
- const [password,setPassword]=useState("");
+ const [password,setPassword]=useState(""),[mfaCode,setMfaCode]=useState(""),[mfaEnabled,setMfaEnabled]=useState(false);
  const [confirm,setConfirm]=useState(false);
  const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState(""),[message,setMessage]=useState("");
  const site=data?.sites.find(s=>s.siteId===selected);
  const enabled=site?.available===true&&role==="owner";
- const update=(next:Site)=>{setSelected(next.siteId);setPolicy({...next.policy});setPassword("");setConfirm(false);setMessage("");setError("");};
+ const update=(next:Site)=>{setSelected(next.siteId);setPolicy({...next.policy});setPassword("");setMfaCode("");setConfirm(false);setMessage("");setError("");};
  async function refresh(resetSelection=false){
   try{
    const next=await api<Shield>("/api/shield");
@@ -26,16 +26,16 @@ export function SiteWafConsole({role}:{role:string}){
    setLoading(false);
   }catch(e){setLoading(false);setError(e instanceof Error?e.message:"Could not load sites");}
  }
- useEffect(()=>{void refresh(true);},[]);
+ useEffect(()=>{void refresh(true);if(role==="owner")void fetch("/api/auth/mfa/status",{credentials:"same-origin"}).then(r=>r.ok?r.json():null).then(v=>setMfaEnabled(v?.enabled===true)).catch(()=>{});},[]);
  async function save(){
-  if(!site||!enabled||!confirm||!password)return;
+  if(!site||!enabled||!confirm||!password||(mfaEnabled&&!mfaCode))return;
   if(!window.confirm("Apply "+policy.mode.toUpperCase()+" HTTP rate protection to "+site.domain+"? NGINX will be tested and reloaded. This may affect visitors."))return;
   setBusy(true);setError("");setMessage("");
   try{
    await api("/api/shield/sites/"+encodeURIComponent(site.siteId),{
-    method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({expectedRevision:site.revision,policy,password,confirmed:true})
+    method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({expectedRevision:site.revision,policy,password,mfaCode,confirmed:true})
    });
-   setPassword("");setConfirm(false);
+   setPassword("");setMfaCode("");setConfirm(false);
    setMessage("Rate protection updated. NGINX configuration passed validation and reload.");
    const result=await api<Shield>("/api/shield");
    setData(result);
@@ -43,7 +43,7 @@ export function SiteWafConsole({role}:{role:string}){
    if(updated)setPolicy({...updated.policy});
   }catch(e){
    const code=e instanceof Error?e.message:"Unable to apply site protection";
-   setError(({site_revision_conflict:"This site's configuration changed. Refresh before making changes.",site_config_changed:"This NGINX file was modified outside DevOne; manual inspection is required.",site_not_ready:"This website is not ready for security changes.",owner_password_invalid:"Incorrect Owner password.",shield_result_requires_inspection:"The Agent might have completed the operation despite the API error. Refresh and inspect state before trying again."} as Record<string,string>)[code]??code);
+   setError(({site_revision_conflict:"This site's configuration changed. Refresh before making changes.",site_config_changed:"This NGINX file was modified outside DevOne; manual inspection is required.",site_not_ready:"This website is not ready for security changes.",owner_password_invalid:"Incorrect Owner password.",mfa_required:"Authenticator code required.",mfa_invalid:"Authenticator or recovery code invalid or already used.",shield_result_requires_inspection:"The Agent might have completed the operation despite the API error. Refresh and inspect state before trying again."} as Record<string,string>)[code]??code);
   }finally{setBusy(false);}
  }
  return <article className="surface-card glass shield-console">
@@ -65,8 +65,9 @@ export function SiteWafConsole({role}:{role:string}){
     {role==="owner"&&<>
      <label className="shield-label" htmlFor="shield-password">Owner password to apply this change</label>
      <input id="shield-password" disabled={!enabled||busy} type="password" autoComplete="current-password" maxLength={1024} value={password} onChange={e=>setPassword(e.target.value)} placeholder="Enter your Owner password"/>
+     {mfaEnabled&&<><label className="shield-label" htmlFor="shield-mfa">Authenticator or recovery code</label><input id="shield-mfa" disabled={!enabled||busy} autoComplete="one-time-code" maxLength={17} value={mfaCode} onChange={e=>setMfaCode(e.target.value.trim())} placeholder="Fresh MFA code required"/></>}
      <label className="shield-consent"><input type="checkbox" disabled={!enabled||busy} checked={confirm} onChange={e=>setConfirm(e.target.checked)}/> I understand NGINX will be validated and reloaded for this site's security policy.</label>
-     <div className="shield-actions"><button className="primary-button" disabled={!enabled||busy||!confirm||!password||JSON.stringify(policy)===JSON.stringify(site?.policy)} onClick={()=>void save()}>{busy?"Applying…":"Apply security policy"}</button><button className="ops-secondary" disabled={busy} onClick={()=>void refresh(true)}>Refresh policies</button></div>
+     <div className="shield-actions"><button className="primary-button" disabled={!enabled||busy||!confirm||!password||(mfaEnabled&&!mfaCode)||JSON.stringify(policy)===JSON.stringify(site?.policy)} onClick={()=>void save()}>{busy?"Applying…":"Apply security policy"}</button><button className="ops-secondary" disabled={busy} onClick={()=>void refresh(true)}>Refresh policies</button></div>
     </>}
     {role!=="owner"&&<p className="ops-note">Security policy changes are restricted to the Owner account. Administrators may inspect policies.</p>}
    </>}

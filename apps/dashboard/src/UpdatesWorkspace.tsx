@@ -10,6 +10,8 @@ function problem(code:string){
   update_busy:"An update is already running. Wait for it to finish.",
   update_target_changed:"The latest GitHub commit changed. Check for updates again.",
   owner_password_invalid:"Owner password is incorrect.",
+  mfa_required:"Authenticator or recovery code is required for this update.",
+  mfa_invalid:"Invalid or previously used authenticator/recovery code.",
   update_auth_rate_limited:"Too many password attempts. Try again after a minute.",
   github_rate_limited:"GitHub API rate limit reached. Try again later.",
   github_unavailable:"GitHub could not be reached from the server.",
@@ -19,7 +21,7 @@ function problem(code:string){
 export function UpdatesWorkspace({onDashboard}:{onDashboard?:()=>void}){
  const [state,setState]=useState<Status|null>(null),[loading,setLoading]=useState(true);
  const [checking,setChecking]=useState(false),[sending,setSending]=useState(false);
- const [approved,setApproved]=useState(false),[password,setPassword]=useState("");
+ const [approved,setApproved]=useState(false),[password,setPassword]=useState(""),[mfaCode,setMfaCode]=useState(""),[mfaEnabled,setMfaEnabled]=useState(false);
  const [error,setError]=useState(""),[message,setMessage]=useState("");
  const refresh=async(show=false)=>{
   if(show)setChecking(true);
@@ -34,6 +36,7 @@ export function UpdatesWorkspace({onDashboard}:{onDashboard?:()=>void}){
  };
  useEffect(()=>{
   void refresh();
+  void fetch("/api/auth/mfa/status",{credentials:"same-origin"}).then(r=>r.ok?r.json():null).then(v=>setMfaEnabled(v?.enabled===true)).catch(()=>{});
   const id=setInterval(()=>{void refresh();},10000);
   return()=>clearInterval(id);
  },[]);
@@ -46,11 +49,11 @@ export function UpdatesWorkspace({onDashboard}:{onDashboard?:()=>void}){
   setSending(true);setMessage("");setError("");
   const target=state.latestSha;
   try{
-   const res=await fetch("/api/updates/apply",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({targetSha:target,password,confirmed:true})});
+   const res=await fetch("/api/updates/apply",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({targetSha:target,password,mfaCode,confirmed:true})});
    const result=await res.json().catch(()=>({})) as {error?:string};
    if(!res.ok)throw Error(problem(result.error??"update_failed"));
    setMessage("Update accepted. The panel will briefly disconnect. Keep this page open to watch the result.");
-   setPassword("");setApproved(false);
+   setPassword("");setMfaCode("");setApproved(false);
    void refresh();
   }catch(e){setError(e instanceof Error?e.message:"Update not started. Check status before retrying.");}
   finally{setSending(false);}
@@ -82,8 +85,9 @@ export function UpdatesWorkspace({onDashboard}:{onDashboard?:()=>void}){
       <div className="update-preflight"><span>1. Root-owned worker {state?.workerInstalled?"ready":"not installed"}</span><span>2. Both CI checks {state?.approved?"passed":"not passed"}</span><span>3. Update target {short(state?.latestSha??null)}</span></div>
       <label htmlFor="update-password">Confirm with your Owner password</label>
       <input id="update-password" type="password" autoComplete="current-password" maxLength={1024} disabled={!canInstall} value={password} onChange={e=>setPassword(e.target.value)} placeholder="Enter your existing Owner password" />
+      {mfaEnabled&&<><label htmlFor="update-mfa">Current authenticator or recovery code</label><input id="update-mfa" autoComplete="one-time-code" value={mfaCode} onChange={e=>setMfaCode(e.target.value.trim())} maxLength={17} placeholder="Fresh code required for update approval" disabled={!canInstall}/></>}
       <label className="update-confirm"><input type="checkbox" checked={approved} disabled={!canInstall} onChange={e=>setApproved(e.target.checked)}/> I understand DevOne will briefly restart and the update may require rollback or operator inspection if it fails.</label>
-      <button type="submit" className="primary-button" disabled={!canInstall||!approved||!password||sending}>{sending?"Requesting…":"Install Update"}</button>
+      <button type="submit" className="primary-button" disabled={!canInstall||!approved||!password||(mfaEnabled&&!mfaCode)||sending}>{sending?"Requesting…":"Install Update"}</button>
     </form>}
    <p className="ops-note">Updates include a private SQLite backup, a permissions preflight, and health checks. They do not delete hosted websites or re-run the initial installer. A failed update can still require manual recovery.</p>
   </article>

@@ -112,6 +112,15 @@ export function verifyOwnerPassword(userId: string, password: unknown) {
   return row ? passwordVerify(password, row.password_hash) : false;
 }
 
+// A privileged operation must re-check the password AND a fresh MFA code if
+// the Owner has opted in to authenticator MFA. Replays are rejected by MfaService.
+export function verifyOwnerStepUp(userId:string,password:unknown,mfaCode:unknown):"ok"|"password_invalid"|"mfa_required"|"mfa_invalid"{
+ if(!verifyOwnerPassword(userId,password))return "password_invalid";
+ if(!mfa.status(userId).enabled)return "ok";
+ if(typeof mfaCode!=="string"||!mfaCode)return "mfa_required";
+ return mfa.verifyLogin(userId,mfaCode)?"ok":"mfa_invalid";
+}
+
 export function logout(token?: string) {
   if (!token) return;
   const user = userFromToken(token);
