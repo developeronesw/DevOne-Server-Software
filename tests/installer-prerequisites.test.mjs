@@ -40,8 +40,40 @@ test('signed distribution installs minimum Node, TLS, HTTP, git and OS utilities
   assert.doesNotMatch(prerequisites,/curl[^\n]*\|\s*(?:sudo\s+)?bash/);
 });
 
+
+const readScript = relative => readFileSync(new URL('../'+relative,import.meta.url),'utf8');
+test('fresh installer prepares readable runtime assets before starting service accounts', () => {
+  assert.match(main,/umask 022/);
+  const builds=main.indexOf('\"$PNPM\" --filter @devone/dashboard build');
+  const prepare=main.indexOf('scripts/prepare-runtime-files.sh');
+  const start=main.indexOf('systemctl restart nginx devone-api devone-agent');
+  assert.ok(builds>=0 && prepare>builds && start>prepare);
+});
+
+test('in-place updater preserves data, applies runtime permissions and verifies the unprivileged API identity', () => {
+  const prepare=readScript('scripts/prepare-runtime-files.sh');
+  const updater=readScript('scripts/update-in-place.sh');
+  assert.match(updater,/umask 022/);
+  assert.match(updater,/git merge-base --is-ancestor/);
+  assert.match(updater,/sqlite3\.connect/);
+  assert.match(updater,/BACKUP=/);
+  assert.match(updater,/trap rollback ERR/);
+  assert.match(updater,/scripts\/prepare-runtime-files\.sh/);
+  const buildPos=updater.indexOf('@devone/dashboard build');
+  const permissionsPos=updater.indexOf('scripts/prepare-runtime-files.sh',buildPos);
+  const restartPos=updater.indexOf('systemctl restart devone-agent',permissionsPos);
+  assert.ok(buildPos>=0 && permissionsPos>buildPos && restartPos>permissionsPos);
+  assert.match(updater,/HTTP_CODE.*401/);
+  assert.match(prepare,/chown -R root:devone "\$API_DIST"/);
+  assert.match(prepare,/chmod 750/);
+  assert.match(prepare,/chmod 640/);
+  assert.match(prepare,/runuser -u devone -- \/usr\/bin\/node --check "\$API_DIST\/control.js"/);
+  assert.match(prepare,/runuser -u www-data -- test -r/);
+  assert.doesNotMatch(prepare,/chmod -R 777|chown -R devone:devone "\$APP"/);
+});
+
 test('installer syntax remains valid without installing packages', () => {
-  for (const script of ['installer/install.sh','installer/install-prerequisites.sh','scripts/issue-setup-link.sh']) {
+  for (const script of ['installer/install.sh','installer/install-prerequisites.sh','scripts/issue-setup-link.sh','scripts/prepare-runtime-files.sh','scripts/update-in-place.sh']) {
     assert.doesNotThrow(() => execFileSync('bash',['-n',script],{stdio:'pipe'}));
   }
 });
