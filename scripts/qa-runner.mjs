@@ -37,6 +37,8 @@ const pending = [
   { id: 'backup-restore', status: 'not_verified', detail: 'Restore database and encryption key together on a disposable VPS.' },
   { id: 'host-isolation', status: 'not_verified', detail: 'Real site UID/GID isolation and service mutation on a disposable VPS.' },
   { id: 'performance-load', status: 'not_verified', detail: 'Latency, concurrency and memory measurements on target VPS hardware.' },
+  { id: 'security-center-host-acceptance', status: 'not_verified', detail: 'CrowdSec detection, real AppSec/WAF enforcement, proxy client-IP trust, false positives and rollback on a disposable VPS.' },
+  { id: 'software-center-host-acceptance', status: 'partially_implemented', detail: 'Read-only catalog and opt-in PHP-FPM/Redis CLI pilot exist; audited UI installs, runtime isolation and package recovery remain unverified.' },
   { id: 'remaining-legacy-modules', status: 'not_implemented', detail: 'Database hosting, containers, DNS, TLS, runtime management and remaining legacy modules.' }
 ];
 export async function main(args = process.argv.slice(2)) {
@@ -63,7 +65,7 @@ export async function main(args = process.argv.slice(2)) {
   try {parity=await parityStatus();}catch {parity={total:null,verified:null,outstanding:null,error:'parity_inventory_invalid'};}
   const runPending=[...pending,...(parity.error ? [{id:'legacy-route-acceptance',status:'invalid',detail:'Legacy parity inventory could not be verified.'}] : parity.outstanding ? [{id:'legacy-route-acceptance',status:'unverified',detail:`${parity.outstanding} of ${parity.total} observed legacy route literals still require acceptance evidence.`}] : [])];
   await check('legacy-distribution-integrity', 'python3', ['scripts/verify-distribution.py']);
-  for (const file of ['installer/install.sh','installer/install-prerequisites.sh','installer/install-legacy.sh','scripts/provision-vault-key.sh','scripts/issue-setup-link.sh','scripts/prepare-runtime-files.sh','scripts/update-in-place.sh','scripts/update-worker.sh','scripts/crowdsec-detection-pilot.sh','deploy/certbot/devone-nginx.sh']) await check(`shell-syntax:${file}`, 'bash', ['-n', file]);
+  for (const file of ['installer/install.sh','installer/install-prerequisites.sh','installer/install-legacy.sh','scripts/provision-vault-key.sh','scripts/issue-setup-link.sh','scripts/prepare-runtime-files.sh','scripts/update-in-place.sh','scripts/update-worker.sh','scripts/crowdsec-detection-pilot.sh','scripts/crowdsec-host-acceptance.sh','scripts/software-runtime-pilot.sh','deploy/certbot/devone-nginx.sh']) await check(`shell-syntax:${file}`, 'bash', ['-n', file]);
   const report = { schemaVersion: 1, runId: randomUUID(), completedAt: new Date().toISOString(), scope: 'isolated-development-regression', ...assess(results, runPending), results, pending:runPending, parity };
   const output = resolve(root, 'qa-reports'); await mkdir(output, { recursive: true, mode: 0o700 });
   const name = `${report.completedAt.replace(/[:.]/g, '-')}-${report.runId}`;

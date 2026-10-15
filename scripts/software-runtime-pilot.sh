@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# Phase 2 Software Center: guarded host-side installation pilot.
+# NOT a dashboard endpoint. Run ONLY on a disposable Ubuntu 24.04 amd64 VPS.
+set -Eeuo pipefail
+umask 077
+usage() { echo "Usage: $0 [--check|--install] [php8.3-fpm|redis-server]" >&2; exit 2; }
+[[ $# -le 2 ]] || usage
+mode="${1:---check}"
+package="${2:-php8.3-fpm}"
+[[ "$mode" == "--check" || "$mode" == "--install" ]] || usage
+case "$package" in php8.3-fpm|redis-server) ;; *) usage ;; esac
+[[ "$EUID" -eq 0 ]] || { echo "Run with sudo/root." >&2; exit 2; }
+. /etc/os-release
+[[ "${ID:-}" == "ubuntu" && "${VERSION_ID:-}" == "24.04" ]] || { echo "Requires Ubuntu 24.04." >&2; exit 2; }
+[[ "$(dpkg --print-architecture)" == "amd64" ]] || { echo "Requires amd64." >&2; exit 2; }
+# Only one host package mutation pilot may run at a time. Do NOT bypass apt/dpkg locks.
+if [[ "$mode" == "--install" ]]; then
+  exec 9>/run/lock/devone-software-pilot.lock
+  flock -n 9 || { echo "Another DevOne pilot is running." >&2; exit 1; }
+fi
+systemctl is-active --quiet nginx || { echo "NGINX is not active." >&2; exit 1; }
+nginx -t >/dev/null 2>&1 || { echo "Invalid NGINX configuration." >&2; exit 1; }
+# Do not install if the Agent/API are unhealthy; never restart or replace them.
+for unit in devone-api devone-agent; do
+  systemctl is-active --quiet "$unit" || { echo "$unit is not active." >&2; exit 1; }
+done
+free_kb="$(df -Pk / | awk 'NR==2{print $4}')"
+[[ "$free_kb" =~ ^[0-9]+$ ]] || { echo "Disk inventory failed." >&2; exit 1; }
+(( free_kb >= 524288 )) || { echo "Need at least 512 MiB free disk." >&2; exit 1; }
+candidate="$(apt-cache policy "$package" | awk '$1=="Candidate:"{print $2;exit}')"
+[[ "$candidate" =~ ^[0-9A-Za-z.+~:-]+$ && "$candidate" != "(none)" ]] || { echo "No valid candidate in current APT metadata." >&2; exit 1; }
+# Candidate must have the Ubuntu Noble release origin, never an arbitrary PPA.
+# This is a preflight; operator must independently review APT trust and freshness.
+policy="$(apt-cache policy "$package")"
+printf '%s\n' "$policy" | awk -v version="$candidate" '
+  $1 == "***" { active=($2 == version); next }
+  $1 ~ /^[0-9][^[:space:]]*$/ && $2 ~ /^[0-9]+$/ { active=($1 == version); next }
+  active && $1 == "release" && /(^|,)o=Ubuntu(,|$)/ && /(^|,)n=noble(,|$)/ && /(^|,)l=Ubuntu(,|$)/ { ok=1 }
+  END { exit(ok ? 0 : 1) }
+' || { echo "Candidate is not proven to originate from Ubuntu Noble metadata." >&2; exit 1; }
+simulation="$(mktemp /tmp/devone-software-apt.XXXXXXXX)"
+trap 'rm -f "$simulation"' EXIT
+apt-get -s --no-install-recommends install "$package=$candidate" > "$simulation" || { echo "APT simulation failed; no install attempted." >&2; exit 1; }
+if grep -Eq '^Remv |^Inst (nginx([^ ]*)|devone([^ ]*)|openssh-([^ ]*)|systemd([^ ]*)|linux-image([^ ]*)|linux-generic([^ ]*)) ' "$simulation"; then
+  echo "APT simulation would remove packages or change protected components." >&2; exit 1
+fi
+echo "Software Center pilot preflight passed: $package $candidate"
+echo "APT: Ubuntu candidate, dependency simulation accepted; no removals."
+echo "This is a host CLI pilot, NOT a dashboard installation or full rollback implementation."
+if [[ "$mode" == "--check" ]]; then
+  echo "READ-ONLY: Nothing installed. Use --install only on a disposable test VPS."
+  exit 0
+fi
+[[ -t 0 ]] || { echo "Refusing noninteractive software installation." >&2; exit 1; }
+read -r -p "Type INSTALL $package to proceed: " confirmation
+[[ "$confirmation" == "INSTALL $package" ]] || { echo "Cancelled." >&2; exit 1; }
+DEBIAN_FRONTEND=noninteractive apt-get -y --no-install-recommends install "$package=$candidate"
+nginx -t >/dev/null 2>&1 || { echo "NGINX changed unexpectedly; inspect host. No automatic removal attempted." >&2; exit 1; }
+for unit in devone-api devone-agent; do
+  systemctl is-active --quiet "$unit" || { echo "$unit is down after install. Manual inspection required." >&2; exit 1; }
+done
+systemctl is-active --quiet "$package" || { echo "$package is installed but its service is not active; inspect host." >&2; exit 1; }
+if [[ "$package" == "redis-server" ]] && ss -ltnH | awk '{print $4}' | grep -Eq '^(0\.0\.0\.0|\*|\[::\]|::):6379$'; then
+  echo "Redis may be exposed on all interfaces; restrict access before continuing." >&2; exit 1
+fi
+echo "Pilot installed and basic service checks passed. Site integration and rollback remain unverified."
