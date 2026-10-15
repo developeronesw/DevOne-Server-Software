@@ -251,3 +251,22 @@
 .shield-consent input{margin-top:2px}
 .shield-actions{display:flex;align-items:center;flex-wrap:wrap;gap:12px}
 @media(max-width:850px){.shield-form{grid-template-columns:1fr}.shield-stat{grid-template-columns:1fr}}
+
+
+/* Owner authenticator MFA & CrowdSec readiness */
+.mfa-panel,.crowdsec-console{margin-bottom:18px}
+.mfa-panel input,.mfa-disable input{display:block;max-width:540px;width:100%;background:#fff;color:#353953;border:1px solid #dcdef1;border-radius:10px;padding:12px;margin:10px 0 16px;font-size:13px}
+.mfa-setup,.mfa-recovery,.mfa-disable{border-radius:14px;border:1px solid #e9e8f7;background:#fafaff;padding:20px;margin:18px 0}
+.mfa-setup h3,.mfa-recovery h3{font-size:14px;margin:0 0 7px}
+.mfa-setup p,.mfa-recovery p{font-size:12px;line-height:1.6;color:#747b99}
+.mfa-code-key{display:flex;flex-wrap:wrap;align-items:center;gap:12px;font:700 14px/1.65 ui-monospace,monospace;letter-spacing:2px;overflow-wrap:anywhere;background:#f0edff;padding:13px;color:#5a40a2;border-radius:9px}
+.mfa-code-key button,.mfa-recovery button{background:#eeeafb;border:1px solid #ded3fa;color:#6046ba;border-radius:8px;padding:9px 12px;font-size:11px;cursor:pointer}
+.mfa-codes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:16px 0}
+.mfa-codes code{padding:10px 12px;background:#f3f1ff;border-radius:7px;color:#4d4a71;font-size:12px;overflow-wrap:anywhere}
+.mfa-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.mfa-fields label{color:#555b76;font-size:12px;font-weight:700}
+.crowdsec-steps{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:20px 0}
+.crowdsec-steps>div{display:flex;justify-content:space-between;align-items:center;gap:10px;background:#faf9ff;border:1px solid #eeecfb;border-radius:12px;padding:12px;font-size:11px;color:#545a7a}
+.crowdsec-console h3{font-size:13px;margin:18px 0 10px}
+.crowdsec-guide{color:#737a99;font-size:12px;line-height:1.8;padding-left:22px}
+@media(max-width:700px){.mfa-codes,.mfa-fields,.crowdsec-steps{grid-template-columns:1fr}}

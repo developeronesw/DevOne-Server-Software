@@ -104,6 +104,18 @@ export function registerSecurityRoutes(app:FastifyInstance,deps:Dependencies){
      return {site:result};
    }catch{return reply.code(503).send({error:"shield_result_requires_inspection"});}
  });
+ app.get("/api/security/crowdsec",async(r,reply)=>{
+   if(!authorized(r,reply))return;
+   reply.header("Cache-Control","no-store");
+   try{
+     if(!agentToken)throw Error("agent_unavailable");
+     const response=await fetch(agentUrl+"/v1/security/crowdsec",{headers:{"Authorization":"Bearer "+agentToken},signal:AbortSignal.timeout(8000)});
+     if(!response.ok)throw Error("agent_unavailable");
+     const result=await response.json() as {phase?:unknown;installed?:unknown};
+     if(result.phase!=="detection-readiness"||typeof result.installed!=="boolean")throw Error("invalid_crowdsec_status");
+     return result;
+   }catch{return reply.code(503).send({error:"crowdsec_readiness_unavailable"});}
+ });
  app.get("/api/security",async(r,reply)=>{
    if(!authorized(r,reply))return;
    reply.header("Cache-Control","no-store");

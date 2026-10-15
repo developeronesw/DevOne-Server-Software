@@ -82,6 +82,12 @@ test('authentication, setup, origin, metrics, logout and rate-limit boundaries',
     assert.equal((await securePost('/api/shield/sites/site_invalid',{confirmed:true,password:credentials.password,expectedRevision:1,policy:{mode:'enforce',requestsPerSecond:10,burst:20}})).status,400);
     assert.equal((await securePost('/api/shield/sites/site_0123456789abcdef',{confirmed:true,password:credentials.password,expectedRevision:1,policy:{mode:'enforce',requestsPerSecond:100,burst:20}})).status,400);
     assert.equal((await securePost('/api/shield/sites/site_0123456789abcdef',{confirmed:true,password:'wrong',expectedRevision:1,policy:{mode:'enforce',requestsPerSecond:10,burst:20}})).status,403);
+    assert.equal((await fetch(url+'/api/security/crowdsec')).status,401);
+    const crowdsecResult=await secureGet('/api/security/crowdsec');
+    assert.equal(crowdsecResult.status,200);
+    assert.equal((await crowdsecResult.json()).enforcementVerified,false);
+    assert.equal((await secureGet('/api/auth/mfa/status')).status,200);
+    assert.equal((await securePost('/api/auth/mfa/begin',{password:'wrong'})).status,403);
     assert.equal((await fetch(url+'/api/security')).status,401);
     assert.equal((await post('/api/security/scan',{})).status,401);
     assert.equal((await secureGet('/api/security')).status,200);
@@ -129,6 +135,8 @@ test('authentication, setup, origin, metrics, logout and rate-limit boundaries',
     assert.equal((await secureGet('/api/updates')).status,403);
     assert.equal((await securePost('/api/updates/apply',{targetSha:'b'.repeat(40),confirmed:true,password:credentials.password})).status,403);
 
+    assert.equal((await secureGet('/api/security/crowdsec')).status,403);
+    assert.equal((await secureGet('/api/auth/mfa/status')).status,403);
     assert.equal((await secureGet('/api/security')).status,403);
     assert.equal((await secureGet('/api/shield')).status,403);
     assert.equal((await securePost('/api/shield/sites/site_0123456789abcdef',{confirmed:true,password:credentials.password,expectedRevision:1,policy:{mode:'enforce',requestsPerSecond:10,burst:20}})).status,403);

@@ -1,0 +1,57 @@
+import {test} from "node:test";
+import assert from "node:assert/strict";
+import {spawn} from "node:child_process";
+import {once} from "node:events";
+import {createServer} from "node:net";
+import {mkdtemp,rm,writeFile} from "node:fs/promises";
+import {randomBytes} from "node:crypto";
+import {tmpdir} from "node:os";
+import {join} from "node:path";
+import {totpAt} from "../apps/api/dist/mfa.js";
+async function port(){const s=createServer();s.listen(0,"127.0.0.1");await once(s,"listening");const p=s.address().port;await new Promise(r=>s.close(r));return p;}
+async function ready(url,proc){for(let n=0;n<100;n++){if(proc.exitCode!==null)throw Error("API exited");try{await fetch(url);return;}catch{await new Promise(r=>setTimeout(r,55));}}throw Error("API did not start");}
+test("Owner MFA API requires password, revokes earlier sessions and prevents password-only sign-in",async()=>{
+ const dir=await mkdtemp(join(tmpdir(),"devone-mfa-api-")),apiPort=await port(),agentPort=await port();
+ const base="http://127.0.0.1:"+apiPort,token="a".repeat(64);
+ await writeFile(join(dir,"token"),token,{mode:0o600});
+ await writeFile(join(dir,"master"),randomBytes(32),{mode:0o600});
+ const env={...process.env,PORT:String(apiPort),DEVONE_AGENT_PORT:String(agentPort),DEVONE_AGENT_TOKEN:"unit-agent-token",DEVONE_AGENT_URL:"http://127.0.0.1:"+agentPort,DEVONE_DB_PATH:join(dir,"state.sqlite"),DEVONE_BACKUP_DIR:join(dir,"backups"),DEVONE_MASTER_KEY_FILE:join(dir,"master"),DEVONE_SETUP_TOKEN_FILE:join(dir,"token"),DEVONE_PANEL_URL:"https://panel.example.test"};
+ const proc=spawn(process.execPath,["apps/api/dist/index.js"],{env,stdio:"ignore"});
+ const post=(path,body,cookie,origin="https://panel.example.test")=>fetch(base+path,{method:"POST",headers:{"Content-Type":"application/json",Origin:origin,...(cookie?{Cookie:cookie}:{})},body:JSON.stringify(body)});
+ try{
+  await ready(base+"/api/health",proc);
+  const account={email:"owner@example.test",password:"a-long-test-password"};
+  const setup=await fetch(base+"/api/auth/setup",{method:"POST",headers:{"Content-Type":"application/json",Origin:"https://panel.example.test","X-DevOne-Setup-Token":token},body:JSON.stringify(account)});
+  assert.equal(setup.status,200);
+  const originalCookie=setup.headers.get("set-cookie").split(";")[0];
+  assert.equal((await fetch(base+"/api/auth/mfa/status")).status,401);
+  assert.equal((await post("/api/auth/mfa/begin",{password:account.password},originalCookie,"https://evil.example.test")).status,403);
+  const begin=await post("/api/auth/mfa/begin",{password:account.password},originalCookie);
+  assert.equal(begin.status,200);
+  const enrollment=await begin.json();
+  assert.match(enrollment.manualKey,/^[A-Z2-7]{32}$/);
+  const code=totpAt(enrollment.manualKey,Math.floor(Date.now()/30000));
+  const confirmed=await post("/api/auth/mfa/confirm",{code},originalCookie);
+  assert.equal(confirmed.status,200);
+  const response=await confirmed.json();
+  assert.equal(response.recoveryCodes.length,8);
+  const secureCookie=confirmed.headers.get("set-cookie").split(";")[0];
+  assert.equal((await fetch(base+"/api/me",{headers:{Cookie:originalCookie}})).status,401);
+  assert.equal((await fetch(base+"/api/me",{headers:{Cookie:secureCookie}})).status,200);
+  const loginNoCode=await post("/api/auth/login",account);
+  assert.equal(loginNoCode.status,200);
+  assert.equal((await loginNoCode.json()).mfaRequired,true);
+  assert.equal(loginNoCode.headers.get("set-cookie"),null);
+  const replay=await post("/api/auth/login",{...account,mfaCode:code});
+  assert.equal(replay.status,401);
+  const recoveryLogin=await post("/api/auth/login",{...account,mfaCode:response.recoveryCodes[0]});
+  assert.equal(recoveryLogin.status,200);
+  assert.ok(recoveryLogin.headers.get("set-cookie")?.includes("HttpOnly"));
+  assert.equal((await post("/api/auth/login",{...account,mfaCode:response.recoveryCodes[0]})).status,401);
+  assert.equal((await post("/api/auth/mfa/disable",{password:account.password,code:response.recoveryCodes[1]},secureCookie,"https://evil.example.test")).status,403);
+  const disable=await post("/api/auth/mfa/disable",{password:account.password,code:response.recoveryCodes[1]},secureCookie);
+  assert.equal(disable.status,200);
+  assert.equal((await fetch(base+"/api/me",{headers:{Cookie:secureCookie}})).status,401);
+  assert.ok(disable.headers.get("set-cookie")?.includes("HttpOnly"));
+ }finally{if(proc.exitCode===null){const exit=once(proc,"exit");proc.kill();await exit;}await rm(dir,{recursive:true,force:true});}
+});

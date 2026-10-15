@@ -1,5 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { MfaService } from "./mfa.js";
 
 export type DevOneUser = { id: string; email: string; role: "owner" | "admin" | "operator" | "viewer" };
 
@@ -31,6 +32,8 @@ CREATE TABLE IF NOT EXISTS audit_log (
   created_at TEXT NOT NULL
 );
 `);
+
+export const mfa = new MfaService(db,process.env.DEVONE_MASTER_KEY_FILE ?? "/etc/devone/secrets.key");
 
 const now = () => new Date().toISOString();
 const id = () => randomBytes(16).toString("hex");
@@ -70,16 +73,28 @@ export function createOwner(email: string, password: string) {
   return getUser(userId)!;
 }
 
-export function login(email: string, password: string) {
-  if (typeof email !== "string" || typeof password !== "string" || password.length > 1024) return null;
-  db.prepare("DELETE FROM sessions WHERE expires_at <= ?").run(Date.now());
-  const row = db.prepare("SELECT * FROM users WHERE email = ?").get(email.trim().toLowerCase()) as any;
-  if (!row || !passwordVerify(password, row.password_hash)) return null;
-  const token = randomBytes(32).toString("base64url");
-  db.prepare("INSERT INTO sessions (id_hash,user_id,expires_at,created_at) VALUES (?,?,?,?)")
-    .run(hashSession(token), row.id, Date.now() + 1000 * 60 * 60 * 12, now());
-  audit(row.id, "auth.login");
-  return { token, user: getUser(row.id)! };
+export function createSession(userId:string){
+ const user=getUser(userId);
+ if(!user)throw Error("user_not_found");
+ const token=randomBytes(32).toString("base64url");
+ db.prepare("INSERT INTO sessions (id_hash,user_id,expires_at,created_at) VALUES (?,?,?,?)").run(hashSession(token),user.id,Date.now()+1000*60*60*12,now());
+ return {token,user};
+}
+export function invalidateSessions(userId:string){
+ db.prepare("DELETE FROM sessions WHERE user_id=?").run(userId);
+}
+export function login(email:string,password:string,code?:unknown){
+ if(typeof email!=="string"||email.length>254||typeof password!=="string"||password.length>1024)return null;
+ db.prepare("DELETE FROM sessions WHERE expires_at <= ?").run(Date.now());
+ const row=db.prepare("SELECT * FROM users WHERE email=?").get(email.trim().toLowerCase()) as any;
+ if(!row||!passwordVerify(password,row.password_hash))return null;
+ if(mfa.status(row.id).enabled){
+   if(typeof code!=="string"||!code.trim())return {mfaRequired:true as const};
+   if(!mfa.verifyLogin(row.id,code.trim()))return null;
+ }
+ const session=createSession(row.id);
+ audit(row.id,"auth.login",{mfa:mfa.status(row.id).enabled});
+ return session;
 }
 
 export function userFromToken(token?: string) {

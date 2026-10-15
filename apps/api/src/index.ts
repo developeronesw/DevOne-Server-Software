@@ -7,7 +7,7 @@ import { Vault, validSecretName } from "./vault.js";
 import Fastify from "fastify";
 import { readFileSync, unlinkSync } from "node:fs";
 import { timingSafeEqual } from "node:crypto";
-import { audit, db, closeDb, createOwner, hasOwner, login, logout, userFromToken, verifyOwnerPassword } from "./auth.js";
+import { audit, db, closeDb, createOwner, hasOwner, login, logout, userFromToken, verifyOwnerPassword, mfa, createSession, invalidateSessions } from "./auth.js";
 
 const app = Fastify({ logger: { redact: ["req.headers.authorization", "req.headers.cookie", "req.headers.x-devone-setup-token"] }, bodyLimit: 16384 });
 const version = "1.0.0-alpha.3";
@@ -84,7 +84,7 @@ app.post("/api/auth/setup", async (request, reply) => {
     audit(user.id, "auth.setup_completed");
     try { unlinkSync(setupTokenFile); } catch (error) { app.log.warn({ err: error }, "Could not remove completed setup token"); }
     const session = login(email, password);
-    if (!session) return reply.code(503).send({ error: "setup_session_failed" });
+    if (!session || "mfaRequired" in session) return reply.code(503).send({ error: "setup_session_failed" });
     setSessionCookie(reply, session.token);
     return reply.send({ ok: true, user });
   } catch (error) {
@@ -106,9 +106,10 @@ app.addHook("onRequest", async (request, reply) => {
 
 app.post("/api/auth/login", async (request, reply) => {
   if (!sameOrigin(request)) return reply.code(403).send({ error: "origin_forbidden" });
-  const body = (request.body ?? {}) as { email?: string; password?: string };
-  const result = login(body.email ?? "", body.password ?? "");
+  const body = (request.body ?? {}) as { email?: string; password?: string; mfaCode?: string };
+  const result = login(body.email ?? "", body.password ?? "", body.mfaCode);
   if (!result) return reply.code(401).send({ error: "invalid_credentials" });
+  if ("mfaRequired" in result) return reply.send({mfaRequired:true});
   setSessionCookie(reply, result.token);
   return reply.send({ ok: true, user: result.user });
 });
@@ -120,6 +121,67 @@ app.post("/api/auth/logout", async (request, reply) => {
   return reply.send({ ok: true });
 });
 
+// MFA is opt-in; activation/disabling always requires password and a live Owner session.
+// When enabled, a password alone never issues a login session.
+app.get("/api/auth/mfa/status",async(request,reply)=>{
+ const user=requestUser(request);
+ if(!user)return reply.code(401).send({error:"unauthorized"});
+ if(user.role!=="owner")return reply.code(403).send({error:"owner_required"});
+ reply.header("Cache-Control","no-store");
+ return mfa.status(user.id);
+});
+app.post("/api/auth/mfa/begin",async(request,reply)=>{
+ const user=requestUser(request);
+ if(!user)return reply.code(401).send({error:"unauthorized"});
+ if(user.role!=="owner")return reply.code(403).send({error:"owner_required"});
+ if(!request.headers.origin||!sameOrigin(request))return reply.code(403).send({error:"origin_forbidden"});
+ const body=request.body as {password?:unknown}|null;
+ if(!verifyOwnerPassword(user.id,body?.password))return reply.code(403).send({error:"owner_password_invalid"});
+ try{
+  const result=mfa.begin(user.id,user.email);
+  audit(user.id,"auth.mfa_enrollment_started");
+  reply.header("Cache-Control","no-store");
+  return result;
+ }catch(e){return reply.code(409).send({error:e instanceof Error&&e.message==="mfa_already_enabled"?e.message:"mfa_unavailable"});}
+});
+app.post("/api/auth/mfa/confirm",async(request,reply)=>{
+ const user=requestUser(request);
+ if(!user)return reply.code(401).send({error:"unauthorized"});
+ if(user.role!=="owner")return reply.code(403).send({error:"owner_required"});
+ if(!request.headers.origin||!sameOrigin(request))return reply.code(403).send({error:"origin_forbidden"});
+ const code=(request.body as {code?:unknown}|null)?.code;
+ try{
+  const recoveryCodes=mfa.confirm(user.id,code);
+  invalidateSessions(user.id);
+  const session=createSession(user.id);
+  setSessionCookie(reply,session.token);
+  audit(user.id,"auth.mfa_enabled");
+  reply.header("Cache-Control","no-store");
+  return {enabled:true,recoveryCodes};
+ }catch(e){
+  const code=e instanceof Error?e.message:"mfa_failed";
+  return reply.code(["mfa_setup_expired","invalid_mfa_code"].includes(code)?400:503).send({error:["mfa_setup_expired","invalid_mfa_code"].includes(code)?code:"mfa_failed"});
+ }
+});
+app.post("/api/auth/mfa/disable",async(request,reply)=>{
+ const user=requestUser(request);
+ if(!user)return reply.code(401).send({error:"unauthorized"});
+ if(user.role!=="owner")return reply.code(403).send({error:"owner_required"});
+ if(!request.headers.origin||!sameOrigin(request))return reply.code(403).send({error:"origin_forbidden"});
+ const body=request.body as {password?:unknown;code?:unknown}|null;
+ if(!verifyOwnerPassword(user.id,body?.password))return reply.code(403).send({error:"owner_password_invalid"});
+ try{
+  mfa.disable(user.id,body?.code);
+  invalidateSessions(user.id);
+  const session=createSession(user.id);
+  setSessionCookie(reply,session.token);
+  audit(user.id,"auth.mfa_disabled");
+  return {enabled:false};
+ }catch(e){
+  const code=e instanceof Error?e.message:"mfa_failed";
+  return reply.code(400).send({error:["mfa_not_enabled","invalid_mfa_code"].includes(code)?code:"mfa_failed"});
+ }
+});
 app.get("/api/me", async (request, reply) => {
   const user = requestUser(request);
   if (!user) return reply.code(401).send({ error: "unauthorized" });
