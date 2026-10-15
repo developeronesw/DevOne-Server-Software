@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 
 export type ServiceInput = { service: string; action: string };
-export type SiteInput = { domain: string; webServer: "nginx" | "none" };
+export type SiteInput = { domain: string; webServer: "nginx" | "none"; siteType?: "static" | "files" };
 export type SiteActionInput = {siteId:string;action:string;expectedRevision:number;domain?:string;aliases?:string[];confirmDomain?:string};
 export type SiteTlsInput = {siteId:string;action:string;expectedRevision:number;email?:string;agreeTerms?:boolean};
 export type JobInput = ServiceInput | SiteInput | SiteActionInput | SiteTlsInput;
