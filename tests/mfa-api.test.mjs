@@ -38,6 +38,18 @@ test("Owner MFA API requires password, revokes earlier sessions and prevents pas
   const secureCookie=confirmed.headers.get("set-cookie").split(";")[0];
   assert.equal((await fetch(base+"/api/me",{headers:{Cookie:originalCookie}})).status,401);
   assert.equal((await fetch(base+"/api/me",{headers:{Cookie:secureCookie}})).status,200);
+  const proposedSha="b".repeat(40);
+  const updateWithoutMfa=await post("/api/updates/apply",{targetSha:proposedSha,password:account.password,confirmed:true},secureCookie);
+  assert.equal(updateWithoutMfa.status,403);
+  assert.equal((await updateWithoutMfa.json()).error,"mfa_required");
+  const shieldWithoutMfa=await post("/api/shield/sites/site_0123456789abcdef",{expectedRevision:1,policy:{mode:"monitor",requestsPerSecond:10,burst:20},password:account.password,confirmed:true},secureCookie);
+  assert.equal(shieldWithoutMfa.status,403);
+  assert.equal((await shieldWithoutMfa.json()).error,"mfa_required");
+  const shieldWithMfa=await post("/api/shield/sites/site_0123456789abcdef",{expectedRevision:1,policy:{mode:"monitor",requestsPerSecond:10,burst:20},password:account.password,mfaCode:response.recoveryCodes[2],confirmed:true},secureCookie);
+  assert.equal(shieldWithMfa.status,503);
+  const shieldReplay=await post("/api/shield/sites/site_0123456789abcdef",{expectedRevision:1,policy:{mode:"monitor",requestsPerSecond:10,burst:20},password:account.password,mfaCode:response.recoveryCodes[2],confirmed:true},secureCookie);
+  assert.equal(shieldReplay.status,403);
+  assert.equal((await shieldReplay.json()).error,"mfa_invalid");
   const loginNoCode=await post("/api/auth/login",account);
   assert.equal(loginNoCode.status,200);
   assert.equal((await loginNoCode.json()).mfaRequired,true);
