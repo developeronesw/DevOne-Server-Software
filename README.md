@@ -107,7 +107,7 @@ The Node edition remains under development. It now has functional sign-in,
 logout, authenticated host metrics and allowlisted service controls, but its management modules are not yet
 ported. See [the comparison and remaining work](docs/LEGACY-COMPARISON.md).
 The fresh Node installer uses the exact clean checkout commit and refuses an
-existing installation; automated updates and legacy migration remain pending.
+existing installation. An explicit, rollback-aware in-place updater is available for reviewed Node commits; see [in-place updates](docs/INSTALLATION.md#in-place-updates-existing-node-installations). Legacy migrations remain pending.
 
 ## Conversion scan
 

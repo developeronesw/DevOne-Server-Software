@@ -78,3 +78,28 @@ sudo certbot update_account --email YOUR_ACTUAL_EMAIL
 - `pnpm qa` validates isolated development behavior in CI, not real package installation, live TLS issuance, reboot, isolation, or hosting parity. Complete the live-host acceptance checklist before deployment approval.
 
 See `docs/PHASE-1-ACCEPTANCE.md` and `docs/STATIC-HOSTING-ACCEPTANCE.md`.
+
+
+## In-place updates (existing Node installations)
+
+Do **not** rerun the fresh installer. Once a target commit is reviewed and passes automated GitHub QA, fetch that exact commit, retrieve its updater script, and execute it as root:
+
+```bash
+TARGET=REPLACE_WITH_REVIEWED_40_CHARACTER_COMMIT
+sudo bash -e -s -- "$TARGET" <<'BASH'
+set -euo pipefail
+TARGET="$1"
+APP=/opt/devone/current
+git -C "$APP" fetch origin main
+TMP="$(mktemp /root/devone-update.XXXXXX.sh)"
+trap 'rm -f "$TMP"' EXIT
+git -C "$APP" show "$TARGET:scripts/update-in-place.sh" > "$TMP"
+bash "$TMP" "$TARGET"
+BASH
+```
+
+The updater refuses an unclean worktree, snapshots the live SQLite database and secret configuration in a root-only backup folder, rebuilds the API/Agent/frontend, normalizes **only** generated assets, checks that the unprivileged \`devone\` account can open the API modules, restarts the API/Agent and verifies health. On failure it attempts to restore the previous compiled application files and Git commit; it does **not** automatically replace your live database or encrypted master key.
+
+**Incident fixed:** building with \`umask 077\` created root-only compiled JavaScript (for example \`apps/api/dist/control.js\`), preventing the \`devone\` service from starting. Both fresh installation and updates now set a safe build umask and explicitly validate runtime file access before starting services. The API bundle is root-owned and readable by the \`devone\` group only; frontend assets remain readable by NGINX. The backup directory stays restricted.
+
+GitHub CI catches syntax and permission-policy regressions, but cannot replace real-host verification. Use this updater only with a reviewed commit and a maintenance window. Do not store backups in public web roots.

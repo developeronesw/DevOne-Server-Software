@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Runtime bundles must be readable by devone and NGINX after compilation.
+umask 022
 
 REPO_URL="${DEVONE_REPO_URL:-https://github.com/developeronesw/DevOne-Server-Software.git}"
 INSTALL_ROOT="/opt/devone"
@@ -71,6 +73,7 @@ cd "$INSTALL_ROOT/current"
 "$PNPM" --filter @devone/api build
 "$PNPM" --filter @devone/agent build
 "$PNPM" --filter @devone/dashboard build
+bash "$INSTALL_ROOT/current/scripts/prepare-runtime-files.sh"
 
 log "Installing systemd services..."
 install -m 644 deploy/systemd/devone-api.service /etc/systemd/system/devone-api.service
