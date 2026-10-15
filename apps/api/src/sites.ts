@@ -1,6 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import type { JobQueue, SiteActionInput, SiteTlsInput } from './jobs.js';
 type Dependencies = { requestUser: (request: any) => {id:string;role:string} | undefined | null; sameOrigin: (request:any) => boolean; agentUrl:string; agentToken:string; jobs:JobQueue; audit:(actor:string|null,action:string,details?:unknown)=>void };
+function siteTypeIsSupported(siteType:unknown,webServer:unknown){
+  const choice = siteType === undefined ? (webServer === 'nginx' ? 'static' : 'files') : siteType;
+  return (choice === 'static' && webServer === 'nginx') || (choice === 'files' && webServer === 'none');
+}
 function validDomain(value: unknown): value is string {
   return typeof value === 'string' && value.length <= 253 && value.includes('.') && /^[a-z]{2,63}$/.test(value.split('.').at(-1)!) && value.split('.').every(label => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label));
 }
@@ -26,10 +30,10 @@ export function registerSiteRoutes(app: FastifyInstance, dependencies: Dependenc
   app.post('/api/sites/preflight',async (request,reply) => {
     const user = authorize(request,reply,true); if (!user) return;
     const body = request.body as Record<string,unknown> | null;
-    if (!body || !validDomain(body.domain) || !['nginx','none'].includes(body.webServer as string) || (body.aliases !== undefined && (!Array.isArray(body.aliases) || body.aliases.length > 20 || !body.aliases.every(validDomain))) || (body.siteId !== undefined && (typeof body.siteId !== 'string' || !/^site_[a-f0-9]{16}$/.test(body.siteId) || !Number.isSafeInteger(body.expectedRevision)))) return reply.code(400).send({error:'invalid_site_preflight'});
+    if (!body || !validDomain(body.domain) || !['nginx','none'].includes(body.webServer as string) || !siteTypeIsSupported(body.siteType,body.webServer) || (body.aliases !== undefined && (!Array.isArray(body.aliases) || body.aliases.length > 20 || !body.aliases.every(validDomain))) || (body.siteId !== undefined && (typeof body.siteId !== 'string' || !/^site_[a-f0-9]{16}$/.test(body.siteId) || !Number.isSafeInteger(body.expectedRevision)))) return reply.code(400).send({error:'invalid_site_preflight'});
     try {
       if (!agentToken) throw new Error();
-      const response = await fetch(`${agentUrl}/v1/sites/preflight`,{method:'POST',headers:{Authorization:`Bearer ${agentToken}`,'Content-Type':'application/json'},body:JSON.stringify({domain:body.domain,aliases:body.aliases,webServer:body.webServer,siteId:body.siteId,expectedRevision:body.expectedRevision}),signal:AbortSignal.timeout(8000)});
+      const response = await fetch(`${agentUrl}/v1/sites/preflight`,{method:'POST',headers:{Authorization:`Bearer ${agentToken}`,'Content-Type':'application/json'},body:JSON.stringify({domain:body.domain,aliases:body.aliases,webServer:body.webServer,siteType:body.siteType,siteId:body.siteId,expectedRevision:body.expectedRevision}),signal:AbortSignal.timeout(8000)});
       const result = await response.json() as {error?:string};
       if (!response.ok) return reply.code(response.status === 409 ? 409 : response.status === 400 ? 400 : 503).send({error:response.status === 409 && result.error === 'domain_in_use' ? 'domain_in_use' : 'preflight_failed'});
       return result;
@@ -38,9 +42,9 @@ export function registerSiteRoutes(app: FastifyInstance, dependencies: Dependenc
   app.post('/api/sites',async (request,reply) => {
     const user = authorize(request,reply,true); if (!user) return;
     const body = request.body as Record<string,unknown> | null;
-    if (!body || body.confirmed !== true || !validDomain(body.domain) || !['nginx','none'].includes(body.webServer as string) || typeof body.requestKey !== 'string') return reply.code(400).send({error:'invalid_site'});
+    if (!body || body.confirmed !== true || !validDomain(body.domain) || !['nginx','none'].includes(body.webServer as string) || !siteTypeIsSupported(body.siteType,body.webServer) || typeof body.requestKey !== 'string') return reply.code(400).send({error:'invalid_site'});
     try {
-      return reply.code(202).send({job:jobs.enqueue(user.id,body.requestKey,{domain:body.domain,webServer:body.webServer as 'nginx'|'none'},'site.create')});
+      return reply.code(202).send({job:jobs.enqueue(user.id,body.requestKey,{domain:body.domain,webServer:body.webServer as 'nginx'|'none',siteType:(body.siteType ?? (body.webServer==='nginx'?'static':'files')) as 'static'|'files'},'site.create')});
     } catch (error) {
       const code = error instanceof Error ? error.message : 'queue_error';
       return reply.code(code === 'request_key_conflict' ? 409 : ['queue_full','queue_stopping'].includes(code) ? 503 : 400).send({error:code});
