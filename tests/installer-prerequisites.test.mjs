@@ -50,6 +50,17 @@ test('fresh installer prepares readable runtime assets before starting service a
   assert.ok(builds>=0 && prepare>builds && start>prepare);
 });
 
+test('fresh installs and in-place updates provision root-owned update worker safely',()=>{
+  const updater=readScript('scripts/update-in-place.sh');
+  const worker=readScript('scripts/update-worker.sh');
+  assert.match(main,/install -D -o root -g root -m 700 .*update-worker\.sh/);
+  assert.match(updater,/update-worker\.sh\.next/);
+  assert.match(updater,/mv -f \/usr\/local\/lib\/devone\/update-worker\.sh\.next \/usr\/local\/lib\/devone\/update-worker\.sh/);
+  assert.match(updater,/update-worker\.sh\.restore/);
+  assert.match(worker,/\/opt\/devone\/current\/scripts\/update-in-place\.sh/);
+  assert.match(worker,/write_state (?:running|succeeded)/);
+  assert.doesNotMatch(worker,/curl.*\|.*bash|eval |\$\(\$TARGET\)/);
+});
 test('in-place updater preserves data, applies runtime permissions and verifies the unprivileged API identity', () => {
   const prepare=readScript('scripts/prepare-runtime-files.sh');
   const updater=readScript('scripts/update-in-place.sh');
