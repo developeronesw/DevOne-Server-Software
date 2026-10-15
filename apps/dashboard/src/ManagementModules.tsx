@@ -1,5 +1,7 @@
 import {useEffect,useMemo,useState} from "react";
 import {SiteWafConsole} from "./SiteWafConsole";
+import {OwnerMfaSettings} from "./OwnerMfaSettings";
+import {CrowdSecStatus} from "./CrowdSecStatus";
 
 type CatalogEntry={id:string;name:string;category:"cms"|"framework"|"platform"|"runtime";description:string;sourceUrl:string;docsUrl:string;runtime:string[];featured?:boolean;latestKnownVersion?:string;verifiedAt?:string;releaseChannel:string;deployment:string};
 type Catalog={items:CatalogEntry[];installAvailable:boolean;notice:string};
@@ -62,6 +64,8 @@ export function SecurityCenter({onAi,role}:{onAi:()=>void;role:string}){
  }
  const scanResult=data?.latest;
  return <div className="security-center">
+  <OwnerMfaSettings role={role}/>
+  <CrowdSecStatus/>
   <SiteWafConsole role={role}/>
   <article className="surface-card glass"><div className="section-heading"><div><h2>Read-only server posture check</h2><p>Automatically at startup and every six hours · No intrusive probes</p></div><button className="primary-button" disabled={busy||data?.busy} onClick={()=>void scan()}>{busy||data?.busy?"Scanning…":"Scan server now"}</button></div>
    <div className="ops-qa-status"><div><small>Needs review</small><strong>{scanResult?.summary.warnings??"—"}</strong></div><div><small>Checks passed</small><strong>{scanResult?.summary.passed??"—"}</strong></div><div><small>Unverified</small><strong>{scanResult?.summary.unknown??"—"}</strong></div></div>
