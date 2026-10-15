@@ -23,7 +23,7 @@ export function resolvePreset(value:unknown,server:unknown,version:unknown){
  const preset=websitePresets.find(p=>p.id===value);
  if(!preset)throw Error("unsupported_site_type");
  if(typeof server!=="string"||!preset.webServers.includes(server))throw Error("unsupported_web_server");
- if(preset.runtime===null ? version!==undefined&&version!==null&&version!=="" : typeof version!=="string"||!preset.versions.includes(version))throw Error("unsupported_runtime_version");
+ if(preset.versions.length === 0 ? version !== undefined && version !== null && version !== "" : typeof version !== "string" || !preset.versions.includes(version))throw Error("unsupported_runtime_version");
  if(!preset.available)throw Error("runtime_not_available");
  return {siteType:preset.id as "static"|"files",webServer:server as "nginx"|"none"};
 }
