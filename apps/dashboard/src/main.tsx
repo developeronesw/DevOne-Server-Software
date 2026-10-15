@@ -2,6 +2,7 @@ import { SitesWorkspace } from "./SitesWorkspace";
 import { SetupWizard } from "./SetupWizard";
 import { ControlWorkspace, type ControlView } from "./ControlWorkspace";
 import { DashboardInsights } from "./ManagementModules";
+import { UpdatesWorkspace } from "./UpdatesWorkspace";
 import { StrictMode, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
@@ -57,7 +58,7 @@ function App() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [view, setView] = useState<"dashboard" | "websites" | "services" | "activity" | "secrets" | ControlView>("dashboard");
+  const [view, setView] = useState<"dashboard" | "websites" | "services" | "activity" | "secrets" | "updates" | ControlView>("dashboard");
   const [showPassword, setShowPassword] = useState(false);
   const [sites, setSites] = useState<{id:string;domain:string;state:string;webServer:string;tls?:boolean}[]>([]);
 
@@ -144,6 +145,7 @@ function App() {
   if (status?.user.role === "owner") {
     navItems.push({id:"backups",label:"Backups",icon:"backup"});
     navItems.push({id:"secrets",label:"Secure Vault",icon:"lock"});
+    navItems.push({id:"updates",label:"Software Updates",icon:"backup"});
   }
   navItems.push({id:"ai",label:"DevOne AI",icon:"zap"});
   if (loading) return <div className="loading-screen"><div className="loading-mark"><Glyph name="layers" /></div><strong>DEVONE <span>SERVER</span></strong><p>Establishing a secure connection…</p></div>;
@@ -240,7 +242,7 @@ function App() {
           <div className="welcome-server"><span className="illustration-icon"><Glyph name="layers" /></span><div><strong>{m.hostname ?? "DevOne Server"}</strong><span className={"server-badge "+(agentOnline?"":"unavailable")}><span className={"live-dot "+(agentOnline?"":"offline")}/>{agentOnline?"Online":"Unavailable"}</span></div></div>
         </section>
         <div className="health-pills"><span className={"health-chip "+(agentOnline?"":"warning")}><Glyph name="shield" /> Agent {agentOnline?"connected":"unavailable"}</span><span className="health-chip"><Glyph name="layers" /> {activeServices} / {services.length} active services</span><span className="health-chip"><Glyph name="globe" /> {sites.length} websites / workspaces</span><span className="health-chip"><Glyph name="clock" /> Updated every 15 seconds</span></div>
-        <DashboardInsights onAi={()=>setView("ai")} onSecurity={()=>setView("security")} onApps={()=>setView("apps")}/>
+        <DashboardInsights onAi={()=>setView("ai")} onSecurity={()=>setView("security")} onApps={()=>setView("apps")}/>{status.user.role==="owner"&&<div className="update-home-link glass"><div><strong>DevOne Software Updates</strong><span>Install verified dashboard releases without SSH.</span></div><button className="primary-button" onClick={()=>setView("updates")}>Check for Updates →</button></div>}
         <section className="resource-grid" aria-label="Live server resources">{resourceCards.map(card=><article className="resource-card glass" key={card.label}><div className="resource-head"><span className={"metric-icon "+card.tone}><Glyph name={card.icon}/></span><span>{card.label}</span></div><strong>{card.value}</strong><small>{card.detail}</small>{card.label==="Memory used"&&memoryPercent!==null?<div className="meter-track"><span style={{width:memoryPercent+"%"}}/></div>:<div className="metric-underline" />}</article>)}</section>
         <section className="dashboard-columns">
           <article className="surface-card glass"><div className="section-heading"><div><h2><Glyph name="layers"/> Managed services</h2><p>Live status reported by your DevOne agent</p></div><button className="text-action" onClick={()=>setView("services")}>Manage services <Glyph name="arrow"/></button></div>{servicesList}</article>
@@ -254,6 +256,7 @@ function App() {
       {view==="services"&&<><div className="page-heading"><span className="overline">INFRASTRUCTURE</span><h1>Managed services</h1><p>Check service health and control supported system services. Service changes require confirmation.</p></div><article className="surface-card glass"><div className="section-heading"><h2>System services</h2><span className="status-pill"><span />{activeServices} active</span></div>{servicesList}</article></>}
       {view==="websites"&&<><div className="page-heading"><span className="overline">HOSTING</span><h1>Websites & files</h1><p>Create isolated static websites, manage file workspaces, domains, and HTTPS certificates.</p></div>{canManage?<SitesWorkspace/>:<p className="surface-card glass">You do not have permission to manage websites.</p>}</>}
       {view==="activity"&&<><div className="page-heading"><span className="overline">OPERATIONS</span><h1>Activity & jobs</h1><p>Review queued, completed, and interrupted infrastructure operations.</p></div><article className="surface-card glass"><div className="section-heading"><h2>Job history</h2><small>Interrupted jobs require inspection before retrying.</small></div>{jobsTable}</article></>}
+      {view==="updates"&&status.user.role==="owner"&&<UpdatesWorkspace onDashboard={()=>setView("dashboard")}/>}
       {(["apps","databases","backups","monitoring","qa","ai","security"] as const).includes(view as ControlView) && <ControlWorkspace key={view} view={view as ControlView} role={status.user.role} onNavigate={setView} />}
       {view==="secrets"&&status.user.role==="owner"&&<><div className="page-heading"><span className="overline">SECURE STORAGE</span><h1>Encrypted vault</h1><p>Store integration credentials securely. Existing secret values are never displayed.</p></div><article className="surface-card glass vault-card"><form onSubmit={saveSecret}><h2>Add a credential</h2><div className="vault-fields"><label>Name<input required pattern="[a-z][a-z0-9_.-]{0,63}" maxLength={64} value={secretName} onChange={e=>setSecretName(e.target.value)} placeholder="service.api_key"/></label><label>Secret value<input required type="password" autoComplete="off" maxLength={8192} value={secretValue} onChange={e=>setSecretValue(e.target.value)} placeholder="Paste private value"/></label></div><button className="primary-button" disabled={busy}>Save secret <Glyph name="arrow"/></button></form><div className="vault-items"><h2>Stored credentials</h2>{secrets.map(secret=><div className="vault-item" key={secret.name}><span><Glyph name="lock"/><strong>{secret.name}</strong><small>{new Date(secret.updated_at).toLocaleString()}</small></span><button disabled={busy} onClick={()=>void deleteSecret(secret.name)} className="delete-action">Delete</button></div>)}{!secrets.length&&<p className="empty-copy">Your vault is empty.</p>}</div></article></>}
       <footer className="app-footer">DEVONE SERVER <span>·</span> Performance. Perfection. Pristine design.</footer>
