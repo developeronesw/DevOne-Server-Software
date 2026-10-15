@@ -270,3 +270,17 @@
 .crowdsec-console h3{font-size:13px;margin:18px 0 10px}
 .crowdsec-guide{color:#737a99;font-size:12px;line-height:1.8;padding-left:22px}
 @media(max-width:700px){.mfa-codes,.mfa-fields,.crowdsec-steps{grid-template-columns:1fr}}
+
+
+/* Privacy-preserving CrowdSec host detection activity */
+.crowdsec-events{border-top:1px solid #eeedfa;padding-top:20px;margin-top:22px}
+.crowdsec-activity-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0}
+.crowdsec-activity-stats>div{background:#f8f7ff;border:1px solid #eeecfa;border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:7px}
+.crowdsec-activity-stats small{color:#8b90a8;font-size:11px}
+.crowdsec-activity-stats strong{color:#565379;font-size:16px}
+.crowdsec-activity-tables{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+.crowdsec-activity-tables>div{background:#faf9ff;border-radius:12px;padding:15px;min-width:0}
+.crowdsec-activity-tables>div>strong{font-size:12px;display:block;margin-bottom:10px}
+.crowdsec-activity-row{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:7px 0;border-top:1px solid #eae9f3;font-size:11px;color:#606581;overflow-wrap:anywhere}
+.crowdsec-activity-row b{color:#5749aa;flex-shrink:0}
+@media(max-width:710px){.crowdsec-activity-stats,.crowdsec-activity-tables{grid-template-columns:1fr}}
