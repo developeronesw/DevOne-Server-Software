@@ -2,6 +2,7 @@ import { SiteManager } from "./sites.js";
 import { UpdatesManager } from "./updates.js";
 import { discoverSoftware } from "./discovery.js";
 import { inspectSecurity } from "./security.js";
+import { crowdSecReadiness } from "./crowdsec.js";
 import { listServices, mutateService } from "./services.js";
 import { cpus, freemem, totalmem, uptime, loadavg, hostname } from "node:os";
 import { createServer } from "node:http";
@@ -81,6 +82,10 @@ const server = createServer(async (request, response) => {
       const bad=["invalid_waf_action","invalid_waf_policy","invalid_site"].includes(code);
       send(conflict?409:bad?400:503,{error:conflict||bad?code:"waf_operation_failed"});
     }
+    return;
+  }
+  if (request.method==="GET"&&request.url==="/v1/security/crowdsec") {
+    try{send(200,await crowdSecReadiness());}catch{send(503,{error:"crowdsec_readiness_unavailable"});}
     return;
   }
   if (request.method === "GET" && request.url === "/v1/security/scan") {
