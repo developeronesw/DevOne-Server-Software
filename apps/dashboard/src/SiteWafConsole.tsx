@@ -61,7 +61,7 @@ export function SiteWafConsole({role}:{role:string}){
      <label>Per-IP request rate<select disabled={!enabled||busy} value={policy.requestsPerSecond} onChange={e=>setPolicy({...policy,requestsPerSecond:Number(e.target.value)})}>{[1,2,5,10,15,20,30,50].map(x=><option key={x} value={x}>{x} requests / second</option>)}</select></label>
      <label>Allowed burst<select disabled={!enabled||busy} value={policy.burst} onChange={e=>setPolicy({...policy,burst:Number(e.target.value)})}>{[1,5,10,20,30,50,100].map(x=><option key={x} value={x}>{x} extra requests</option>)}</select></label>
     </div>
-    {policy.mode==="enforce"&&<p className="ops-warning">Enforcement may affect legitimate users behind shared IPs or during traffic bursts. Start in Monitor mode, observe web server logs, then enable enforcement with safe limits.</p>}
+    {policy.mode==="enforce"&&<p className="ops-warning">Enforcement may affect legitimate users behind shared IPs, NAT or reverse proxies (including Cloudflare). Without a correctly configured, tightly trusted NGINX real-IP chain, every visitor behind a proxy may share one rate-limit identity. Start with Monitor; validate client IP detection and traffic before enabling blocking.</p>}
     {role==="owner"&&<>
      <label className="shield-label" htmlFor="shield-password">Owner password to apply this change</label>
      <input id="shield-password" disabled={!enabled||busy} type="password" autoComplete="current-password" maxLength={1024} value={password} onChange={e=>setPassword(e.target.value)} placeholder="Enter your Owner password"/>
