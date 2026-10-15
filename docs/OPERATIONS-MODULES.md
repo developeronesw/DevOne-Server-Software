@@ -3,7 +3,7 @@
 The DevOne dashboard has Apps, Databases, Backups, Monitoring, QA Center, and AI. Modules are implemented incrementally; full legacy parity and release acceptance are not yet complete.
 
 ## Apps and Databases
-The Agent performs allowlisted read-only runtime version queries and systemd state discovery. No arbitrary shell endpoint is exposed. Runtime installation, full deployment lifecycle, SQL database creation, database accounts and Docker lifecycle management remain to be built. Existing static websites and HTTPS live under Websites & Files.
+The Agent performs allowlisted read-only runtime version queries and systemd state discovery. No arbitrary shell endpoint is exposed. Owner-approved PHP 8.3-FPM and Redis Server installation now runs through the existing audited API/Agent job system. Runtime removal and upgrades, full app deployment lifecycle, SQL database creation, database accounts and Docker lifecycle management remain to be built. Existing static websites and HTTPS live under Websites & Files.
 
 ## Monitoring
 Authenticated Agent metrics sampled once per minute with a 24-hour SQLite retention window; dashboard displays load and memory history. Load average is not CPU utilization percentage.
