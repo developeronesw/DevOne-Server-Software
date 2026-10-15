@@ -74,6 +74,7 @@ cd "$INSTALL_ROOT/current"
 "$PNPM" --filter @devone/agent build
 "$PNPM" --filter @devone/dashboard build
 bash "$INSTALL_ROOT/current/scripts/prepare-runtime-files.sh"
+install -D -o root -g root -m 700 "$INSTALL_ROOT/current/scripts/update-worker.sh" /usr/local/lib/devone/update-worker.sh
 
 log "Installing systemd services..."
 install -m 644 deploy/systemd/devone-api.service /etc/systemd/system/devone-api.service
