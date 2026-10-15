@@ -90,6 +90,11 @@ test('authentication, setup, origin, metrics, logout and rate-limit boundaries',
     assert.equal((await secureGet('/api/security')).status,200);
     assert.equal((await securePost('/api/security/scan',{})).status,429);
 
+    assert.equal((await fetch(url + '/api/updates')).status,401);
+    assert.equal((await post('/api/updates/apply',{})).status,401);
+    assert.equal((await post('/api/updates/apply',{targetSha:'b'.repeat(40),confirmed:true,password:credentials.password},{Cookie:cookie,Origin:'https://evil.example.test'})).status,403);
+    assert.equal((await securePost('/api/updates/apply',{targetSha:'bad',confirmed:true,password:credentials.password})).status,400);
+    assert.equal((await securePost('/api/updates/apply',{targetSha:'b'.repeat(40),confirmed:true,password:'incorrect'})).status,403);
     assert.equal((await fetch(url + '/api/qa')).status, 401);
     assert.equal((await post('/api/qa/run', {})).status, 401);
     assert.equal((await securePost('/api/backups', {})).status, 400);
@@ -115,6 +120,9 @@ test('authentication, setup, origin, metrics, logout and rate-limit boundaries',
     assert.equal((await fetch(url + '/api/me', { headers: { Cookie: 'devone_session=%malformed' } })).status, 401);
     const db = new DatabaseSync(join(dir, 'state.sqlite'));
     db.prepare("UPDATE users SET role='viewer'").run();
+    assert.equal((await secureGet('/api/updates')).status,403);
+    assert.equal((await securePost('/api/updates/apply',{targetSha:'b'.repeat(40),confirmed:true,password:credentials.password})).status,403);
+
     assert.equal((await secureGet('/api/security')).status,403);
     assert.equal((await securePost('/api/security/scan',{})).status,403);
     assert.equal((await securePost('/api/ai/diagnose',{question:'Check security',provider:'gemini',includeSecurity:true})).status,403);
