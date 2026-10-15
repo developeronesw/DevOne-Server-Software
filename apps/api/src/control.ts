@@ -133,7 +133,7 @@ export function registerControlRoutes(app:FastifyInstance,deps:Deps) {
       await check("agent.sites",async()=>Array.isArray((await agent("/v1/sites")).sites),"Hosted site registry readable");
       await check("agent.software",async()=>{
         const capabilities=await agent("/v1/software/capabilities");
-        return capabilities.mode==="read-only-preflight"&&capabilities.installAvailable===false&&
+        return capabilities.mode==="managed-install"&&capabilities.installAvailable===true&&
           Array.isArray(capabilities.options)&&capabilities.options.length===2;
       },"Software Center allowlisted read-only preflight capabilities; installation remains disabled");
       await check("agent.crowdsec",async()=>{
