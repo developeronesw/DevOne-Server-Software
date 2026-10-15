@@ -1,20 +1,21 @@
 #!/usr/bin/env bash
-# Phase 2 Software Center: guarded host-side installation pilot.
-# NOT a dashboard endpoint. Run ONLY on a disposable Ubuntu 24.04 amd64 VPS.
+# Phase 2 Software Center: guarded host installation engine.
+# The API/Agent may use --managed-install only after Owner password/MFA approval.
+# Real package mutations must be tested on a disposable Ubuntu VPS.
 set -Eeuo pipefail
 umask 077
-usage() { echo "Usage: $0 [--check|--install] [php8.3-fpm|redis-server]" >&2; exit 2; }
+usage() { echo "Usage: $0 [--check|--install|--managed-install] [php8.3-fpm|redis-server]" >&2; exit 2; }
 [[ $# -le 2 ]] || usage
 mode="${1:---check}"
 package="${2:-php8.3-fpm}"
-[[ "$mode" == "--check" || "$mode" == "--install" ]] || usage
+[[ "$mode" == "--check" || "$mode" == "--install" || "$mode" == "--managed-install" ]] || usage
 case "$package" in php8.3-fpm|redis-server) ;; *) usage ;; esac
 [[ "$EUID" -eq 0 ]] || { echo "Run with sudo/root." >&2; exit 2; }
 . /etc/os-release
 [[ "${ID:-}" == "ubuntu" && "${VERSION_ID:-}" == "24.04" ]] || { echo "Requires Ubuntu 24.04." >&2; exit 2; }
 [[ "$(dpkg --print-architecture)" == "amd64" ]] || { echo "Requires amd64." >&2; exit 2; }
 # Only one host package mutation pilot may run at a time. Do NOT bypass apt/dpkg locks.
-if [[ "$mode" == "--install" ]]; then
+if [[ "$mode" == "--install" || "$mode" == "--managed-install" ]]; then
   exec 9>/run/lock/devone-software-pilot.lock
   flock -n 9 || { echo "Another DevOne pilot is running." >&2; exit 1; }
 fi
@@ -46,14 +47,20 @@ if grep -Eq '^Remv |^Inst (nginx([^ ]*)|devone([^ ]*)|openssh-([^ ]*)|systemd([^
 fi
 echo "Software Center pilot preflight passed: $package $candidate"
 echo "APT: Ubuntu candidate, dependency simulation accepted; no removals."
-echo "This is a host CLI pilot, NOT a dashboard installation or full rollback implementation."
+echo "APT install is allowlisted, origin-checked and audited by the calling DevOne Agent."
 if [[ "$mode" == "--check" ]]; then
   echo "READ-ONLY: Nothing installed. Use --install only on a disposable test VPS."
   exit 0
 fi
-[[ -t 0 ]] || { echo "Refusing noninteractive software installation." >&2; exit 1; }
-read -r -p "Type INSTALL $package to proceed: " confirmation
-[[ "$confirmation" == "INSTALL $package" ]] || { echo "Cancelled." >&2; exit 1; }
+if [[ "$mode" == "--install" ]]; then
+  [[ -t 0 ]] || { echo "Interactive console required for manual installation." >&2; exit 1; }
+  read -r -p "Type INSTALL $package to proceed: " confirmation
+  [[ "$confirmation" == "INSTALL $package" ]] || { echo "Cancelled." >&2; exit 1; }
+else
+  # Only the authenticated, privileged local Agent can reach this path through
+  # the private host endpoint; this script still requires root.
+  [[ ! -t 0 ]] || { echo "Managed installs run without an interactive terminal." >&2; exit 1; }
+fi
 DEBIAN_FRONTEND=noninteractive apt-get -y --no-install-recommends install "$package=$candidate"
 nginx -t >/dev/null 2>&1 || { echo "NGINX changed unexpectedly; inspect host. No automatic removal attempted." >&2; exit 1; }
 for unit in devone-api devone-agent; do
@@ -63,4 +70,4 @@ systemctl is-active --quiet "$package" || { echo "$package is installed but its 
 if [[ "$package" == "redis-server" ]] && ss -ltnH | awk '{print $4}' | grep -Eq '^(0\.0\.0\.0|\*|\[::\]|::):6379$'; then
   echo "Redis may be exposed on all interfaces; restrict access before continuing." >&2; exit 1
 fi
-echo "Pilot installed and basic service checks passed. Site integration and rollback remain unverified."
+echo "Managed package installed and service active. Site integration and package-level rollback are separate capabilities."

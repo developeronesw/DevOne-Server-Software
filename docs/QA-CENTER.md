@@ -28,8 +28,6 @@ This is the initial QA infrastructure, not full legacy feature parity. Browser w
 
 The dashboard now provides authenticated read-only probes for SQLite integrity, vault key, Agent health, services and sites, automatically at startup and every six hours, with saved reports. These do not substitute for full regression testing or the gated VPS release verification; see [Operations Modules](OPERATIONS-MODULES.md).
 
-## Software + Security integration check (Phase 2)
+## Software Center and Security integration (Phase 2)
 
-The authenticated dashboard **QA Center** now includes two additional read-only Agent probes: `agent.software` asserts the exact PHP 8.3 FPM/Redis preflight allowlist and confirms that managed installation remains disabled; `agent.crowdsec` confirms security-readiness telemetry is responsive without mislabeling WAF enforcement. Total: **9** read-only dashboard checks.
-
-Host-runtime APT preflight runs from **Software Center** on explicit Owner/Admin request and never installs packages. The regression suite covers the strict allowlist, command argument boundaries, origin/role authorization, and unavailable-host failure cases. No automated QA checks install packages in CI. These new checks do not remove the existing release blockers, nor do they verify real-world CrowdSec blocking, package installations or restore operations. See [Software Runtime Preflight](SOFTWARE-RUNTIME-PREFLIGHT.md).
+Dashboard QA performs 9 non-destructive checks, including the `agent.software` managed-install capability and `agent.crowdsec` readiness. Package installation is now an independent, Owner-approved, audited operation through the existing JobQueue. QA reports do not install software or claim WAF enforcement, and green CI is not evidence of successful package installation on the test VPS. See [Managed Software Installation](SOFTWARE-RUNTIME-PREFLIGHT.md).

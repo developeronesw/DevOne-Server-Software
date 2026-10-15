@@ -207,7 +207,7 @@ app.post("/api/services/action", async (request, reply) => {
   if (!["owner", "admin"].includes(user.role)) return reply.code(403).send({ error: "forbidden" });
   if (!request.headers.origin || !sameOrigin(request)) return reply.code(403).send({ error: "origin_forbidden" });
   const body = request.body as { service?: unknown; action?: unknown; confirmed?: unknown } | null;
-  if (!body || body.confirmed !== true || !["nginx", "apache2", "mariadb", "mysql", "postgresql", "redis-server", "docker"].includes(body.service as string) || !["start", "stop", "restart"].includes(body.action as string)) return reply.code(400).send({ error: "invalid_service_operation" });
+  if (!body || body.confirmed !== true || !["nginx", "apache2", "mariadb", "mysql", "postgresql", "redis-server", "php8.3-fpm", "docker"].includes(body.service as string) || !["start", "stop", "restart"].includes(body.action as string)) return reply.code(400).send({ error: "invalid_service_operation" });
   const requestKey = (request.body as { requestKey?: unknown }).requestKey;
   if (typeof requestKey !== "string") return reply.code(400).send({ error: "request_key_required" });
   try {
@@ -224,7 +224,7 @@ const jobs = new JobQueue(db, async (input, operation) => {
   if (!agentToken) throw new Error("agent_not_configured");
   let response: Response;
   try {
-    response = await fetch(`${agentUrl}${operation === "site.create" ? "/v1/sites" : operation === "site.action" ? "/v1/sites/action" : operation === "site.tls" ? "/v1/sites/tls" : "/v1/services/action"}`, { method: "POST", headers: { Authorization: `Bearer ${agentToken}`, "Content-Type": "application/json" }, body: JSON.stringify(input), signal: AbortSignal.timeout(operation === "site.tls" ? 240000 : operation.startsWith("site.") ? 120000 : 35000) });
+    response = await fetch(`${agentUrl}${operation === "site.create" ? "/v1/sites" : operation === "site.action" ? "/v1/sites/action" : operation === "site.tls" ? "/v1/sites/tls" : operation === "software.install" ? "/v1/software/install" : "/v1/services/action"}`, { method: "POST", headers: { Authorization: `Bearer ${agentToken}`, "Content-Type": "application/json" }, body: JSON.stringify(input), signal: AbortSignal.timeout(operation === "software.install" ? 320000 : operation === "site.tls" ? 240000 : operation.startsWith("site.") ? 120000 : 35000) });
   } catch { throw new OutcomeUnknown("agent_outcome_unknown"); }
   if (response.status >= 500) throw new OutcomeUnknown("agent_outcome_unknown");
   if (!response.ok) throw new Error("agent_operation_failed");
@@ -281,7 +281,7 @@ app.delete<{ Params: { name: string } }>("/api/secrets/:name", async (request, r
 registerSiteRoutes(app, { requestUser, sameOrigin, agentUrl, agentToken, jobs, audit });
 registerControlRoutes(app, {db,vault,agentUrl,agentToken,requestUser,sameOrigin,audit});
 registerSecurityRoutes(app, {db,agentUrl,agentToken,requestUser,sameOrigin,audit});
-registerSoftwareRoutes(app,{agentUrl,agentToken,requestUser,sameOrigin,audit});
+registerSoftwareRoutes(app,{agentUrl,agentToken,requestUser,sameOrigin,audit,jobs});
 const updateAttempts = new Map<string,{count:number;until:number}>();
 app.get("/api/updates",async(request,reply)=>{
   const user=requestUser(request);

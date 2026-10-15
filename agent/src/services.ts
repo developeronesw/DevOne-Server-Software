@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 const run = promisify(execFile);
-export const managedServices = ["nginx", "apache2", "mariadb", "mysql", "postgresql", "redis-server", "docker"] as const;
+export const managedServices = ["nginx", "apache2", "mariadb", "mysql", "postgresql", "redis-server", "php8.3-fpm", "docker"] as const;
 export function serviceOperation(body: unknown): { service: string; action: string } {
   const value = body as { service?: unknown; action?: unknown } | null;
   if (!value || !managedServices.includes(value.service as any) || !["start", "stop", "restart"].includes(value.action as string)) throw new Error("invalid_service_operation");

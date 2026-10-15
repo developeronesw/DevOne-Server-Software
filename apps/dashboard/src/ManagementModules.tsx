@@ -17,8 +17,89 @@ async function readApi<T>(url:string):Promise<T>{
  return r.json() as Promise<T>;
 }
 
-type RuntimeCapabilities={mode:string;installAvailable:false;options:{package:string;label:string;installAvailable:false}[];notice:string};
-type RuntimeResult={package:string;status:"ready"|"blocked";reason:string;installAvailable:false};
+type RuntimeCapabilities={mode:"managed-install";installAvailable:true;options:{package:string;label:string;installAvailable:true}[];notice:string};
+type RuntimeState={package:string;installed:boolean;version:string|null;serviceActive:boolean};
+type InstallJob={id:string;state:string;error:string|null;operation:string};
+function RuntimeManager({role}:{role:string}){
+ const [capabilities,setCapabilities]=useState<RuntimeCapabilities|null>(null);
+ const [packages,setPackages]=useState<RuntimeState[]>([]);
+ const [choice,setChoice]=useState("php8.3-fpm");
+ const [password,setPassword]=useState("");
+ const [mfaCode,setMfaCode]=useState("");
+ const [mfaEnabled,setMfaEnabled]=useState(false);
+ const [confirmed,setConfirmed]=useState(false);
+ const [busy,setBusy]=useState(false);
+ const [error,setError]=useState("");
+ const [job,setJob]=useState<InstallJob|null>(null);
+ async function refresh(){
+  const [cfg,installed]=await Promise.all([
+   readApi<RuntimeCapabilities>("/api/software/capabilities"),
+   readApi<{packages:RuntimeState[]}>("/api/software/status")
+  ]);
+  setCapabilities(cfg);setPackages(installed.packages);
+ }
+ useEffect(()=>{
+  if(!["owner","admin"].includes(role))return;
+  void refresh().catch(()=>setError("Could not load installed package status."));
+  if(role==="owner")void fetch("/api/auth/mfa/status",{credentials:"same-origin"})
+   .then(r=>r.ok?r.json():null).then(data=>setMfaEnabled(data?.enabled===true)).catch(()=>{});
+ },[role]);
+ useEffect(()=>{
+  if(!job||["succeeded","failed","interrupted"].includes(job.state))return;
+  const interval=setInterval(()=>{
+   void readApi<{job:InstallJob}>("/api/jobs/"+encodeURIComponent(job.id)).then(async r=>{
+    setJob(r.job);
+    if(["succeeded","failed","interrupted"].includes(r.job.state))await refresh();
+   }).catch(()=>setError("Job status unavailable. Check Activity & Jobs before retrying."));
+  },2500);
+  return ()=>clearInterval(interval);
+ },[job?.id,job?.state]);
+ async function install(){
+  if(role!=="owner"||!confirmed||!password||busy)return;
+  if(!window.confirm("Install "+choice+" using Ubuntu's package manager? This changes the development VPS. Existing packages are not removed automatically."))return;
+  setBusy(true);setError("");setJob(null);
+  try{
+   const response=await fetch("/api/software/install",{
+    method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({package:choice,confirmed:true,password,mfaCode,requestKey:crypto.randomUUID().replace(/-/g,"")})
+   });
+   const data=await response.json().catch(()=>({})) as {job?:InstallJob;error?:string};
+   if(!response.ok||!data.job)throw Error(data.error??"Installation could not be queued");
+   setJob(data.job);setPassword("");setMfaCode("");setConfirmed(false);
+  }catch(e){setError(e instanceof Error?e.message:"Installation failed");}
+  finally{setBusy(false);}
+ }
+ const selected=packages.find(p=>p.package===choice);
+ const running=job&&!["succeeded","failed","interrupted"].includes(job.state);
+ return <section className="surface-card glass ops-panel-gap" aria-label="Managed host runtimes">
+  <div className="section-heading"><div><span className="overline">MANAGED SOFTWARE · UBUNTU</span>
+   <h2>Install and manage host runtimes</h2><p>Install PHP-FPM or Redis from Ubuntu's signed package sources with an audited DevOne Agent job.</p>
+  </div><button className="ops-secondary" disabled={busy||Boolean(running)} onClick={()=>void refresh().catch(()=>setError("Status refresh failed"))}>Refresh status</button></div>
+  <div className="ops-catalog-filters"><select aria-label="Software to manage" value={choice} onChange={e=>{setChoice(e.target.value);setError("");}}>
+   {(capabilities?.options??[{package:"php8.3-fpm",label:"PHP 8.3 FPM"},{package:"redis-server",label:"Redis Server"}]).map(p=><option key={p.package} value={p.package}>{p.label}</option>)}
+  </select></div>
+  {selected?<div className="ops-qa-status">
+   <div><small>Installation</small><strong>{selected.installed?"Installed":"Not installed"}</strong></div>
+   <div><small>Service</small><strong>{selected.serviceActive?"Running":selected.installed?"Stopped":"—"}</strong></div>
+   <div><small>Version</small><strong>{selected.version??"—"}</strong></div>
+  </div>:<p className="ops-empty">Loading installed software status…</p>}
+  {role==="owner"&&!selected?.installed&&<div className="shield-form">
+   <label className="shield-label" htmlFor="software-install-password">Owner password</label>
+   <input id="software-install-password" type="password" autoComplete="current-password" maxLength={1024} value={password} onChange={e=>setPassword(e.target.value)} disabled={busy||Boolean(running)}/>
+   {mfaEnabled&&<><label className="shield-label" htmlFor="software-install-mfa">Authenticator or recovery code</label>
+    <input id="software-install-mfa" autoComplete="one-time-code" maxLength={17} value={mfaCode} onChange={e=>setMfaCode(e.target.value.trim())} disabled={busy||Boolean(running)}/></>}
+   <label className="shield-consent"><input type="checkbox" checked={confirmed} onChange={e=>setConfirmed(e.target.checked)} disabled={busy||Boolean(running)}/> I approve installation of this package and its required dependencies on this development server.</label>
+   <button className="primary-button" type="button" onClick={()=>void install()} disabled={!capabilities||busy||Boolean(running)||!confirmed||!password||(mfaEnabled&&!mfaCode)}>
+    {running?"Installing…":busy?"Submitting…":"Install "+choice}
+   </button>
+  </div>}
+  {job&&<p role="status" className={job.state==="succeeded"?"inline-notice":job.state==="failed"||job.state==="interrupted"?"ops-warning":"ops-subtext"}>
+   Installation job {job.state}. {job.state==="interrupted"?"Outcome uncertain; inspect package status before retrying.":job.state==="failed"?"Review Activity & Jobs and server logs.":""}
+  </p>}
+  {error&&<p role="alert" className="inline-error">{error}</p>}
+  <p className="ops-note">Only these two Ubuntu runtimes are managed here. Installed services can be started, stopped or restarted under Services. This does not install WordPress, DevOne CMS, or other catalog applications. Package removal and automatic dependency rollback are not available yet.</p>
+ </section>;
+}
 export function AppCatalog({role}:{role:string}){
  const [catalog,setCatalog]=useState<Catalog|null>(null);
  const [discovery,setDiscovery]=useState<Discovery|null>(null);
@@ -26,28 +107,6 @@ export function AppCatalog({role}:{role:string}){
  const [category,setCategory]=useState("all");
  const [selected,setSelected]=useState<string|null>(null);
  const [error,setError]=useState("");
- const [capabilities,setCapabilities]=useState<RuntimeCapabilities|null>(null);
- const [runtimeChoice,setRuntimeChoice]=useState("php8.3-fpm");
- const [runtimeResult,setRuntimeResult]=useState<RuntimeResult|null>(null);
- const [runtimeBusy,setRuntimeBusy]=useState(false);
- const [runtimeError,setRuntimeError]=useState("");
- useEffect(()=>{
-  if(!["owner","admin"].includes(role))return;
-  void readApi<RuntimeCapabilities>("/api/software/capabilities").then(setCapabilities).catch(()=>setRuntimeError("Host runtime preflight capabilities unavailable."));
- },[role]);
- async function runRuntimePreflight(){
-  setRuntimeBusy(true);setRuntimeError("");setRuntimeResult(null);
-  try{
-   const response=await fetch("/api/software/preflight",{
-    method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({package:runtimeChoice})
-   });
-   const result=await response.json() as RuntimeResult & {error?:string};
-   if(!response.ok)throw Error(result.error??"Preflight failed");
-   setRuntimeResult(result);
-  }catch(e){setRuntimeError(e instanceof Error?e.message:"Preflight unavailable");}
-  finally{setRuntimeBusy(false);}
- }
  useEffect(()=>{void Promise.allSettled([readApi<Catalog>("/api/catalog"),readApi<Discovery>("/api/discovery")]).then(values=>{
   if(values[0].status==="fulfilled")setCatalog(values[0].value); else setError("Catalog unavailable; check DevOne API.");
   if(values[1].status==="fulfilled")setDiscovery(values[1].value);
@@ -56,16 +115,8 @@ export function AppCatalog({role}:{role:string}){
  const current=catalog?.items.find(item=>item.id===selected);
  const runtimeNames=new Set(discovery?.runtimes.filter(x=>x.installed).map(x=>x.name.toLowerCase())??[]);
  return <div className="app-catalog">
-   <div className="ops-catalog-intro glass"><div><span className="overline">DEVONE SOFTWARE CENTER</span><h2>Launch your next project.</h2><p>Explore trusted software sources, compare prerequisites and plan an installation. Host-managed one-click deployments will become available after isolation and rollback testing.</p></div><span className="catalog-count">{catalog?.items.length??"—"} catalog entries</span></div>
-   {["owner","admin"].includes(role)&&<section className="surface-card glass ops-panel-gap" aria-label="Host runtime preflight">
-    <div className="section-heading"><div><span className="overline">HOST PREFLIGHT · READ ONLY</span><h2>Runtime installation readiness</h2><p>Validate APT candidates and dependency simulation without changing software. Dashboard installations are not enabled yet.</p></div></div>
-    <div className="ops-catalog-filters"><select aria-label="Runtime package to check" value={runtimeChoice} onChange={e=>{setRuntimeChoice(e.target.value);setRuntimeResult(null);}}>
-     {(capabilities?.options??[{package:"php8.3-fpm",label:"PHP 8.3 FPM"},{package:"redis-server",label:"Redis Server"}]).map(p=><option key={p.package} value={p.package}>{p.label}</option>)}
-    </select><button className="ops-secondary" type="button" disabled={!capabilities||runtimeBusy} onClick={()=>void runRuntimePreflight()}>{runtimeBusy?"Checking host…":"Run safe preflight"}</button></div>
-    {runtimeError&&<p role="alert" className="inline-error">{runtimeError}</p>}
-    {runtimeResult&&<p role="status" className={runtimeResult.status==="ready"?"inline-notice":"ops-warning"}>{runtimeResult.package}: {runtimeResult.status==="ready"?"Host preflight passed (no installation performed).":"Host preflight blocked; review the VPS prerequisites."}</p>}
-    <p className="ops-note">Preflight is not installation, a vulnerability scan or a rollback guarantee. Runtime installers remain CLI-only pilots until live VPS tests pass.</p>
-   </section>}
+   <div className="ops-catalog-intro glass"><div><span className="overline">DEVONE SOFTWARE CENTER</span><h2>Launch your next project.</h2><p>Install the supported Ubuntu host runtimes below. Other catalog applications require their individual deployment adapters.</p></div><span className="catalog-count">{catalog?.items.length??"—"} catalog entries</span></div>
+   {["owner","admin"].includes(role)&&<RuntimeManager role={role}/>}
    <div className="ops-catalog-filters"><input aria-label="Search software and frameworks" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search CMS, frameworks, runtimes…"/><select aria-label="Filter software by category" value={category} onChange={e=>setCategory(e.target.value)}><option value="all">All software</option><option value="cms">CMS platforms</option><option value="framework">Frameworks</option><option value="runtime">Runtimes</option><option value="platform">Platforms</option></select></div>
    {error&&<p role="alert" className="inline-error">{error}</p>}
    <div className="ops-catalog-grid">{items.map(item=><article key={item.id} className={"catalog-card glass "+(item.featured?"featured":"")}><div className="catalog-card-heading"><div className="catalog-icon">{item.name.slice(0,1)}</div><span className="catalog-type">{item.category}</span></div><h3>{item.name} {item.featured&&<span className="catalog-featured">Featured</span>}</h3><p>{item.description}</p><div className="catalog-meta">{item.latestKnownVersion&&<span>Reference: {item.latestKnownVersion}</span>}<span>{item.releaseChannel}</span></div><div className="catalog-card-actions"><button onClick={()=>setSelected(item.id)}>View requirements <span aria-hidden="true">→</span></button><a href={item.sourceUrl} target="_blank" rel="noopener noreferrer">Official source ↗</a></div></article>)}</div>

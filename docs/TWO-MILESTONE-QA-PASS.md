@@ -32,3 +32,7 @@ An absent CrowdSec engine is **BLOCKED**, not a detected vulnerability. Site/WAF
 - Common: clean VPS, TLS, Owner/MFA, restart and reboot, functional UI, matching legacy behavior, memory and latency baselines, and saved sanitized test evidence.
 
 Keep `pnpm qa:release` **BLOCKED** until all Phase 1–5 and legacy parity acceptance requirements are verified. Never present APT installation, file presence or a dashboard status as verified WAF protection or complete deployer support.
+
+## October 15 operational phase continuation
+
+A follow-up integrates actual PHP 8.3-FPM/Redis managed installation into Software Center with Owner password/MFA step-up, audited persistent JobQueue operations, live package status and service controls. The earlier preflight-only dashboard UI was removed. This enables immediate testing on the dedicated disposable development VPS; it is not proof of successful real-VPS installs, rollback, broad software catalog deployment or WAF enforcement. See [Managed Software Installation](SOFTWARE-RUNTIME-PREFLIGHT.md).
