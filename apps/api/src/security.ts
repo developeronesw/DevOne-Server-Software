@@ -104,6 +104,21 @@ export function registerSecurityRoutes(app:FastifyInstance,deps:Dependencies){
      return {site:result};
    }catch{return reply.code(503).send({error:"shield_result_requires_inspection"});}
  });
+ let lastEvents:{time:number;data:unknown}|null=null;
+ app.get("/api/security/crowdsec/events",async(r,reply)=>{
+   if(!authorized(r,reply))return;
+   reply.header("Cache-Control","no-store");
+   if(lastEvents&&Date.now()-lastEvents.time<30000)return lastEvents.data;
+   try{
+     if(!agentToken)throw Error("agent_unavailable");
+     const response=await fetch(agentUrl+"/v1/security/crowdsec/events",{headers:{"Authorization":"Bearer "+agentToken},signal:AbortSignal.timeout(9000)});
+     if(!response.ok)throw Error("agent_unavailable");
+     const result=await response.json() as {hostWide?:unknown;alerts?:{sampleSize?:unknown;available?:unknown};decisions?:{sampleSize?:unknown;available?:unknown}};
+     if(result.hostWide!==true||typeof result.alerts?.available!=="boolean"||typeof result.decisions?.available!=="boolean"||
+       !Number.isInteger(result.alerts.sampleSize)||!Number.isInteger(result.decisions.sampleSize)||Number(result.alerts.sampleSize)>20||Number(result.decisions.sampleSize)>50)throw Error("invalid_events");
+     lastEvents={time:Date.now(),data:result};return result;
+   }catch{return reply.code(503).send({error:"crowdsec_events_unavailable"});}
+ });
  app.get("/api/security/crowdsec",async(r,reply)=>{
    if(!authorized(r,reply))return;
    reply.header("Cache-Control","no-store");
