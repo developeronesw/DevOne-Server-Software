@@ -233,8 +233,10 @@ export function registerControlRoutes(app:FastifyInstance,deps:Deps) {
   });
   app.post("/api/ai/diagnose",async(request,reply)=>{
     const user=authorize(request,reply,false,true);if(!user)return;
-    const body=request.body as {question?:unknown;provider?:unknown;model?:unknown}|null;
+    const body=request.body as {question?:unknown;provider?:unknown;model?:unknown;includeSecurity?:unknown}|null;
     if(typeof body?.question!=="string"||body.question.trim().length<5||body.question.length>1600)return reply.code(400).send({error:"invalid_question"});
+    if(body.includeSecurity!==undefined&&typeof body.includeSecurity!=="boolean")return reply.code(400).send({error:"invalid_security_consent"});
+    if(body.includeSecurity===true&&!["owner","admin"].includes(user.role))return reply.code(403).send({error:"security_report_forbidden"});
     const selected=providers.find(p=>p.id===body.provider);
     if(!selected)return reply.code(400).send({error:"invalid_ai_provider"});
     let chosenModel:string=selected.model;
@@ -265,9 +267,19 @@ export function registerControlRoutes(app:FastifyInstance,deps:Deps) {
         memoryPercent:metrics.memoryTotal?Math.round((1-metrics.memoryFree/metrics.memoryTotal)*100):null,
         serviceStates:(Array.isArray(services)?services:[]).map((v:any)=>({name:v.service,state:v.ActiveState}))
       };
-      const answer=await providerReply(selected.id,chosenModel,key,JSON.stringify({snapshot,question:body.question.trim()}));
+      // Only transmit sanitized security findings after explicit opt-in by an Owner/Admin.
+      // Never send raw system output, hostnames, IP addresses or local file contents.
+      let securityFindings:unknown=undefined;
+      if(body.includeSecurity===true){
+        const report=db.prepare("SELECT results FROM security_reports ORDER BY checked_at DESC LIMIT 1").get() as {results:string}|undefined;
+        if(report){
+          const parsed=JSON.parse(report.results) as {findings?:Array<{id:string;severity:string;status:string;title:string;recommendation:string}>};
+          securityFindings=parsed.findings?.slice(0,25).map(f=>({id:f.id,title:f.title,severity:f.severity,status:f.status,recommendation:f.recommendation}));
+        }else securityFindings="No stored security scan. Run Security Center first.";
+      }
+      const answer=await providerReply(selected.id,chosenModel,key,JSON.stringify({snapshot,question:body.question.trim(),...(body.includeSecurity===true?{securityFindings}:{})}));
       if(!answer)return reply.code(502).send({error:"ai_empty_response"});
-      audit(user.id,"ai.diagnostic_requested",{provider:selected.id,mode:"advisory"});
+      audit(user.id,"ai.diagnostic_requested",{provider:selected.id,mode:"advisory",includedSecurity:body.includeSecurity===true});
       return {answer:answer.slice(0,8000),mode:"advisory-diagnostics",provider:selected.id,model:chosenModel};
     }catch{return reply.code(503).send({error:"ai_request_failed"});}
   });
