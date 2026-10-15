@@ -76,6 +76,21 @@ test('authentication, setup, origin, metrics, logout and rate-limit boundaries',
     assert.equal(catalog.items[0].id,'devone-cms-v2');
     assert.equal(catalog.items[1].id,'wordpress');
     assert.equal(catalog.installAvailable,false);
+    assert.equal((await fetch(url+'/api/software/capabilities')).status,401);
+    assert.equal((await post('/api/software/preflight',{})).status,401);
+    assert.equal((await securePost('/api/software/preflight',{package:'../../bad'})).status,400);
+    assert.equal((await post('/api/software/preflight',{package:'redis-server'},{Cookie:cookie,Origin:'https://wrong-origin.test'})).status,403);
+    const hostSoftware=await secureGet('/api/software/capabilities');
+    assert.equal(hostSoftware.status,200);
+    const hostCapabilities=await hostSoftware.json();
+    assert.equal(hostCapabilities.installAvailable,false);
+    assert.deepEqual(hostCapabilities.options.map(p=>p.package),['php8.3-fpm','redis-server']);
+    const hostPreflight=await securePost('/api/software/preflight',{package:'php8.3-fpm'});
+    assert.equal(hostPreflight.status,200);
+    const hostReport=await hostPreflight.json();
+    assert.equal(hostReport.package,'php8.3-fpm');
+    assert.equal(hostReport.installAvailable,false);
+    assert.ok(['ready','blocked'].includes(hostReport.status));
     assert.equal((await fetch(url+'/api/shield')).status,401);
     assert.equal((await post('/api/shield/sites/site_0123456789abcdef',{})).status,401);
     assert.equal((await post('/api/shield/sites/site_0123456789abcdef',{confirmed:true,password:credentials.password,expectedRevision:1,policy:{mode:'enforce',requestsPerSecond:10,burst:20}},{Cookie:cookie,Origin:'https://malicious.example'})).status,403);
@@ -127,7 +142,7 @@ test('authentication, setup, origin, metrics, logout and rate-limit boundaries',
     assert.equal((await secureGet('/api/backups/not-a-valid-uuid/download')).status, 400);
     const liveQa = await securePost('/api/qa/run', {});
     assert.equal(liveQa.status, 200);
-    assert.equal((await liveQa.json()).results.length, 7);
+    assert.equal((await liveQa.json()).results.length, 9);
     assert.equal((await securePost('/api/qa/run', {})).status, 429);
     assert.equal((await securePost('/api/ai/diagnose', {question:'Check my service status',provider:'gemini'})).status, 409);
     const aiStatus = await (await secureGet('/api/ai/status')).json();
@@ -147,6 +162,8 @@ test('authentication, setup, origin, metrics, logout and rate-limit boundaries',
     assert.equal((await secureGet('/api/security/crowdsec/events')).status,403);
     assert.equal((await secureGet('/api/auth/mfa/status')).status,403);
     assert.equal((await secureGet('/api/security')).status,403);
+    assert.equal((await secureGet('/api/software/capabilities')).status,403);
+    assert.equal((await securePost('/api/software/preflight',{package:'redis-server'})).status,403);
     assert.equal((await secureGet('/api/shield')).status,403);
     assert.equal((await securePost('/api/shield/sites/site_0123456789abcdef',{confirmed:true,password:credentials.password,expectedRevision:1,policy:{mode:'enforce',requestsPerSecond:10,burst:20}})).status,403);
 

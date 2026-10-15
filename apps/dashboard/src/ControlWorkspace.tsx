@@ -129,7 +129,7 @@ export function ControlWorkspace({view,role,onNavigate}:{view:ControlView;role:s
     <div className="page-heading"><span className="overline">{header.eyebrow}</span><h1>{header.title}</h1><p>{header.description}</p></div>
     {error&&<p role="alert" className="inline-error">{error}</p>}
     {notice&&<p role="status" className="inline-notice">{notice}</p>}
-    {view==="apps"&&<AppCatalog/>}
+    {view==="apps"&&<AppCatalog role={role}/>}
     {view==="databases"&&<section className="surface-card glass"><div className="section-heading"><div><h2>Installed database engines</h2><p>Read-only discovery · Source: authenticated DevOne Agent</p></div></div>
       {discovery?<><div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Engine</th><th>Service state</th><th>Client</th></tr></thead><tbody>{discovery.databases.map(item=><tr key={item.name}><td><strong>{item.name}</strong><small className="ops-subtext">{item.version??"No client detected"}</small></td><td><span className={"state-chip "+(item.serviceState==="active"?"good":"neutral")}>{item.serviceState}</span></td><td>{item.clientInstalled?"Installed":"Not detected"}</td></tr>)}</tbody></table></div><p className="ops-note">Service start/stop/restart is available through Services. Database creation, credentials, SQL administration and restore are not enabled until Agent authorization and isolation tests pass.</p></>:<p className="ops-empty">Checking your database engines…</p>}
     </section>}

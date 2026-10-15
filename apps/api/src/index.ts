@@ -1,6 +1,7 @@
 import { registerSiteRoutes } from "./sites.js";
 import { registerControlRoutes } from "./control.js";
 import { registerSecurityRoutes } from "./security.js";
+import {registerSoftwareRoutes} from "./software.js";
 import { listCatalog } from "./catalog.js";
 import { JobQueue, OutcomeUnknown } from "./jobs.js";
 import { Vault, validSecretName } from "./vault.js";
@@ -280,6 +281,7 @@ app.delete<{ Params: { name: string } }>("/api/secrets/:name", async (request, r
 registerSiteRoutes(app, { requestUser, sameOrigin, agentUrl, agentToken, jobs, audit });
 registerControlRoutes(app, {db,vault,agentUrl,agentToken,requestUser,sameOrigin,audit});
 registerSecurityRoutes(app, {db,agentUrl,agentToken,requestUser,sameOrigin,audit});
+registerSoftwareRoutes(app,{agentUrl,agentToken,requestUser,sameOrigin,audit});
 const updateAttempts = new Map<string,{count:number;until:number}>();
 app.get("/api/updates",async(request,reply)=>{
   const user=requestUser(request);

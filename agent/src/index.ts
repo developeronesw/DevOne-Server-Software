@@ -1,6 +1,7 @@
 import { SiteManager } from "./sites.js";
 import { UpdatesManager } from "./updates.js";
 import { discoverSoftware } from "./discovery.js";
+import { softwareCapabilities, softwarePreflight } from "./software.js";
 import { inspectSecurity } from "./security.js";
 import { crowdSecReadiness } from "./crowdsec.js";
 import {recentCrowdSecEvents} from "./crowdsec-events.js";
@@ -97,6 +98,24 @@ const server = createServer(async (request, response) => {
   if (request.method === "GET" && request.url === "/v1/security/scan") {
     try { send(200,await inspectSecurity()); }
     catch { send(503,{error:"security_scan_unavailable"}); }
+    return;
+  }
+  // The software phase starts with a non-mutating, audited host preflight.
+  // No remote package installations or arbitrary commands are enabled.
+  if(request.method==="GET"&&request.url==="/v1/software/capabilities"){
+    send(200,softwareCapabilities());return;
+  }
+  if(request.method==="POST"&&request.url==="/v1/software/preflight"){
+    try{
+      request.setEncoding("utf8");let body="";
+      for await (const chunk of request){
+        body+=chunk;if(Buffer.byteLength(body)>512){send(413,{error:"body_too_large"});return;}
+      }
+      send(200,await softwarePreflight(JSON.parse(body)));
+    }catch(error){
+      const invalid=error instanceof Error&&error.message==="invalid_software_preflight";
+      send(invalid?400:503,{error:invalid?"invalid_software_preflight":"software_preflight_unavailable"});
+    }
     return;
   }
   if (request.method === "GET" && request.url === "/v1/discovery") {
