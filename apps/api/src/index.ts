@@ -7,7 +7,7 @@ import { Vault, validSecretName } from "./vault.js";
 import Fastify from "fastify";
 import { readFileSync, unlinkSync } from "node:fs";
 import { timingSafeEqual } from "node:crypto";
-import { audit, db, closeDb, createOwner, hasOwner, login, logout, userFromToken } from "./auth.js";
+import { audit, db, closeDb, createOwner, hasOwner, login, logout, userFromToken, verifyOwnerPassword } from "./auth.js";
 
 const app = Fastify({ logger: { redact: ["req.headers.authorization", "req.headers.cookie", "req.headers.x-devone-setup-token"] }, bodyLimit: 16384 });
 const version = "1.0.0-alpha.3";
@@ -218,6 +218,57 @@ app.delete<{ Params: { name: string } }>("/api/secrets/:name", async (request, r
 registerSiteRoutes(app, { requestUser, sameOrigin, agentUrl, agentToken, jobs, audit });
 registerControlRoutes(app, {db,vault,agentUrl,agentToken,requestUser,sameOrigin,audit});
 registerSecurityRoutes(app, {db,agentUrl,agentToken,requestUser,sameOrigin,audit});
+const updateAttempts = new Map<string,{count:number;until:number}>();
+app.get("/api/updates",async(request,reply)=>{
+  const user=requestUser(request);
+  if(!user)return reply.code(401).send({error:"unauthorized"});
+  if(user.role!=="owner")return reply.code(403).send({error:"owner_required"});
+  reply.header("Cache-Control","no-store");
+  try{
+    if(!agentToken)throw Error("agent_not_configured");
+    const result=await fetch(agentUrl+"/v1/updates/status",{
+      headers:{Authorization:"Bearer "+agentToken},
+      signal:AbortSignal.timeout(17000)
+    });
+    if(!result.ok)throw Error("agent_update_unavailable");
+    return await result.json();
+  }catch{return reply.code(503).send({error:"update_status_unavailable"});}
+});
+app.post("/api/updates/apply",async(request,reply)=>{
+  const user=requestUser(request);
+  if(!user)return reply.code(401).send({error:"unauthorized"});
+  if(user.role!=="owner")return reply.code(403).send({error:"owner_required"});
+  if(!request.headers.origin||!sameOrigin(request))return reply.code(403).send({error:"origin_forbidden"});
+  const body=request.body as {targetSha?:unknown;password?:unknown;confirmed?:unknown}|null;
+  if(!body||body.confirmed!==true||typeof body.targetSha!=="string"||!/^[a-f0-9]{40}$/.test(body.targetSha)||
+    typeof body.password!=="string"||body.password.length>1024)
+    return reply.code(400).send({error:"invalid_update_request"});
+  const now=Date.now();
+  const entry=updateAttempts.get(user.id)??{count:0,until:now+60000};
+  if(now>entry.until){entry.count=0;entry.until=now+60000;}
+  if(entry.count>=5)return reply.code(429).send({error:"update_auth_rate_limited"});
+  entry.count++;
+  updateAttempts.set(user.id,entry);
+  if(!verifyOwnerPassword(user.id,body.password))return reply.code(403).send({error:"owner_password_invalid"});
+  if(!agentToken)return reply.code(503).send({error:"agent_unavailable"});
+  try{
+    const response=await fetch(agentUrl+"/v1/updates/apply",{
+      method:"POST",headers:{"Authorization":"Bearer "+agentToken,"Content-Type":"application/json"},
+      body:JSON.stringify({targetSha:body.targetSha,confirmed:true}),
+      signal:AbortSignal.timeout(26000)
+    });
+    const output=await response.json().catch(()=>({})) as {error?:string;update?:unknown};
+    if(!response.ok){
+      const allowed=new Set(["update_busy","update_target_changed","update_worker_missing","release_checks_not_passed","github_rate_limited","github_unavailable"]);
+      return reply.code(response.status===409?409:503).send({error:allowed.has(output.error??"")?output.error:"update_unavailable"});
+    }
+    audit(user.id,"system.update_requested",{targetSha:body.targetSha});
+    return reply.code(202).send({update:output.update});
+  }catch{
+    // Do not retry automatically: worker may have started even if the network response was lost.
+    return reply.code(503).send({error:"update_result_requires_inspection"});
+  }
+});
 app.get("/api/catalog", async (request, reply) => {
   if (!requestUser(request)) return reply.code(401).send({error:"unauthorized"});
   reply.header("Cache-Control", "no-store");
