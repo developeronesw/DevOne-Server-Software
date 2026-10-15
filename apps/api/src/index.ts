@@ -1,5 +1,7 @@
 import { registerSiteRoutes } from "./sites.js";
 import { registerControlRoutes } from "./control.js";
+import { registerSecurityRoutes } from "./security.js";
+import { listCatalog } from "./catalog.js";
 import { JobQueue, OutcomeUnknown } from "./jobs.js";
 import { Vault, validSecretName } from "./vault.js";
 import Fastify from "fastify";
@@ -215,6 +217,12 @@ app.delete<{ Params: { name: string } }>("/api/secrets/:name", async (request, r
 });
 registerSiteRoutes(app, { requestUser, sameOrigin, agentUrl, agentToken, jobs, audit });
 registerControlRoutes(app, {db,vault,agentUrl,agentToken,requestUser,sameOrigin,audit});
+registerSecurityRoutes(app, {db,agentUrl,agentToken,requestUser,sameOrigin,audit});
+app.get("/api/catalog", async (request, reply) => {
+  if (!requestUser(request)) return reply.code(401).send({error:"unauthorized"});
+  reply.header("Cache-Control", "no-store");
+  return listCatalog();
+});
 jobs.start();
 app.addHook("onClose", async () => { await jobs.stop(); closeDb(); });
 const port = Number(process.env.PORT ?? 8787);
