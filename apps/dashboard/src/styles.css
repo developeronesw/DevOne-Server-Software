@@ -203,3 +203,33 @@
 .code-studio .inline-notice{margin:10px;color:#a8ebcb}
 @media(max-width:1250px){.code-studio-main{grid-template-columns:minmax(160px,220px) minmax(0,1fr)}.code-studio-ai{grid-column:1/-1;border-top:1px solid #353a56;border-left:0}}
 @media(max-width:750px){.website-preset-form{grid-template-columns:1fr}.website-preset-summary dl{grid-template-columns:1fr}.site-studio-shortcut,.code-studio-header{flex-direction:column;align-items:flex-start}.code-studio-main{grid-template-columns:1fr}.code-studio-files{max-height:170px;border-right:0;border-bottom:1px solid #353a56}.code-studio-editor{max-height:55vh}}
+
+
+/* Safe in-panel software updates */
+.update-home-link{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:18px 22px;border:1px solid #e5dffc;border-radius:16px;margin:14px 0;background:linear-gradient(110deg,#f8f6ff,#f0f5ff)}
+.update-home-link>div{display:flex;flex-direction:column;gap:5px}.update-home-link strong{font-size:13px;color:#322b64}.update-home-link span{font-size:11px;color:#848a9f}.update-home-link button{white-space:nowrap}
+.updates-workspace{max-width:1160px;padding-bottom:50px}
+.update-overview{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:18px 0}
+.update-stat{display:flex;flex-direction:column;gap:12px;min-width:0}
+.update-stat span{font-size:11px;font-weight:700;color:#8586a1}.update-stat strong{font-size:23px;color:#5543be;font-family:Manrope,sans-serif}.update-stat small{font-size:10px;color:#9194b0;overflow-wrap:anywhere}
+.update-panel{margin:15px 0}.update-gates{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+.update-gate{display:flex;justify-content:space-between;align-items:center;gap:15px;padding:14px 16px;border:1px solid #e7e8f5;background:#fafaff;border-radius:11px;font-size:11px;color:#646b89}
+.update-gate strong,.update-run strong{font-size:11px;text-transform:capitalize;padding:6px 10px;border-radius:99px}
+.update-gate .passed,.update-run .passed{color:#15875c;background:#e1f8ed}
+.update-gate .pending,.update-run .pending{color:#866325;background:#fff4dc}
+.update-run .failed{color:#b6424f;background:#ffe8ea}
+.update-install-form{display:flex;flex-direction:column;gap:13px;max-width:720px}
+.update-install-form>label:not(.update-confirm){font-size:12px;font-weight:700}
+.update-install-form>input{padding:13px 16px;border-radius:10px;border:1px solid #dddfee;background:#fff;max-width:440px;font-size:13px}
+.update-install-form>.primary-button{align-self:flex-start}
+.update-preflight{display:flex;flex-wrap:wrap;gap:10px;margin:9px 0 14px}
+.update-preflight span{background:#f6f5fc;border:1px solid #e8e5fb;border-radius:9px;padding:11px;color:#7e719a;font-size:11px}
+.update-confirm{display:flex;align-items:flex-start;gap:9px;color:#767e9b;line-height:1.5;font-size:11px;max-width:680px}
+.update-confirm input{margin-top:2px}
+.update-progress{display:flex;align-items:center;gap:16px;padding:20px;background:#f0ecff;border-radius:13px;color:#5755a5}
+.update-progress p{font-size:11px;line-height:1.6;margin:6px 0 0}
+.update-spinner{width:30px;height:30px;flex:0 0 30px;border-radius:50%;border:3px solid #dbd0ff;border-top-color:#7e61f0;animation:update-spin .85s linear infinite}
+@keyframes update-spin{to{transform:rotate(360deg)}}
+.update-run{display:flex;flex-wrap:wrap;gap:16px;align-items:center;font-size:11px;color:#707993;margin-top:15px}
+@media(max-width:1000px){.update-overview{grid-template-columns:1fr}.update-gates{grid-template-columns:1fr}}
+@media(max-width:650px){.update-home-link{align-items:flex-start;flex-direction:column}.update-panel .section-heading{flex-direction:column;align-items:flex-start}.update-preflight{flex-direction:column}}
