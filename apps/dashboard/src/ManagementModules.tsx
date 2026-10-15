@@ -17,13 +17,37 @@ async function readApi<T>(url:string):Promise<T>{
  return r.json() as Promise<T>;
 }
 
-export function AppCatalog(){
+type RuntimeCapabilities={mode:string;installAvailable:false;options:{package:string;label:string;installAvailable:false}[];notice:string};
+type RuntimeResult={package:string;status:"ready"|"blocked";reason:string;installAvailable:false};
+export function AppCatalog({role}:{role:string}){
  const [catalog,setCatalog]=useState<Catalog|null>(null);
  const [discovery,setDiscovery]=useState<Discovery|null>(null);
  const [search,setSearch]=useState("");
  const [category,setCategory]=useState("all");
  const [selected,setSelected]=useState<string|null>(null);
  const [error,setError]=useState("");
+ const [capabilities,setCapabilities]=useState<RuntimeCapabilities|null>(null);
+ const [runtimeChoice,setRuntimeChoice]=useState("php8.3-fpm");
+ const [runtimeResult,setRuntimeResult]=useState<RuntimeResult|null>(null);
+ const [runtimeBusy,setRuntimeBusy]=useState(false);
+ const [runtimeError,setRuntimeError]=useState("");
+ useEffect(()=>{
+  if(!["owner","admin"].includes(role))return;
+  void readApi<RuntimeCapabilities>("/api/software/capabilities").then(setCapabilities).catch(()=>setRuntimeError("Host runtime preflight capabilities unavailable."));
+ },[role]);
+ async function runRuntimePreflight(){
+  setRuntimeBusy(true);setRuntimeError("");setRuntimeResult(null);
+  try{
+   const response=await fetch("/api/software/preflight",{
+    method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({package:runtimeChoice})
+   });
+   const result=await response.json() as RuntimeResult & {error?:string};
+   if(!response.ok)throw Error(result.error??"Preflight failed");
+   setRuntimeResult(result);
+  }catch(e){setRuntimeError(e instanceof Error?e.message:"Preflight unavailable");}
+  finally{setRuntimeBusy(false);}
+ }
  useEffect(()=>{void Promise.allSettled([readApi<Catalog>("/api/catalog"),readApi<Discovery>("/api/discovery")]).then(values=>{
   if(values[0].status==="fulfilled")setCatalog(values[0].value); else setError("Catalog unavailable; check DevOne API.");
   if(values[1].status==="fulfilled")setDiscovery(values[1].value);
@@ -33,6 +57,15 @@ export function AppCatalog(){
  const runtimeNames=new Set(discovery?.runtimes.filter(x=>x.installed).map(x=>x.name.toLowerCase())??[]);
  return <div className="app-catalog">
    <div className="ops-catalog-intro glass"><div><span className="overline">DEVONE SOFTWARE CENTER</span><h2>Launch your next project.</h2><p>Explore trusted software sources, compare prerequisites and plan an installation. Host-managed one-click deployments will become available after isolation and rollback testing.</p></div><span className="catalog-count">{catalog?.items.length??"—"} catalog entries</span></div>
+   {["owner","admin"].includes(role)&&<section className="surface-card glass ops-panel-gap" aria-label="Host runtime preflight">
+    <div className="section-heading"><div><span className="overline">HOST PREFLIGHT · READ ONLY</span><h2>Runtime installation readiness</h2><p>Validate APT candidates and dependency simulation without changing software. Dashboard installations are not enabled yet.</p></div></div>
+    <div className="ops-catalog-filters"><select aria-label="Runtime package to check" value={runtimeChoice} onChange={e=>{setRuntimeChoice(e.target.value);setRuntimeResult(null);}}>
+     {(capabilities?.options??[{package:"php8.3-fpm",label:"PHP 8.3 FPM"},{package:"redis-server",label:"Redis Server"}]).map(p=><option key={p.package} value={p.package}>{p.label}</option>)}
+    </select><button className="ops-secondary" type="button" disabled={!capabilities||runtimeBusy} onClick={()=>void runRuntimePreflight()}>{runtimeBusy?"Checking host…":"Run safe preflight"}</button></div>
+    {runtimeError&&<p role="alert" className="inline-error">{runtimeError}</p>}
+    {runtimeResult&&<p role="status" className={runtimeResult.status==="ready"?"inline-notice":"ops-warning"}>{runtimeResult.package}: {runtimeResult.status==="ready"?"Host preflight passed (no installation performed).":"Host preflight blocked; review the VPS prerequisites."}</p>}
+    <p className="ops-note">Preflight is not installation, a vulnerability scan or a rollback guarantee. Runtime installers remain CLI-only pilots until live VPS tests pass.</p>
+   </section>}
    <div className="ops-catalog-filters"><input aria-label="Search software and frameworks" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search CMS, frameworks, runtimes…"/><select aria-label="Filter software by category" value={category} onChange={e=>setCategory(e.target.value)}><option value="all">All software</option><option value="cms">CMS platforms</option><option value="framework">Frameworks</option><option value="runtime">Runtimes</option><option value="platform">Platforms</option></select></div>
    {error&&<p role="alert" className="inline-error">{error}</p>}
    <div className="ops-catalog-grid">{items.map(item=><article key={item.id} className={"catalog-card glass "+(item.featured?"featured":"")}><div className="catalog-card-heading"><div className="catalog-icon">{item.name.slice(0,1)}</div><span className="catalog-type">{item.category}</span></div><h3>{item.name} {item.featured&&<span className="catalog-featured">Featured</span>}</h3><p>{item.description}</p><div className="catalog-meta">{item.latestKnownVersion&&<span>Reference: {item.latestKnownVersion}</span>}<span>{item.releaseChannel}</span></div><div className="catalog-card-actions"><button onClick={()=>setSelected(item.id)}>View requirements <span aria-hidden="true">→</span></button><a href={item.sourceUrl} target="_blank" rel="noopener noreferrer">Official source ↗</a></div></article>)}</div>
