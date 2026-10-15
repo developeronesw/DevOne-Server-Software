@@ -1,0 +1,22 @@
+import {test} from "node:test";
+import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
+test("CrowdSec pilot is read-only by default and blocks unsigned/unverified installs",()=>{
+ const script=readFileSync(new URL("../scripts/crowdsec-detection-pilot.sh",import.meta.url),"utf8");
+ assert.match(script,/mode="--check"/);
+ assert.match(script,/--install/);
+ assert.match(script,/signed-by=\$key_file/);
+ assert.match(script,/https:\/\/packagecloud\.io\/crowdsec\/crowdsec\/any/);
+ assert.match(script,/apt-cache policy crowdsec/);
+ assert.match(script,/apt-cache madison crowdsec/);
+ assert.match(script,/apt-get -s --no-install-recommends install/);
+ assert.match(script,/Type INSTALL DETECTION ONLY/);
+ assert.match(script,/\[\[ -t 0 \]\]/);
+ assert.match(script,/nginx -t/);
+ assert.match(script,/flock -n 9/);
+ assert.doesNotMatch(script,/curl.*\|.*(?:sh|bash)|wget.*\|.*(?:sh|bash)/);
+ assert.doesNotMatch(script,/iptables -|nft add|ufw disable|systemctl stop nginx/);
+ const posCheck=script.indexOf('if [[ "$mode" == "--check" ]]');
+ const posInstall=script.indexOf("DEBIAN_FRONTEND=noninteractive apt-get");
+ assert.ok(posCheck>0&&posInstall>posCheck);
+});
