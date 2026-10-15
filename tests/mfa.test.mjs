@@ -1,0 +1,50 @@
+import {test} from "node:test";
+import assert from "node:assert/strict";
+import {DatabaseSync} from "node:sqlite";
+import {randomBytes} from "node:crypto";
+import {mkdtemp,writeFile,rm} from "node:fs/promises";
+import {tmpdir} from "node:os";
+import {join} from "node:path";
+import {MfaService,base32,fromBase32,totpAt,matchTotp} from "../apps/api/dist/mfa.js";
+test("RFC6238 SHA1 TOTP, strict decoding, drift window and anti-replay",()=>{
+ const secret=base32(Buffer.from("12345678901234567890"));
+ assert.equal(secret,"GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ");
+ assert.deepEqual(fromBase32(secret),Buffer.from("12345678901234567890"));
+ assert.equal(totpAt(secret,1),"287082");
+ assert.equal(matchTotp(secret,"287082",-1,59000),1);
+ assert.equal(matchTotp(secret,"287082",1,59000),null);
+ assert.equal(matchTotp(secret,"287082",-1,30000),1);
+ assert.equal(matchTotp(secret,"not-a-code",-1,59000),null);
+ assert.throws(()=>fromBase32("not-base32"),/invalid_totp_secret/);
+});
+test("encrypted enrollment, one-use recovery, secret never stored as plaintext",async()=>{
+ const dir=await mkdtemp(join(tmpdir(),"devone-mfa-test-"));
+ const db=new DatabaseSync(":memory:");
+ const keyfile=join(dir,"key");
+ try{
+  await writeFile(keyfile,randomBytes(32),{mode:0o600});
+  db.exec("CREATE TABLE users(id TEXT PRIMARY KEY)");
+  db.prepare("INSERT INTO users(id) VALUES(?)").run("owner1");
+  const mfa=new MfaService(db,keyfile);
+  const begin=mfa.begin("owner1","owner@example.test");
+  assert.match(begin.manualKey,/^[A-Z2-7]{32}$/);
+  assert.match(begin.otpauthUrl,/^otpauth:\/\/totp\//);
+  const stored=db.prepare("SELECT encrypted_secret FROM owner_mfa WHERE user_id='owner1'").get().encrypted_secret;
+  assert.doesNotMatch(stored,new RegExp(begin.manualKey));
+  assert.equal(mfa.status("owner1").enabled,false);
+  assert.throws(()=>mfa.confirm("owner1","invalid"),/invalid_mfa_code/);
+  const code=totpAt(begin.manualKey,Math.floor(Date.now()/30000));
+  const backups=mfa.confirm("owner1",code);
+  assert.equal(backups.length,8);
+  assert.equal(new Set(backups).size,8);
+  assert.equal(mfa.status("owner1").enabled,true);
+  assert.equal(mfa.verifyLogin("owner1",code),false);
+  assert.equal(mfa.verifyLogin("owner1",backups[0]),true);
+  assert.equal(mfa.verifyLogin("owner1",backups[0]),false);
+  assert.equal(mfa.status("owner1").remainingRecoveryCodes,7);
+  assert.throws(()=>mfa.begin("owner1","owner@example.test"),/mfa_already_enabled/);
+  assert.throws(()=>mfa.disable("owner1","bad"),/invalid_mfa_code/);
+  mfa.disable("owner1",backups[1]);
+  assert.equal(mfa.status("owner1").enabled,false);
+ }finally{db.close();await rm(dir,{recursive:true,force:true});}
+});
