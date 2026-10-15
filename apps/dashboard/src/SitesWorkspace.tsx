@@ -141,7 +141,7 @@ export function SitesWorkspace() {
     return ()=>{active=false;};
   },[selected,sites]);
   const site = sites.find(site=>site.id === selected);
-  const currentPreset = presets.find(item=>item.id===presetId) ?? (presetId==='static'?{id:'static',label:'Static HTML / CSS / JavaScript',description:'Empty static NGINX website.',webServers:['nginx'],versions:[],runtime:null,root:'public',available:true,initialContent:'empty' as const}:undefined);
+  const currentPreset:Preset|undefined = presets.find(item=>item.id===presetId) ?? (presetId==='static'?{id:'static',label:'Static HTML / CSS / JavaScript',description:'Empty static NGINX website.',webServers:['nginx'],versions:[],runtime:null,root:'public',available:true,initialContent:'empty'}:undefined);
   const availableOptions = currentPreset?.webServers ?? ['nginx'];
   return <article className="card glass" id="websites"><h3>Websites and files</h3>
   <p>Create an isolated, empty website environment. Choose your website type, server, and runtime version. DevOne configures infrastructure, <strong>not starter content</strong>. <a href="https://letsencrypt.org/repository/" target="_blank" rel="noreferrer">Certificate terms</a></p>
