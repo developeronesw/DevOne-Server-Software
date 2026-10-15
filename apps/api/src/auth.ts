@@ -91,6 +91,12 @@ export function userFromToken(token?: string) {
   return row ?? null;
 }
 
+export function verifyOwnerPassword(userId: string, password: unknown) {
+  if (typeof password !== "string" || password.length === 0 || password.length > 1024) return false;
+  const row = db.prepare("SELECT password_hash FROM users WHERE id=? AND role='owner'").get(userId) as {password_hash:string}|undefined;
+  return row ? passwordVerify(password, row.password_hash) : false;
+}
+
 export function logout(token?: string) {
   if (!token) return;
   const user = userFromToken(token);
