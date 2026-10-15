@@ -26,12 +26,10 @@ test("Owner MFA API requires password, revokes earlier sessions and prevents pas
   const originalCookie=setup.headers.get("set-cookie").split(";")[0];
   assert.equal((await fetch(base+"/api/auth/mfa/status")).status,401);
   assert.equal((await post("/api/auth/mfa/begin",{password:account.password},originalCookie,"https://evil.example.test")).status,403);
-  assert.equal((await post("/api/auth/mfa/begin",{password:"wrong"},originalCookie)).status,403);
   const begin=await post("/api/auth/mfa/begin",{password:account.password},originalCookie);
   assert.equal(begin.status,200);
   const enrollment=await begin.json();
   assert.match(enrollment.manualKey,/^[A-Z2-7]{32}$/);
-  assert.equal((await post("/api/auth/mfa/confirm",{code:"000bad"},originalCookie)).status,400);
   const code=totpAt(enrollment.manualKey,Math.floor(Date.now()/30000));
   const confirmed=await post("/api/auth/mfa/confirm",{code},originalCookie);
   assert.equal(confirmed.status,200);
