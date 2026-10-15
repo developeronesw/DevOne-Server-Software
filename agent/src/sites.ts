@@ -8,17 +8,21 @@ import { fileURLToPath } from 'node:url';
 import { validateDomain, relativeParts, MAX_FILE_BYTES } from './site-files.js';
 
 const exec = promisify(execFile);
-export type Site = { id: string; domain: string; user: string; uid?: number; gid?: number; webServer: 'nginx' | 'none'; state: 'provisioning' | 'ready' | 'disabled' | 'updating' | 'needs_inspection'; createdAt: string; aliases?: string[]; revision?: number; configHash?: string; tls?: boolean; certificateIssued?: boolean };
+export type Site = { id: string; domain: string; user: string; uid?: number; gid?: number; siteType?: 'static' | 'files'; webServer: 'nginx' | 'none'; state: 'provisioning' | 'ready' | 'disabled' | 'updating' | 'needs_inspection'; createdAt: string; aliases?: string[]; revision?: number; configHash?: string; tls?: boolean; certificateIssued?: boolean };
 type Options = { registry: string; base: string; nginx: string; panelDomain: string; requireRoot?: boolean; certificates?: string; ownership?: typeof chown; worker?: (site: Site,request: Record<string,unknown>) => Promise<unknown>; command?: (command: string, args: string[]) => Promise<string> };
-export function siteInput(input: unknown): { domain: string; webServer: 'nginx' | 'none' } {
+export function siteInput(input: unknown): { domain: string; webServer: 'nginx' | 'none'; siteType: 'static' | 'files' } {
   if (!input || typeof input !== 'object') throw new Error('invalid_site');
   const body = input as Record<string,unknown>;
   const domain = validateDomain(body.domain);
   if (body.webServer !== 'nginx' && body.webServer !== 'none') throw new Error('invalid_web_server');
-  return { domain, webServer: body.webServer };
+  // Only deployable types may be accepted by the privileged Agent.
+  // PHP, Node, Python and containers require isolated runtime adapters.
+  const siteType = body.siteType === undefined ? (body.webServer === 'nginx' ? 'static' : 'files') : body.siteType;
+  if (!['static','files'].includes(siteType as string) || (siteType === 'static' ? body.webServer !== 'nginx' : body.webServer !== 'none')) throw new Error('unsupported_site_type');
+  return { domain, webServer: body.webServer, siteType: siteType as 'static' | 'files' };
 }
 function validRecord(site: Site) {
-  return /^site_[a-f0-9]{16}$/.test(site.id) && site.user === `dvs_${site.id.slice(5)}` && validateDomain(site.domain) === site.domain && ['nginx','none'].includes(site.webServer) && ['provisioning','ready','disabled','updating','needs_inspection'].includes(site.state) && (site.aliases === undefined || Array.isArray(site.aliases) && site.aliases.length <= 20 && site.aliases.every(alias => validateDomain(alias) === alias)) && (site.revision === undefined || Number.isSafeInteger(site.revision) && site.revision >= 1) && (site.tls === undefined || typeof site.tls === 'boolean') && (site.certificateIssued === undefined || typeof site.certificateIssued === 'boolean') && (site.configHash === undefined || /^[a-f0-9]{64}$/.test(site.configHash)) && (site.uid === undefined || Number.isInteger(site.uid) && site.uid >= 1000) && (site.gid === undefined || Number.isInteger(site.gid) && site.gid >= 1000);
+  return /^site_[a-f0-9]{16}$/.test(site.id) && site.user === `dvs_${site.id.slice(5)}` && validateDomain(site.domain) === site.domain && ['nginx','none'].includes(site.webServer) && (site.siteType === undefined || (site.siteType === 'static' && site.webServer === 'nginx') || (site.siteType === 'files' && site.webServer === 'none')) && ['provisioning','ready','disabled','updating','needs_inspection'].includes(site.state) && (site.aliases === undefined || Array.isArray(site.aliases) && site.aliases.length <= 20 && site.aliases.every(alias => validateDomain(alias) === alias)) && (site.revision === undefined || Number.isSafeInteger(site.revision) && site.revision >= 1) && (site.tls === undefined || typeof site.tls === 'boolean') && (site.certificateIssued === undefined || typeof site.certificateIssued === 'boolean') && (site.configHash === undefined || /^[a-f0-9]{64}$/.test(site.configHash)) && (site.uid === undefined || Number.isInteger(site.uid) && site.uid >= 1000) && (site.gid === undefined || Number.isInteger(site.gid) && site.gid >= 1000);
 }
 export class SiteManager {
   private runningSite: string | null = null;
@@ -57,7 +61,7 @@ export class SiteManager {
   async list() {
     const sites = await this.registry();
     // In-progress provisioning is never replayed automatically after a restart.
-    return sites.map(site => ({ ...site, state: ['provisioning','updating'].includes(site.state) && this.runningSite !== site.id ? 'needs_inspection' : site.state }));
+    return sites.map(site => ({ ...site, siteType: site.siteType ?? (site.webServer === 'nginx' ? 'static' : 'files'), state: ['provisioning','updating'].includes(site.state) && this.runningSite !== site.id ? 'needs_inspection' : site.state }));
   }
   private serial<T>(work:()=>Promise<T>,siteId?:unknown) {
     const operation = this.queue.then(async()=>{
@@ -68,9 +72,10 @@ export class SiteManager {
   }
   // Advisory only: queued changes revalidate conflicts before mutation.
   async preflight(input: unknown) {
-    const body = input as {domain?:unknown;webServer?:unknown;aliases?:unknown;siteId?:unknown;expectedRevision?:unknown} | null;
+    const body = input as {domain?:unknown;webServer?:unknown;siteType?:unknown;aliases?:unknown;siteId?:unknown;expectedRevision?:unknown} | null;
     if (!body || !['nginx','none'].includes(body.webServer as string)) throw new Error('invalid_web_server');
     const domain = validateDomain(body.domain);
+    siteInput({domain,webServer:body.webServer,siteType:body.siteType});
     const aliases = body.aliases === undefined ? [] : body.aliases;
     if (!Array.isArray(aliases) || aliases.length > 20 || aliases.some(alias=>validateDomain(alias) !== alias)) throw new Error('invalid_aliases');
     const hosts = [domain,...aliases] as string[];
@@ -94,7 +99,7 @@ export class SiteManager {
   }
   create(input: unknown) { return this.serial(()=>this.provision(input)); }
   private async provision(input: unknown) {
-    const {domain,webServer} = siteInput(input);
+    const {domain,webServer,siteType} = siteInput(input);
     const sites = await this.registry();
     if (domain === this.options.panelDomain || sites.some(site => [site.domain,...(site.aliases ?? [])].includes(domain))) throw new Error('domain_in_use');
     if (sites.length >= 100) throw new Error('site_limit');
@@ -105,7 +110,7 @@ export class SiteManager {
       if (names.some(name => name === domain || name.startsWith('~') || name.startsWith('$') || (name.startsWith('*.') && domain.endsWith(name.slice(1))) || (name.startsWith('.') && (domain === name.slice(1) || domain.endsWith(name))) || (name.endsWith('.*') && domain.startsWith(name.slice(0,-1))))) throw new Error('domain_in_use');
     }
     const id = `site_${randomBytes(8).toString('hex')}`;
-    const site: Site = {id,domain,user:`dvs_${id.slice(5)}`,webServer,state:'provisioning',createdAt:new Date().toISOString(),aliases:[],revision:1};
+    const site: Site = {id,domain,user:`dvs_${id.slice(5)}`,webServer,siteType,state:'provisioning',createdAt:new Date().toISOString(),aliases:[],revision:1};
     this.runningSite = id;
     sites.push(site); await this.save(sites);
     let ownedConfig: string | undefined;
