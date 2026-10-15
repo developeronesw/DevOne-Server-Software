@@ -55,6 +55,8 @@ function App() {
   const [setupRequired, setSetupRequired] = useState<boolean | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [mfaPrompt,setMfaPrompt]=useState(false);
+  const [mfaCode,setMfaCode]=useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -92,9 +94,11 @@ function App() {
   async function signIn(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError("");
     try {
-      const response = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password }) });
-      if (!response.ok) throw new Error(response.status === 429 ? "Too many attempts. Try again in a minute." : "Sign-in failed. Check your credentials.");
-      setPassword(""); await refresh();
+      const response = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password, ...(mfaPrompt?{mfaCode}:{}) }) });
+      if (!response.ok) throw new Error(response.status === 429 ? "Too many attempts. Try again in a minute." : "Sign-in failed. Check your password and authenticator code.");
+      const result=await response.json() as {mfaRequired?:boolean};
+      if(result.mfaRequired){setMfaPrompt(true);setMfaCode("");return;}
+      setPassword("");setMfaPrompt(false);setMfaCode(""); await refresh();
     } catch (e) { setError(e instanceof Error ? e.message : "Sign-in failed"); }
     finally { setBusy(false); }
   }
@@ -190,6 +194,7 @@ function App() {
             <div className="input-wrap"><Glyph name="mail" /><input id="owner-email" type="email" autoComplete="username" required autoFocus value={email} onChange={e => setEmail(e.target.value)} placeholder="owner@example.com" /></div>
             <label htmlFor="owner-password">Password</label>
             <div className="input-wrap"><Glyph name="lock" /><input id="owner-password" type={showPassword ? "text" : "password"} autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)} placeholder="Enter your password" /><button className="input-action" type="button" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "Hide password" : "Show password"}><Glyph name={showPassword ? "eye-off" : "eye"} /></button></div>
+            {mfaPrompt&&<><label htmlFor="owner-mfa-code">Authenticator or recovery code</label><div className="input-wrap"><Glyph name="shield"/><input id="owner-mfa-code" autoComplete="one-time-code" inputMode="text" required value={mfaCode} onChange={e=>setMfaCode(e.target.value.trim())} placeholder="6-digit code or saved recovery code" maxLength={17}/></div><button type="button" className="ops-secondary" onClick={()=>{setMfaPrompt(false);setMfaCode("");setPassword("");}}>Use another account</button></>}
             {error && <p role="alert" className="auth-error"><Glyph name="alert" /> {error}</p>}
             <button className="primary-button signin-button" type="submit" disabled={busy}>{busy ? "Signing in…" : "Sign in securely"} <Glyph name="arrow" /></button>
             <div className="auth-privacy"><Glyph name="shield" /> Protected connection · Your credentials stay on your server</div>
