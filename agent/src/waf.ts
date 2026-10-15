@@ -22,10 +22,10 @@ export function isValidWaf(policy:unknown):policy is WafPolicy{
 export function nginxWafZone(siteId:string,policy:WafPolicy):string{
  if(!/^site_[a-f0-9]{16}$/.test(siteId))throw Error("invalid_site");
  if(policy.mode==="off")return "";
- return \`limit_req_zone $binary_remote_addr zone=devone_\${siteId.slice(5)}:1m rate=\${policy.requestsPerSecond}r/s;\n\`;
+ return `limit_req_zone $binary_remote_addr zone=devone_${siteId.slice(5)}:1m rate=${policy.requestsPerSecond}r/s;\n`;
 }
 export function nginxWafLocation(siteId:string,policy:WafPolicy):string{
  if(!/^site_[a-f0-9]{16}$/.test(siteId))throw Error("invalid_site");
  if(policy.mode==="off")return "";
- return \` limit_req zone=devone_\${siteId.slice(5)} burst=\${policy.burst} nodelay;\n limit_req_status 429;\n\${policy.mode==="monitor"?" limit_req_dry_run on;\n":""}\`;
+ return ` limit_req zone=devone_${siteId.slice(5)} burst=${policy.burst} nodelay;\n limit_req_status 429;\n${policy.mode==="monitor"?" limit_req_dry_run on;\n":""}`;
 }
