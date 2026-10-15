@@ -1,7 +1,7 @@
 import { SiteManager } from "./sites.js";
 import { UpdatesManager } from "./updates.js";
 import { discoverSoftware } from "./discovery.js";
-import { softwareCapabilities, softwarePreflight } from "./software.js";
+import { softwareCapabilities, softwarePreflight, softwareStatus, softwareInstall } from "./software.js";
 import { inspectSecurity } from "./security.js";
 import { crowdSecReadiness } from "./crowdsec.js";
 import {recentCrowdSecEvents} from "./crowdsec-events.js";
@@ -104,6 +104,25 @@ const server = createServer(async (request, response) => {
   // No remote package installations or arbitrary commands are enabled.
   if(request.method==="GET"&&request.url==="/v1/software/capabilities"){
     send(200,softwareCapabilities());return;
+  }
+  if(request.method==="GET"&&request.url==="/v1/software/status"){
+    try{send(200,await softwareStatus());}
+    catch{send(503,{error:"software_status_unavailable"});}
+    return;
+  }
+  if(request.method==="POST"&&request.url==="/v1/software/install"){
+    try{
+      request.setEncoding("utf8");let body="";
+      for await(const chunk of request){
+        body+=chunk;if(Buffer.byteLength(body)>512){send(413,{error:"body_too_large"});return;}
+      }
+      send(200,await softwareInstall(JSON.parse(body)));
+    }catch(error){
+      const message=error instanceof Error?error.message:"software_install_requires_inspection";
+      const invalid=message==="invalid_software_install",busy=message==="software_install_busy";
+      send(invalid?400:busy?409:503,{error:invalid?"invalid_software_install":busy?"software_install_busy":"software_install_requires_inspection"});
+    }
+    return;
   }
   if(request.method==="POST"&&request.url==="/v1/software/preflight"){
     try{
