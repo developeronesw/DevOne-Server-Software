@@ -131,6 +131,15 @@ export function registerControlRoutes(app:FastifyInstance,deps:Deps) {
       await check("agent.metrics",async()=>Boolean((await agent("/v1/metrics")).ok),"Readable live system metrics");
       await check("agent.services",async()=>Array.isArray(await agent("/v1/services")),"Allowlisted system service inventory");
       await check("agent.sites",async()=>Array.isArray((await agent("/v1/sites")).sites),"Hosted site registry readable");
+      await check("agent.software",async()=>{
+        const capabilities=await agent("/v1/software/capabilities");
+        return capabilities.mode==="read-only-preflight"&&capabilities.installAvailable===false&&
+          Array.isArray(capabilities.options)&&capabilities.options.length===2;
+      },"Software Center allowlisted read-only preflight capabilities; installation remains disabled");
+      await check("agent.crowdsec",async()=>{
+        const status=await agent("/v1/security/crowdsec");
+        return status.phase==="detection-readiness"&&status.enforcementVerified===false;
+      },"CrowdSec readiness probe responds; WAF enforcement not verified");
       const passed=results.every(x=>x.status==="pass");
       const id=randomUUID(),at=new Date().toISOString();
       db.prepare("INSERT INTO qa_reports(id,checked_at,passed,results) VALUES(?,?,?,?)").run(id,at,passed?1:0,JSON.stringify(results));
