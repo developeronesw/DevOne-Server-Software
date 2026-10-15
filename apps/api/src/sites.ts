@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { JobQueue, SiteActionInput, SiteTlsInput } from './jobs.js';
+import { getWebsitePresets, resolvePreset } from './presets.js';
 type Dependencies = { requestUser: (request: any) => {id:string;role:string} | undefined | null; sameOrigin: (request:any) => boolean; agentUrl:string; agentToken:string; jobs:JobQueue; audit:(actor:string|null,action:string,details?:unknown)=>void };
 function siteTypeIsSupported(siteType:unknown,webServer:unknown){
   const choice = siteType === undefined ? (webServer === 'nginx' ? 'static' : 'files') : siteType;
@@ -17,6 +18,11 @@ export function registerSiteRoutes(app: FastifyInstance, dependencies: Dependenc
     if (mutation && (!request.headers.origin || !sameOrigin(request))) { reply.code(403).send({error:'origin_forbidden'}); return null; }
     return user;
   };
+  app.get('/api/sites/presets',async (request,reply) => {
+    if (!authorize(request,reply)) return;
+    reply.header('Cache-Control','no-store');
+    return getWebsitePresets();
+  });
   app.get('/api/sites',async (request,reply) => {
     if (!authorize(request,reply)) return;
     try {
@@ -31,6 +37,10 @@ export function registerSiteRoutes(app: FastifyInstance, dependencies: Dependenc
     const user = authorize(request,reply,true); if (!user) return;
     const body = request.body as Record<string,unknown> | null;
     if (!body || !validDomain(body.domain) || !['nginx','none'].includes(body.webServer as string) || !siteTypeIsSupported(body.siteType,body.webServer) || (body.aliases !== undefined && (!Array.isArray(body.aliases) || body.aliases.length > 20 || !body.aliases.every(validDomain))) || (body.siteId !== undefined && (typeof body.siteId !== 'string' || !/^site_[a-f0-9]{16}$/.test(body.siteId) || !Number.isSafeInteger(body.expectedRevision)))) return reply.code(400).send({error:'invalid_site_preflight'});
+    if (body.siteId === undefined) {
+      try { resolvePreset(body.siteType ?? (body.webServer === 'nginx' ? 'static' : 'files'),body.webServer,body.runtimeVersion); }
+      catch (error) { return reply.code(400).send({error:error instanceof Error ? error.message : 'invalid_site_preset'}); }
+    }
     try {
       if (!agentToken) throw new Error();
       const response = await fetch(`${agentUrl}/v1/sites/preflight`,{method:'POST',headers:{Authorization:`Bearer ${agentToken}`,'Content-Type':'application/json'},body:JSON.stringify({domain:body.domain,aliases:body.aliases,webServer:body.webServer,siteType:body.siteType,siteId:body.siteId,expectedRevision:body.expectedRevision}),signal:AbortSignal.timeout(8000)});
@@ -43,6 +53,11 @@ export function registerSiteRoutes(app: FastifyInstance, dependencies: Dependenc
     const user = authorize(request,reply,true); if (!user) return;
     const body = request.body as Record<string,unknown> | null;
     if (!body || body.confirmed !== true || !validDomain(body.domain) || !['nginx','none'].includes(body.webServer as string) || !siteTypeIsSupported(body.siteType,body.webServer) || typeof body.requestKey !== 'string') return reply.code(400).send({error:'invalid_site'});
+    try {
+      resolvePreset(body.siteType ?? (body.webServer === 'nginx' ? 'static' : 'files'),body.webServer,body.runtimeVersion);
+    } catch (error) {
+      return reply.code(400).send({error:error instanceof Error ? error.message : 'invalid_site_preset'});
+    }
     try {
       return reply.code(202).send({job:jobs.enqueue(user.id,body.requestKey,{domain:body.domain,webServer:body.webServer as 'nginx'|'none',siteType:(body.siteType ?? (body.webServer==='nginx'?'static':'files')) as 'static'|'files'},'site.create')});
     } catch (error) {
