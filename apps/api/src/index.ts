@@ -207,7 +207,7 @@ app.post("/api/services/action", async (request, reply) => {
   if (!["owner", "admin"].includes(user.role)) return reply.code(403).send({ error: "forbidden" });
   if (!request.headers.origin || !sameOrigin(request)) return reply.code(403).send({ error: "origin_forbidden" });
   const body = request.body as { service?: unknown; action?: unknown; confirmed?: unknown } | null;
-  if (!body || body.confirmed !== true || !["nginx", "apache2", "mariadb", "mysql", "postgresql", "redis-server", "docker"].includes(body.service as string) || !["start", "stop", "restart"].includes(body.action as string)) return reply.code(400).send({ error: "invalid_service_operation" });
+  if (!body || body.confirmed !== true || !["nginx", "apache2", "mariadb", "mysql", "postgresql", "redis-server", "php8.3-fpm", "docker"].includes(body.service as string) || !["start", "stop", "restart"].includes(body.action as string)) return reply.code(400).send({ error: "invalid_service_operation" });
   const requestKey = (request.body as { requestKey?: unknown }).requestKey;
   if (typeof requestKey !== "string") return reply.code(400).send({ error: "request_key_required" });
   try {
