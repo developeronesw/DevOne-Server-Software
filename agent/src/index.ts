@@ -68,6 +68,21 @@ const server = createServer(async (request, response) => {
     } catch (error) { const invalid = error instanceof Error && /^(invalid_|domain_in_use|site_limit|site_not_ready|file_too_large)/.test(error.message); const conflict = error instanceof Error && ["file_conflict","destination_exists","site_revision_conflict"].includes(error.message); send(conflict ? 409 : invalid ? 400 : 503,{error:conflict && error instanceof Error ? error.message : "site_operation_failed"}); }
     return;
   }
+  if(request.method==="POST"&&request.url==="/v1/sites/waf"){
+    try{
+      request.setEncoding("utf8");let body="";
+      for await (const part of request){
+        body+=part;if(Buffer.byteLength(body)>2048){send(413,{error:"body_too_large"});return;}
+      }
+      send(200,await sites.setWaf(JSON.parse(body)));
+    }catch(error){
+      const code=error instanceof Error?error.message:"waf_operation_failed";
+      const conflict=["site_revision_conflict","site_config_changed","site_not_ready"].includes(code);
+      const bad=["invalid_waf_action","invalid_waf_policy","invalid_site"].includes(code);
+      send(conflict?409:bad?400:503,{error:conflict||bad?code:"waf_operation_failed"});
+    }
+    return;
+  }
   if (request.method === "GET" && request.url === "/v1/security/scan") {
     try { send(200,await inspectSecurity()); }
     catch { send(503,{error:"security_scan_unavailable"}); }

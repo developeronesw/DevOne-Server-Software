@@ -6,9 +6,10 @@ import { randomBytes, randomUUID, createHash, X509Certificate } from 'node:crypt
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { validateDomain, relativeParts, MAX_FILE_BYTES } from './site-files.js';
+import { defaultWafPolicy, validateWaf, isValidWaf, nginxWafZone, nginxWafLocation, type WafPolicy } from './waf.js';
 
 const exec = promisify(execFile);
-export type Site = { id: string; domain: string; user: string; uid?: number; gid?: number; siteType?: 'static' | 'files'; webServer: 'nginx' | 'none'; state: 'provisioning' | 'ready' | 'disabled' | 'updating' | 'needs_inspection'; createdAt: string; aliases?: string[]; revision?: number; configHash?: string; tls?: boolean; certificateIssued?: boolean };
+export type Site = { id: string; domain: string; user: string; uid?: number; gid?: number; siteType?: 'static' | 'files'; waf?:WafPolicy; webServer: 'nginx' | 'none'; state: 'provisioning' | 'ready' | 'disabled' | 'updating' | 'needs_inspection'; createdAt: string; aliases?: string[]; revision?: number; configHash?: string; tls?: boolean; certificateIssued?: boolean };
 type Options = { registry: string; base: string; nginx: string; panelDomain: string; requireRoot?: boolean; certificates?: string; ownership?: typeof chown; worker?: (site: Site,request: Record<string,unknown>) => Promise<unknown>; command?: (command: string, args: string[]) => Promise<string> };
 export function siteInput(input: unknown): { domain: string; webServer: 'nginx' | 'none'; siteType: 'static' | 'files' } {
   if (!input || typeof input !== 'object') throw new Error('invalid_site');
@@ -22,7 +23,7 @@ export function siteInput(input: unknown): { domain: string; webServer: 'nginx' 
   return { domain, webServer: body.webServer, siteType: siteType as 'static' | 'files' };
 }
 function validRecord(site: Site) {
-  return /^site_[a-f0-9]{16}$/.test(site.id) && site.user === `dvs_${site.id.slice(5)}` && validateDomain(site.domain) === site.domain && ['nginx','none'].includes(site.webServer) && (site.siteType === undefined || (site.siteType === 'static' && site.webServer === 'nginx') || (site.siteType === 'files' && site.webServer === 'none')) && ['provisioning','ready','disabled','updating','needs_inspection'].includes(site.state) && (site.aliases === undefined || Array.isArray(site.aliases) && site.aliases.length <= 20 && site.aliases.every(alias => validateDomain(alias) === alias)) && (site.revision === undefined || Number.isSafeInteger(site.revision) && site.revision >= 1) && (site.tls === undefined || typeof site.tls === 'boolean') && (site.certificateIssued === undefined || typeof site.certificateIssued === 'boolean') && (site.configHash === undefined || /^[a-f0-9]{64}$/.test(site.configHash)) && (site.uid === undefined || Number.isInteger(site.uid) && site.uid >= 1000) && (site.gid === undefined || Number.isInteger(site.gid) && site.gid >= 1000);
+  return /^site_[a-f0-9]{16}$/.test(site.id) && site.user === `dvs_${site.id.slice(5)}` && validateDomain(site.domain) === site.domain && ['nginx','none'].includes(site.webServer) && (site.siteType === undefined || (site.siteType === 'static' && site.webServer === 'nginx') || (site.siteType === 'files' && site.webServer === 'none')) && ['provisioning','ready','disabled','updating','needs_inspection'].includes(site.state) && (site.aliases === undefined || Array.isArray(site.aliases) && site.aliases.length <= 20 && site.aliases.every(alias => validateDomain(alias) === alias)) && (site.revision === undefined || Number.isSafeInteger(site.revision) && site.revision >= 1) && (site.tls === undefined || typeof site.tls === 'boolean') && (site.certificateIssued === undefined || typeof site.certificateIssued === 'boolean') && (site.configHash === undefined || /^[a-f0-9]{64}$/.test(site.configHash)) && (site.waf === undefined || isValidWaf(site.waf)) && (site.uid === undefined || Number.isInteger(site.uid) && site.uid >= 1000) && (site.gid === undefined || Number.isInteger(site.gid) && site.gid >= 1000);
 }
 export class SiteManager {
   private runningSite: string | null = null;
@@ -149,8 +150,11 @@ export class SiteManager {
   private configuration(site: Site) {
     const hosts = [site.domain,...(site.aliases ?? [])].join(' ');
     const challenge = ' location ^~ /.well-known/acme-challenge/ { root /var/www/devone-acme; try_files $uri =404; }\n';
-    const body = site.state === 'disabled' ? ' location / { return 410; }\n' : ` root ${join(this.options.base,site.id,'public')};\n index index.html;\n disable_symlinks on;\n location / { try_files $uri $uri/ =404; }\n location ~ /\\. { deny all; }\n`;
-    const http = `server {\n listen 80;\n listen [::]:80;\n server_name ${hosts};\n${challenge}${site.tls && site.state !== 'disabled' ? ' location / { return 301 https://$host$request_uri; }\n' : body}}\n`;
+    const policy=site.waf ?? defaultWafPolicy;
+    const zone=site.state === 'disabled' ? '' : nginxWafZone(site.id,policy);
+    const protection=nginxWafLocation(site.id,policy);
+    const body = site.state === 'disabled' ? ' location / { return 410; }\n' : ` root ${join(this.options.base,site.id,'public')};\n index index.html;\n disable_symlinks on;\n add_header X-Content-Type-Options nosniff always;\n add_header Referrer-Policy strict-origin-when-cross-origin always;\n location / {\n${protection} try_files $uri $uri/ =404;\n }\n location ~ /\\. { deny all; }\n`;
+    const http = `${zone}server {\n listen 80;\n listen [::]:80;\n server_name ${hosts};\n${challenge}${site.tls && site.state !== 'disabled' ? ' location / { return 301 https://$host$request_uri; }\n' : body}}\n`;
     if (!site.tls) return http;
     const certificate = join(this.options.certificates ?? '/etc/letsencrypt/live',`devone-${site.id}`);
     return http+`server {\n listen 443 ssl;\n listen [::]:443 ssl;\n server_name ${hosts};\n ssl_certificate ${certificate}/fullchain.pem;\n ssl_certificate_key ${certificate}/privkey.pem;\n ssl_protocols TLSv1.2 TLSv1.3;\n${body}}\n`;
@@ -202,6 +206,56 @@ export class SiteManager {
     } catch {
       try {await this.writeConfig(destination,previous);await this.command('nginx',['-t']);await this.command('systemctl',['reload','nginx']);}catch{ /* Inspection required. */ }
       Object.assign(site,before,{state:'needs_inspection'});await this.save(sites);throw new Error('site_tls_requires_inspection');
+    }
+  }
+  // Every policy change is serialized with site creation, lifecycle and TLS.
+  // A site can never control the DevOne panel's virtual host.
+  setWaf(input:unknown) {
+    return this.serial(()=>this.updateWaf(input),(input as {siteId?:unknown}|null)?.siteId);
+  }
+  private async updateWaf(input:unknown) {
+    const body=input as {siteId?:unknown;expectedRevision?:unknown;policy?:unknown}|null;
+    if(!body||typeof body.siteId!=="string"||!/^site_[a-f0-9]{16}$/.test(body.siteId)||
+      !Number.isSafeInteger(body.expectedRevision)||Number(body.expectedRevision)<1)throw Error("invalid_waf_action");
+    const policy=validateWaf(body.policy);
+    const sites=await this.registry(),site=sites.find(item=>item.id===body.siteId);
+    if(!site||site.webServer!=="nginx"||site.state!=="ready")throw Error("site_not_ready");
+    if(site.domain===this.options.panelDomain)throw Error("invalid_site");
+    if(site.revision!==body.expectedRevision)throw Error("site_revision_conflict");
+    const destination=join(this.options.nginx,"devone-"+site.id+".conf");
+    const handle=await open(destination,constants.O_RDONLY|constants.O_NOFOLLOW);
+    let previous:string;
+    try{
+      const st=await handle.stat();
+      if(!st.isFile()||st.nlink!==1||st.size>65536||(this.options.requireRoot!==false&&st.uid!==0))throw Error("unsafe_site_config");
+      previous=await handle.readFile("utf8");
+    }finally{await handle.close();}
+    if(!site.configHash||this.digest(previous)!==site.configHash)throw Error("site_config_changed");
+    const before={...site,waf:site.waf?{...site.waf}:undefined};
+    site.state="updating";
+    await this.save(sites);
+    try{
+      site.waf=policy;
+      const next=this.configuration(site);
+      await this.writeConfig(destination,next);
+      await this.command("nginx",["-t"]);
+      await this.command("systemctl",["reload","nginx"]);
+      site.configHash=this.digest(next);
+      site.revision=(before.revision??1)+1;
+      site.state="ready";
+      await this.save(sites);
+      return {siteId:site.id,domain:site.domain,revision:site.revision,policy,engine:"nginx-native-rate-limit",webApplicationFirewall:false};
+    }catch{
+      let recovered=false;
+      try{
+        await this.writeConfig(destination,previous);
+        await this.command("nginx",["-t"]);
+        await this.command("systemctl",["reload","nginx"]);
+        recovered=true;
+      }catch{ /* Prevent silent claims of recovery; operator must inspect. */ }
+      Object.assign(site,before,{state:recovered?before.state:"needs_inspection"});
+      await this.save(sites);
+      throw Error(recovered?"waf_apply_failed":"waf_requires_inspection");
     }
   }
   action(input: unknown) { return this.serial(()=>this.lifecycle(input),(input as {siteId?:unknown}|null)?.siteId); }
