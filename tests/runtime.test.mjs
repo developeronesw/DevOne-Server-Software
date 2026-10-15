@@ -83,6 +83,14 @@ test('authentication, setup, origin, metrics, logout and rate-limit boundaries',
     assert.equal((await securePost('/api/shield/sites/site_0123456789abcdef',{confirmed:true,password:credentials.password,expectedRevision:1,policy:{mode:'enforce',requestsPerSecond:100,burst:20}})).status,400);
     assert.equal((await securePost('/api/shield/sites/site_0123456789abcdef',{confirmed:true,password:'wrong',expectedRevision:1,policy:{mode:'enforce',requestsPerSecond:10,burst:20}})).status,403);
     assert.equal((await fetch(url+'/api/security/crowdsec')).status,401);
+    assert.equal((await fetch(url+'/api/security/crowdsec/events')).status,401);
+    const crowdsecEvents=await secureGet('/api/security/crowdsec/events');
+    assert.equal(crowdsecEvents.status,200);
+    const recentCrowdsec=await crowdsecEvents.json();
+    assert.equal(recentCrowdsec.hostWide,true);
+    assert.equal(recentCrowdsec.enforcementVerified,false);
+    assert.ok(typeof recentCrowdsec.alerts.available==="boolean");
+
     const crowdsecResult=await secureGet('/api/security/crowdsec');
     assert.equal(crowdsecResult.status,200);
     assert.equal((await crowdsecResult.json()).enforcementVerified,false);
@@ -136,6 +144,7 @@ test('authentication, setup, origin, metrics, logout and rate-limit boundaries',
     assert.equal((await securePost('/api/updates/apply',{targetSha:'b'.repeat(40),confirmed:true,password:credentials.password})).status,403);
 
     assert.equal((await secureGet('/api/security/crowdsec')).status,403);
+    assert.equal((await secureGet('/api/security/crowdsec/events')).status,403);
     assert.equal((await secureGet('/api/auth/mfa/status')).status,403);
     assert.equal((await secureGet('/api/security')).status,403);
     assert.equal((await secureGet('/api/shield')).status,403);
