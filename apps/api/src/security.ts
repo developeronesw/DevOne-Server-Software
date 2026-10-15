@@ -1,6 +1,7 @@
 import type {FastifyInstance} from "fastify";
 import type {DatabaseSync} from "node:sqlite";
 import {randomUUID} from "node:crypto";
+import {verifyOwnerPassword} from "./auth.js";
 
 type User={id:string;role:string};
 type Dependencies={db:DatabaseSync;agentUrl:string;agentToken:string;requestUser:(r:any)=>User|null|undefined;sameOrigin:(r:any)=>boolean;audit:(id:string|null,event:string,detail?:unknown)=>void};
@@ -41,6 +42,68 @@ export function registerSecurityRoutes(app:FastifyInstance,deps:Dependencies){
  const startup=setTimeout(()=>{if(!stopped)void scan().catch(()=>{});},20000);
  startup.unref();
  app.addHook("onClose",async()=>{stopped=true;clearInterval(timer);clearTimeout(startup);});
+
+ async function agentGet(path:string){
+   if(!agentToken)throw Error("agent_unconfigured");
+   const response=await fetch(agentUrl+path,{headers:{Authorization:"Bearer "+agentToken},signal:AbortSignal.timeout(6000)});
+   if(!response.ok)throw Error("agent_unavailable");
+   return response.json() as Promise<any>;
+ }
+ app.get("/api/shield",async(r,reply)=>{
+   if(!authorized(r,reply))return;
+   reply.header("Cache-Control","no-store");
+   try{
+     const data=await agentGet("/v1/sites");
+     if(!Array.isArray(data.sites))throw Error("invalid_sites");
+     return {
+       sites:data.sites.map((s:any)=>({siteId:s.id,domain:s.domain,webServer:s.webServer,state:s.state,revision:s.revision,
+         policy:s.waf??{mode:"off",requestsPerSecond:10,burst:20},
+         available:s.webServer==="nginx"&&s.state==="ready"})),
+       engine:"nginx-native-rate-limit",webApplicationFirewall:false,
+       globalPanelWaf:false,
+       disclaimer:"Per-site NGINX request-rate protection only. Does not inspect payloads or mitigate volumetric DDoS. CrowdSec/AppSec is not yet installed.",
+       modes:["off","monitor","enforce"]
+     };
+   }catch{return reply.code(503).send({error:"shield_unavailable"});}
+ });
+ const changeAttempts=new Map<string,{count:number;reset:number}>();
+ app.post<{Params:{siteId:string}}>("/api/shield/sites/:siteId",async(r,reply)=>{
+   const user=authorized(r,reply,true);if(!user)return;
+   if(user.role!=="owner")return reply.code(403).send({error:"owner_required"});
+   const raw=r.body as {expectedRevision?:unknown;policy?:unknown;confirmed?:unknown;password?:unknown}|null;
+   if(!/^site_[a-f0-9]{16}$/.test(r.params.siteId)||raw?.confirmed!==true||
+     !Number.isSafeInteger(raw.expectedRevision)||Number(raw.expectedRevision)<1||
+     typeof raw.password!=="string"||raw.password.length>1024||
+     !raw.policy||typeof raw.policy!=="object"||Array.isArray(raw.policy))
+     return reply.code(400).send({error:"invalid_shield_request"});
+   const p=raw.policy as Record<string,unknown>;
+   if(Object.keys(p).some(key=>!["mode","requestsPerSecond","burst"].includes(key))||
+      !["off","monitor","enforce"].includes(p.mode as string)||
+      !Number.isInteger(p.requestsPerSecond)||Number(p.requestsPerSecond)<1||Number(p.requestsPerSecond)>50||
+      !Number.isInteger(p.burst)||Number(p.burst)<1||Number(p.burst)>100)
+      return reply.code(400).send({error:"invalid_shield_policy"});
+   const current=Date.now(),entry=changeAttempts.get(user.id)??{count:0,reset:current+60000};
+   if(current>entry.reset){entry.count=0;entry.reset=current+60000;}
+   if(entry.count>=5)return reply.code(429).send({error:"shield_rate_limited"});
+   entry.count++;changeAttempts.set(user.id,entry);
+   if(!verifyOwnerPassword(user.id,raw.password))return reply.code(403).send({error:"owner_password_invalid"});
+   if(!agentToken)return reply.code(503).send({error:"agent_unavailable"});
+   try{
+     const response=await fetch(agentUrl+"/v1/sites/waf",{
+       method:"POST",
+       headers:{"Authorization":"Bearer "+agentToken,"Content-Type":"application/json"},
+       body:JSON.stringify({siteId:r.params.siteId,expectedRevision:raw.expectedRevision,policy:p}),
+       signal:AbortSignal.timeout(20000)
+     });
+     const result=await response.json().catch(()=>({})) as {error?:string;[key:string]:unknown};
+     if(!response.ok){
+       const allowed=["site_revision_conflict","site_config_changed","site_not_ready","invalid_waf_policy","invalid_waf_action"];
+       return reply.code(response.status===409?409:response.status===400?400:503).send({error:allowed.includes(result.error??"")?result.error:"shield_apply_failed"});
+     }
+     audit(user.id,"shield.site_policy_updated",{siteId:r.params.siteId,mode:p.mode,rate:p.requestsPerSecond,burst:p.burst});
+     return {site:result};
+   }catch{return reply.code(503).send({error:"shield_result_requires_inspection"});}
+ });
  app.get("/api/security",async(r,reply)=>{
    if(!authorized(r,reply))return;
    reply.header("Cache-Control","no-store");
