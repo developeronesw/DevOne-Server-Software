@@ -40,6 +40,9 @@ cp -a agent/dist "$BACKUP/agent-dist"
 cp -a apps/dashboard/dist "$BACKUP/dashboard-dist"
 cp -a /etc/devone/devone.env "$BACKUP/devone.env"
 cp -a /etc/devone/secrets.key "$BACKUP/secrets.key"
+if [[ -f /usr/local/lib/devone/update-worker.sh ]]; then
+  cp -a /usr/local/lib/devone/update-worker.sh "$BACKUP/update-worker.sh"
+fi
 python3 - "$DB" "$BACKUP/devone.sqlite" <<'PY'
 import sqlite3,sys
 src=sqlite3.connect("file:"+sys.argv[1]+"?mode=ro",uri=True)
@@ -67,6 +70,12 @@ rollback(){
   cp -a "$BACKUP/api-dist" apps/api/dist
   cp -a "$BACKUP/agent-dist" agent/dist
   cp -a "$BACKUP/dashboard-dist" apps/dashboard/dist
+  if [[ -f "$BACKUP/update-worker.sh" ]]; then
+    install -D -o root -g root -m 700 "$BACKUP/update-worker.sh" /usr/local/lib/devone/update-worker.sh.restore
+    mv -f /usr/local/lib/devone/update-worker.sh.restore /usr/local/lib/devone/update-worker.sh
+  else
+    rm -f /usr/local/lib/devone/update-worker.sh
+  fi
   bash "$APP/scripts/prepare-runtime-files.sh" || true
   systemctl reset-failed devone-api devone-agent || true
   systemctl restart devone-agent devone-api || true
@@ -83,6 +92,9 @@ git checkout --detach "$TARGET"
 
 # This is the EACCES regression fix: the default umask must not make JS unreadable.
 bash "$APP/scripts/prepare-runtime-files.sh"
+# Atomically install a root-owned worker, so an already running worker retains its inode.
+install -D -o root -g root -m 700 "$APP/scripts/update-worker.sh" /usr/local/lib/devone/update-worker.sh.next
+mv -f /usr/local/lib/devone/update-worker.sh.next /usr/local/lib/devone/update-worker.sh
 
 systemctl restart devone-agent
 systemctl restart devone-api
