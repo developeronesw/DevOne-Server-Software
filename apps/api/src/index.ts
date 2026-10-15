@@ -7,7 +7,7 @@ import { Vault, validSecretName } from "./vault.js";
 import Fastify from "fastify";
 import { readFileSync, unlinkSync } from "node:fs";
 import { timingSafeEqual } from "node:crypto";
-import { audit, db, closeDb, createOwner, hasOwner, login, logout, userFromToken, verifyOwnerPassword, mfa, createSession, invalidateSessions } from "./auth.js";
+import { audit, db, closeDb, createOwner, hasOwner, login, logout, userFromToken, verifyOwnerPassword, verifyOwnerStepUp, mfa, createSession, invalidateSessions } from "./auth.js";
 
 const app = Fastify({ logger: { redact: ["req.headers.authorization", "req.headers.cookie", "req.headers.x-devone-setup-token"] }, bodyLimit: 16384 });
 const version = "1.0.0-alpha.3";
@@ -301,7 +301,7 @@ app.post("/api/updates/apply",async(request,reply)=>{
   if(!user)return reply.code(401).send({error:"unauthorized"});
   if(user.role!=="owner")return reply.code(403).send({error:"owner_required"});
   if(!request.headers.origin||!sameOrigin(request))return reply.code(403).send({error:"origin_forbidden"});
-  const body=request.body as {targetSha?:unknown;password?:unknown;confirmed?:unknown}|null;
+  const body=request.body as {targetSha?:unknown;password?:unknown;mfaCode?:unknown;confirmed?:unknown}|null;
   if(!body||body.confirmed!==true||typeof body.targetSha!=="string"||!/^[a-f0-9]{40}$/.test(body.targetSha)||
     typeof body.password!=="string"||body.password.length>1024)
     return reply.code(400).send({error:"invalid_update_request"});
@@ -311,7 +311,8 @@ app.post("/api/updates/apply",async(request,reply)=>{
   if(entry.count>=5)return reply.code(429).send({error:"update_auth_rate_limited"});
   entry.count++;
   updateAttempts.set(user.id,entry);
-  if(!verifyOwnerPassword(user.id,body.password))return reply.code(403).send({error:"owner_password_invalid"});
+  const stepUp=verifyOwnerStepUp(user.id,body.password,body.mfaCode);
+  if(stepUp!=="ok")return reply.code(403).send({error:stepUp==="password_invalid"?"owner_password_invalid":stepUp});
   if(!agentToken)return reply.code(503).send({error:"agent_unavailable"});
   try{
     const response=await fetch(agentUrl+"/v1/updates/apply",{
