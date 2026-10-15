@@ -1,30 +1,24 @@
-# Software Center host runtime preflight — Phase 2 integration
+# Managed host software installation — Phase 2
 
-## Scope
+DevOne Software Center now provides actual, Owner-approved Ubuntu package installation for **PHP 8.3-FPM** and **Redis Server** on the dedicated Ubuntu 24.04 development VPS. Click Install after entering your Owner password and an MFA code when enabled. This runs the allowlisted, root-owned Agent operation as an audited persistent job and shows queued/running/succeeded/failed or interrupted state. The UI reads live dpkg and systemd package states; Services can start/stop/restart either component.
 
-This is the **first dashboard-connected preflight** built on our existing Software Center, read-only software discovery, security model, and the guarded `scripts/software-runtime-pilot.sh`. It does **not** authorize dashboard installation, app deployment, package upgrades, removal, or changing site configuration. Avoid confusing it with the protected **DevOne software update** feature, which updates DevOne Server itself.
+## Operation sequence
 
-The existing software catalog remains `installAvailable: false` for every application. This iteration adds only `php8.3-fpm` and `redis-server` as approved **host prerequisite check targets**, not installable apps.
+- API POST /api/software/install requires owner session, same Origin, explicit confirmation, a fresh password and optional MFA, and a unique request key. A rate limit applies.
+- Existing JobQueue persists the software.install action and rechecks Owner role when executing. API submits exact package name and confirmation to localhost Agent.
+- Agent executes the existing `scripts/software-runtime-pilot.sh --managed-install` with a fixed package allowlist, signed-Ubuntu-origin candidate checks, apt simulation, protected-service checks, package installation and service verification. No arbitrary command or user-provided paths are accepted.
+- GET /api/software/status reports dpkg version and systemd state. Job outcome interrupted/unknown is not automatically retried; inspect the actual host first.
 
-## Architecture
+## Update & immediate development VPS QA
 
-- Owner/Admin Software Center UI: choose the exact host runtime and click **Run safe preflight**.
-- API: authenticated `GET /api/software/capabilities` and Origin-checked `POST /api/software/preflight`; Owner/Admin only, 3 per minute per user, audit on successful probe.
-- Agent: authorized localhost-only `GET /v1/software/capabilities` and strict `POST /v1/software/preflight` with a fixed package allowlist and 512-byte input maximum.
-- Host: only `/usr/bin/bash /opt/devone/current/scripts/software-runtime-pilot.sh --check <package>`. This runs the existing script's APT simulation; it does not perform installation.
-- Responses are bounded and do not expose privileged stderr, command details or arbitrary host files. Ready means the **preflight simulation** passed, not that the package is installed, active, or safely recoverable.
+1. In the panel Owner **Software Updates**, check both required CI jobs for the exact merged commit before updating. Sign in again when services restart.
+2. In **Software Center**, choose **PHP 8.3 FPM**, enter your password/MFA if enabled, approve and click **Install**. Confirm the job succeeds and the package shows Installed/Running. Repeat for **Redis Server** on this disposable development VPS.
+3. Under **Services**, verify both named systemd services can be started/stopped/restarted after installation; never stop the DevOne API, Agent or SSH.
+4. Run **QA Center → Run live checks** and review all nine results, including Agent Software and CrowdSec telemetry. QA is read-only and does not reinstall packages.
+5. If installation fails or is interrupted, inspect **Activity & Jobs** and package status before any retry; APT may have partially installed dependencies.
 
-## QA to perform after updating a disposable development VPS
+## Scope boundaries
 
-1. Open **Software & app runtimes** → **Host preflight**, choose PHP 8.3 FPM and Redis Server in turn, and run preflight.
-2. Confirm each returns Ready or Blocked truthfully; do not treat a blocked result as application failure without checking package prerequisites.
-3. Open **QA Center**, run **Run live checks**, and confirm `agent.software` and `agent.crowdsec` are present. This is 9 read-only checks in total, not the full release QA suite.
-4. Confirm the Owner session, MFA, Security Center, website operations, monitoring and updates continue to work.
-5. Run `pnpm qa` on a dependency-installed development checkout, not in a root-owned production runtime directory.
-6. Save sanitized test evidence and the deployed exact commit SHA.
+Application catalog entries including DevOne CMS, WordPress, Next.js, and Ghost still require individual deployment adapters and are not installable from the catalog. Installed PHP/Redis do not automatically create a website or database. This first working package management path does not yet implement package **removal**, automatic dependency **rollback**, multi-version PHP, real WAF blocking, or production release parity. Run it only on a disposable development VPS and retain recoverable snapshot backups before attempting host mutations.
 
-## Still blocked
-
-Before implementing dashboard package mutations: validate package signing and vendor sources, serialized APT ownership and locking, package/script trust, runtime isolation, privileged job authorization and MFA step-up, interrupted install states, repository metadata drift, rollout recovery and repeatable uninstall/rollback on a disposable VPS. AppSec and real CrowdSec WAF blocking are also separate and **not** implemented by this change.
-
-`pnpm qa:release` remains BLOCKED on legacy parity and full release acceptance.
+A green `pnpm qa` means CI/regressions passed; production release acceptance must still separately pass `pnpm qa:release` after live-host, restore and legacy parity verification.
