@@ -14,7 +14,7 @@ function asRecords(raw:string|null):unknown[]|null{
 }
 function scenario(value:unknown):string{
  // Avoid echoing arbitrary custom strings/IPs into the dashboard.
- return typeof value==="string"&&/^crowdsecurity\/[a-zA-Z0-9_./-]{1,80}$/.test(value)?"crowdsecurity/"+value.slice("crowdsecurity/".length):"other/custom";
+ return typeof value==="string"&&/^crowdsecurity\/[a-zA-Z0-9_./-]{1,80}$/.test(value)&&!/(?:\d{1,3}\.){3}\d{1,3}/.test(value)?"crowdsecurity/"+value.slice("crowdsecurity/".length):"other/custom";
 }
 function action(value:unknown):string{
  return typeof value==="string"&&["ban","captcha","throttle"].includes(value.toLowerCase())?value.toLowerCase():"other";
