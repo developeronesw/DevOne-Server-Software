@@ -76,6 +76,12 @@ test('authentication, setup, origin, metrics, logout and rate-limit boundaries',
     assert.equal(catalog.items[0].id,'devone-cms-v2');
     assert.equal(catalog.items[1].id,'wordpress');
     assert.equal(catalog.installAvailable,false);
+    assert.equal((await fetch(url+'/api/shield')).status,401);
+    assert.equal((await post('/api/shield/sites/site_0123456789abcdef',{})).status,401);
+    assert.equal((await post('/api/shield/sites/site_0123456789abcdef',{confirmed:true,password:credentials.password,expectedRevision:1,policy:{mode:'enforce',requestsPerSecond:10,burst:20}},{Cookie:cookie,Origin:'https://malicious.example'})).status,403);
+    assert.equal((await securePost('/api/shield/sites/site_invalid',{confirmed:true,password:credentials.password,expectedRevision:1,policy:{mode:'enforce',requestsPerSecond:10,burst:20}})).status,400);
+    assert.equal((await securePost('/api/shield/sites/site_0123456789abcdef',{confirmed:true,password:credentials.password,expectedRevision:1,policy:{mode:'enforce',requestsPerSecond:100,burst:20}})).status,400);
+    assert.equal((await securePost('/api/shield/sites/site_0123456789abcdef',{confirmed:true,password:'wrong',expectedRevision:1,policy:{mode:'enforce',requestsPerSecond:10,burst:20}})).status,403);
     assert.equal((await fetch(url+'/api/security')).status,401);
     assert.equal((await post('/api/security/scan',{})).status,401);
     assert.equal((await secureGet('/api/security')).status,200);
@@ -124,6 +130,9 @@ test('authentication, setup, origin, metrics, logout and rate-limit boundaries',
     assert.equal((await securePost('/api/updates/apply',{targetSha:'b'.repeat(40),confirmed:true,password:credentials.password})).status,403);
 
     assert.equal((await secureGet('/api/security')).status,403);
+    assert.equal((await secureGet('/api/shield')).status,403);
+    assert.equal((await securePost('/api/shield/sites/site_0123456789abcdef',{confirmed:true,password:credentials.password,expectedRevision:1,policy:{mode:'enforce',requestsPerSecond:10,burst:20}})).status,403);
+
     assert.equal((await securePost('/api/security/scan',{})).status,403);
     assert.equal((await securePost('/api/ai/diagnose',{question:'Check security',provider:'gemini',includeSecurity:true})).status,403);
 
