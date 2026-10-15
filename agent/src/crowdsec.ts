@@ -20,7 +20,10 @@ export async function crowdSecReadiness(){
   regular("/etc/crowdsec/acquis.d/appsec.yaml"),
   safeExec("/usr/bin/systemctl",["is-active","nginx"])
  ]);
- // Cscli version can contain banners; never return local logs, LAPI keys, or IPs.
+ return crowdSecReport({engine,version,collection,bouncer,appsecConfig,appsecService});
+}
+export function crowdSecReport(signals:{engine:string|null;version:string|null;collection:boolean;bouncer:boolean;appsecConfig:boolean;appsecService:string|null}){
+ const {engine,version,collection,bouncer,appsecConfig,appsecService}=signals;
  const installed=version!==null;
  const active=engine==="active";
  const nginxActive=appsecService==="active";
