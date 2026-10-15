@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
+import { AppCatalog, SecurityCenter } from "./ManagementModules";
 
-export type ControlView = "apps" | "databases" | "backups" | "monitoring" | "qa" | "ai";
+export type ControlView = "apps" | "databases" | "backups" | "monitoring" | "qa" | "ai" | "security";
 type Runtime = {name:string;installed:boolean;version:string|null};
 type Database = {name:string;clientInstalled:boolean;version:string|null;service:string;serviceState:string};
 type Discovery = {checkedAt:string;runtimes:Runtime[];databases:Database[];capabilities:{applicationDeployments:boolean;databaseProvisioning:boolean}};
@@ -14,7 +15,8 @@ const headings:Record<ControlView,{eyebrow:string;title:string;description:strin
   backups:{eyebrow:"RECOVERY",title:"Control-plane backups",description:"Create and download consistent SQLite snapshots of DevOne's control database."},
   monitoring:{eyebrow:"OBSERVABILITY",title:"Server monitoring",description:"Real server metrics and recent history from your connected agent."},
   qa:{eyebrow:"QUALITY ASSURANCE",title:"Automatic QA Center",description:"Non-destructive live checks, scheduled every six hours, with retained results."},
-  ai:{eyebrow:"INTELLIGENCE",title:"DevOne AI",description:"Choose Gemini, OpenAI, DeepSeek, or a separately secured OpenClaw diagnostic agent."}
+  ai:{eyebrow:"INTELLIGENCE",title:"DevOne AI",description:"Choose Gemini, OpenAI, DeepSeek, or a separately secured OpenClaw diagnostic agent."},
+  security:{eyebrow:"SECURITY & HARDENING",title:"Security Center",description:"Identify configuration weaknesses and potential exposure with passive, repeatable local checks."}
 };
 async function getJson<T>(path:string):Promise<T>{
   const response=await fetch(path,{credentials:"same-origin",cache:"no-store"});
@@ -41,7 +43,7 @@ function MetricChart({history,keyName,label}:{history:Sample[];keyName:"load1"|"
   </div>;
 }
 
-export function ControlWorkspace({view,role}:{view:ControlView;role:string}) {
+export function ControlWorkspace({view,role,onNavigate}:{view:ControlView;role:string;onNavigate:(target:ControlView)=>void}) {
   const [discovery,setDiscovery]=useState<Discovery|null>(null);
   const [history,setHistory]=useState<Sample[]>([]);
   const [qa,setQa]=useState<QA[]>([]);
@@ -51,6 +53,9 @@ export function ControlWorkspace({view,role}:{view:ControlView;role:string}) {
   const [aiProviders,setAiProviders]=useState<AiProvider[]>([]);
   const [selectedProvider,setSelectedProvider]=useState<AiProvider["id"]>("gemini");
   const [modelInput,setModelInput]=useState("");
+  const [apiKey,setApiKey]=useState("");
+  const [showApiKey,setShowApiKey]=useState(false);
+  const [includeSecurity,setIncludeSecurity]=useState(false);
   const [question,setQuestion]=useState("");
   const [answer,setAnswer]=useState("");
   const [error,setError]=useState("");
@@ -97,8 +102,24 @@ export function ControlWorkspace({view,role}:{view:ControlView;role:string}) {
   }
   async function diagnose(){
     setBusy(true);setError("");setAnswer("");
-    try{const data=await sendJson<{answer:string}>("/api/ai/diagnose",{question,provider:selectedProvider,...(selectedProvider==="openclaw"?{}:{model:modelInput||selected?.model})});setAnswer(data.answer);}
+    try{const data=await sendJson<{answer:string}>("/api/ai/diagnose",{question,provider:selectedProvider,includeSecurity,...(selectedProvider==="openclaw"?{}:{model:modelInput||selected?.model})});setAnswer(data.answer);}
     catch(e){setError(e instanceof Error?e.message:"AI provider unavailable.");}
+    finally{setBusy(false);}
+  }
+  async function saveProviderKey(){
+    const provider=aiProviders.find(p=>p.id===selectedProvider);
+    if(!provider||!apiKey.trim())return;
+    setBusy(true);setError("");setNotice("");
+    try{
+      const response=await fetch("/api/secrets/"+encodeURIComponent(provider.secretName),{
+        method:"PUT",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({value:apiKey.trim()})
+      });
+      const result=await response.json().catch(()=>({})) as {error?:string};
+      if(!response.ok)throw Error(result.error??"Could not save provider credential");
+      setApiKey("");setShowApiKey(false);
+      setNotice("Provider credential encrypted and saved. You can now use DevOne AI if the endpoint is configured.");
+      await refresh();
+    }catch(e){setError(e instanceof Error?e.message:"Credential save failed.");}
     finally{setBusy(false);}
   }
   const selected=aiProviders.find(p=>p.id===selectedProvider);
@@ -108,9 +129,7 @@ export function ControlWorkspace({view,role}:{view:ControlView;role:string}) {
     <div className="page-heading"><span className="overline">{header.eyebrow}</span><h1>{header.title}</h1><p>{header.description}</p></div>
     {error&&<p role="alert" className="inline-error">{error}</p>}
     {notice&&<p role="status" className="inline-notice">{notice}</p>}
-    {view==="apps"&&<section className="surface-card glass"><div className="section-heading"><div><h2>Detected software</h2><p>Automatic discovery · No packages will be installed or changed</p></div></div>
-      {discovery?<><div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Runtime / tool</th><th>Installation</th><th>Detected version</th></tr></thead><tbody>{discovery.runtimes.map(runtime=><tr key={runtime.name}><td><strong>{runtime.name}</strong></td><td><span className={"state-chip "+(runtime.installed?"good":"neutral")}>{runtime.installed?"Installed":"Not detected"}</span></td><td>{runtime.version??"—"}</td></tr>)}</tbody></table></div><p className="ops-note">Managed Node/Python app deployments, Git release history, per-app domains and rollback are next-stage integrations. Sites & files already supports static hosting.</p></>:<p className="ops-empty">Checking your server's software inventory…</p>}
-    </section>}
+    {view==="apps"&&<AppCatalog/>}
     {view==="databases"&&<section className="surface-card glass"><div className="section-heading"><div><h2>Installed database engines</h2><p>Read-only discovery · Source: authenticated DevOne Agent</p></div></div>
       {discovery?<><div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Engine</th><th>Service state</th><th>Client</th></tr></thead><tbody>{discovery.databases.map(item=><tr key={item.name}><td><strong>{item.name}</strong><small className="ops-subtext">{item.version??"No client detected"}</small></td><td><span className={"state-chip "+(item.serviceState==="active"?"good":"neutral")}>{item.serviceState}</span></td><td>{item.clientInstalled?"Installed":"Not detected"}</td></tr>)}</tbody></table></div><p className="ops-note">Service start/stop/restart is available through Services. Database creation, credentials, SQL administration and restore are not enabled until Agent authorization and isolation tests pass.</p></>:<p className="ops-empty">Checking your database engines…</p>}
     </section>}
@@ -129,6 +148,7 @@ export function ControlWorkspace({view,role}:{view:ControlView;role:string}) {
       {role==="owner"?<><article className="surface-card glass"><div className="section-heading"><div><h2>Control database snapshots</h2><p>SQLite online backup API · Consistent snapshots without stopping the server</p></div><button className="primary-button" disabled={busy} onClick={()=>void createBackup()}>{busy?"Creating…":"Create snapshot"}</button></div><p className="ops-warning">{backupWarning||"Backups exclude hosted sites, system configurations and the vault encryption key. Do not treat them as full-server recovery images."}</p></article>
       <article className="surface-card glass ops-panel-gap"><div className="section-heading"><h2>Available snapshots</h2><small className="ops-subtext">Owner-only downloads</small></div><div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Created</th><th>Size</th><th>Action</th></tr></thead><tbody>{backups.map(b=><tr key={b.id}><td>{new Date(b.createdAt).toLocaleString()}</td><td>{(b.bytes/1048576).toFixed(2)} MiB</td><td><a className="ops-download" href={"/api/backups/"+b.id+"/download"}>Download snapshot ↓</a></td></tr>)}</tbody></table>{!backups.length&&<p className="ops-empty">No snapshots yet.</p>}</div></article></>:<article className="surface-card glass"><h2>Owner permission required</h2><p>Backups are restricted to the Owner account.</p></article>}
     </>}
+    {view==="security"&&<SecurityCenter onAi={()=>onNavigate("ai")}/>}
     {view==="ai"&&<div className="ops-ai-grid"><section className="surface-card glass">
       <div className="section-heading"><div><h2>AI infrastructure assistant</h2><p>One DevOne workspace. Multiple model providers.</p></div><span className={"state-chip "+(providerReady?"good":"neutral")}>{providerReady?"Ready":"Needs setup"}</span></div>
       <label className="ops-ai-label" htmlFor="ai-provider">AI connection</label>
@@ -139,11 +159,18 @@ export function ControlWorkspace({view,role}:{view:ControlView;role:string}) {
       {selectedProvider!=="openclaw"&&<><label className="ops-ai-label" htmlFor="ai-model">Model identifier</label><input id="ai-model" value={modelInput} onChange={e=>setModelInput(e.target.value)} placeholder={selected?.model??"Choose your provider model"}/><p className="ops-subtext">Leave blank to use the default model: <strong>{selected?.model??"Loading…"}</strong>. The selected model must be available to your provider account.</p></>}
       {selectedProvider==="openclaw"&&<p className="ops-warning"><strong>OpenClaw gateway security:</strong> Connect only a dedicated diagnostics agent with all host, shell, file, browser and other tools disabled on the gateway. A normal OpenClaw agent could perform actions even if DevOne requests only text. Configure its fixed HTTPS gateway URL and pinned agent model on the VPS; never expose the gateway token here.</p>}
       <p className="ops-note">DevOne sends your question and a limited server-health snapshot to the selected provider. It does not intentionally send credentials, customer records, system logs or IP addresses. No DevOne host mutations are exposed to AI.</p>
-      {!providerReady?<div className="ops-ai-setup"><h3>Connect {selected?.label??"your provider"}</h3><p>Save your access credential in the Owner <strong>Secure Vault</strong> as <code>{selected?.secretName??"provider.api_key"}</code>. The value remains encrypted and never appears in API responses.</p>{selectedProvider==="openclaw"&&<p>Also set <code>DEVONE_OPENCLAW_BASE_URL</code> to your gateway's HTTPS <code>/v1</code> base URL and <code>DEVONE_OPENCLAW_AGENT_MODEL</code> to the dedicated no-tools agent ID (for example <code>openclaw/devone-diagnostics</code>), then restart the DevOne API.</p>}<button className="ops-secondary" onClick={()=>void refresh().catch(()=>{})}>Refresh connection status</button></div>:<>
-        <label className="ops-ai-label" htmlFor="ai-question">What would you like to diagnose?</label>
-        <textarea id="ai-question" value={question} onChange={e=>setQuestion(e.target.value)} maxLength={1600} placeholder="For example: What does my system load suggest about server performance?"/>
-        <button className="primary-button" disabled={busy||question.trim().length<5} onClick={()=>void diagnose()}>{busy?"Analyzing…":"Analyze with "+(selected?.label??"AI")}</button>
-      </>}
+      {role==="owner"&&<div className="ops-ai-setup"><h3>{selected?.keyStored?"Update connection key":"Connect "+(selected?.label??"your provider")}</h3>
+        <p>Enter the API key/token here. It is sent directly to your DevOne backend and stored encrypted; existing saved values are never displayed.</p>
+        <label htmlFor="ai-api-key" className="ops-ai-label">{selectedProvider==="openclaw"?"Dedicated gateway bearer token":"Provider API key"}</label>
+        <div className="ops-secret-input"><input id="ai-api-key" autoComplete="off" spellCheck={false} type={showApiKey?"text":"password"} value={apiKey} onChange={e=>setApiKey(e.target.value)} placeholder={selected?.keyStored?"Paste a new key to rotate the connection":"Paste provider key"}/><button type="button" onClick={()=>setShowApiKey(!showApiKey)}>{showApiKey?"Hide":"Show"}</button></div>
+        <button className="primary-button" disabled={busy||!apiKey.trim()} onClick={()=>void saveProviderKey()}>{busy?"Saving…":selected?.keyStored?"Replace encrypted key":"Save encrypted API key"}</button>
+        {selectedProvider==="openclaw"&&<p className="ops-warning">OpenClaw also needs the HTTPS gateway URL and pinned no-tools agent configured in /etc/devone/devone.env. A gateway token can grant broad access; use a dedicated diagnostic agent.</p>}
+       </div>}
+      {!providerReady&&<p className="ops-warning">This provider is not connected yet. {role==="owner"?"Save a valid credential above.":"Ask the Owner to configure credentials."} For OpenClaw, the server must also have its dedicated no-tools gateway configured.</p>}
+      <label className="ops-ai-label" htmlFor="ai-question">What would you like to diagnose?</label>
+      <textarea id="ai-question" value={question} onChange={e=>setQuestion(e.target.value)} maxLength={1600} placeholder="For example: Which server settings should I review to reduce attack surface?"/>
+      <label className="ops-ai-consent"><input type="checkbox" checked={includeSecurity} onChange={e=>setIncludeSecurity(e.target.checked)}/> Include latest sanitized Security Center findings in the question sent to this AI provider (optional).</label>
+      <button className="primary-button" disabled={!providerReady||busy||question.trim().length<5} onClick={()=>void diagnose()}>{busy?"Analyzing…":"Analyze with "+(selected?.label??"AI")}</button>
       </section>
       <section className="surface-card glass ops-ai-output"><h2>Diagnostic response</h2>{answer?<div className="ops-response" aria-live="polite">{answer}</div>:<p className="ops-empty">Provider responses appear here as advice. Verify any recommendation before making changes to your server.</p>}</section>
     </div>}

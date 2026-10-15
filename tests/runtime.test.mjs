@@ -55,6 +55,28 @@ test('authentication, setup, origin, metrics, logout and rate-limit boundaries',
     assert.equal((await secureGet('/api/monitoring')).status, 200);
     assert.equal((await secureGet('/api/backups')).status, 200);
     assert.equal((await secureGet('/api/ai/status')).status, 200);
+    assert.equal((await fetch(url+'/api/catalog')).status,401);
+    const catalogResponse=await secureGet('/api/catalog');
+    assert.equal(catalogResponse.status,200);
+    const catalog=await catalogResponse.json();
+    assert.ok(catalog.items.length>=18);
+    assert.equal(catalog.items[0].id,'devone-cms-v2');
+    assert.equal(catalog.items[1].id,'wordpress');
+    assert.equal(catalog.installAvailable,false);
+    assert.equal((await fetch(url+'/api/security')).status,401);
+    assert.equal((await post('/api/security/scan',{})).status,401);
+    assert.equal((await secureGet('/api/security')).status,200);
+    assert.equal((await post('/api/security/scan',{}, {Cookie:cookie,Origin:'https://wrong-origin.example'})).status,403);
+    assert.equal((await securePost('/api/ai/diagnose',{question:'Check my host configuration',provider:'gemini',includeSecurity:'bad'})).status,400);
+    const securityRun=await securePost('/api/security/scan',{});
+    assert.equal(securityRun.status,200);
+    const securityReport=(await securityRun.json()).report;
+    assert.ok(Array.isArray(securityReport.findings));
+    assert.ok(securityReport.findings.length>=4);
+    assert.equal(securityReport.mode,'passive-local-baseline');
+    assert.equal((await secureGet('/api/security')).status,200);
+    assert.equal((await securePost('/api/security/scan',{})).status,429);
+
     assert.equal((await fetch(url + '/api/qa')).status, 401);
     assert.equal((await post('/api/qa/run', {})).status, 401);
     assert.equal((await securePost('/api/backups', {})).status, 400);
@@ -80,6 +102,10 @@ test('authentication, setup, origin, metrics, logout and rate-limit boundaries',
     assert.equal((await fetch(url + '/api/me', { headers: { Cookie: 'devone_session=%malformed' } })).status, 401);
     const db = new DatabaseSync(join(dir, 'state.sqlite'));
     db.prepare("UPDATE users SET role='viewer'").run();
+    assert.equal((await secureGet('/api/security')).status,403);
+    assert.equal((await securePost('/api/security/scan',{})).status,403);
+    assert.equal((await securePost('/api/ai/diagnose',{question:'Check security',provider:'gemini',includeSecurity:true})).status,403);
+
     assert.equal((await post('/api/services/action', {service:'nginx',action:'restart',confirmed:true}, {Cookie:cookie,Origin:'https://panel.example.test'})).status, 403);
     db.prepare("UPDATE users SET role='owner'").run(); db.close();
     assert.equal((await post('/api/services/action', {service:'ssh',action:'stop',confirmed:true}, {Cookie:cookie,Origin:'https://panel.example.test'})).status, 400);
