@@ -67,7 +67,7 @@ export async function softwareInstall(input:unknown,run:Runner=exec):Promise<Run
  installing=true;
  try{
   // The Agent is a dedicated privileged service; no shell, custom input or apt command exposed.
-  await run("/usr/bin/bash",[SCRIPT,"--managed-install",name],{timeout:300000,maxBuffer:16384});
+  await run("/usr/bin/bash",[SCRIPT,"--managed-install",name],{timeout:300000,maxBuffer:4194304});
   const info=(await softwareStatus(run)).packages.find(x=>x.package===name)!;
   if(!info.installed||!info.serviceActive)throw Error("software_install_requires_inspection");
   return info;
