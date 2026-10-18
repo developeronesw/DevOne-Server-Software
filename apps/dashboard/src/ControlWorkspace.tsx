@@ -8,6 +8,7 @@ type Discovery = {checkedAt:string;runtimes:Runtime[];databases:Database[];capab
 type Sample = {checked_at:string;load1:number;load5:number;memory_percent:number;cpu_cores:number;uptime_seconds:number};
 type QA = {id:string;checkedAt:string;passed:boolean;scope:string;productionReady:boolean;results:{check:string;status:"pass"|"fail";detail:string}[]};
 type Backup = {id:string;createdAt:string;bytes:number};
+type DisposableQA={id?:string;state:"not_run"|"running"|"passed"|"failed";startedAt?:string;finishedAt?:string;results:{name:string;status:"pass"|"fail"|"blocked";detail:string;siteId?:string;cleaned?:boolean}[];warning:string};
 type AiProvider = {id:"gemini"|"openai"|"deepseek"|"openclaw";label:string;secretName:string;model:string;configured:boolean;keyStored:boolean;endpointConfigured:boolean;securityNote:string};
 const headings:Record<ControlView,{eyebrow:string;title:string;description:string}>={
   apps:{eyebrow:"APPLICATIONS",title:"Software & app runtimes",description:"Discover installed development runtimes and the host's software foundation."},
@@ -48,6 +49,11 @@ export function ControlWorkspace({view,role,onNavigate}:{view:ControlView;role:s
   const [history,setHistory]=useState<Sample[]>([]);
   const [qa,setQa]=useState<QA[]>([]);
   const [qaRunning,setQaRunning]=useState(false);
+  const [disposableQa,setDisposableQa]=useState<DisposableQA|null>(null);
+  const [qaPassword,setQaPassword]=useState("");
+  const [qaMfa,setQaMfa]=useState("");
+  const [qaConfirm,setQaConfirm]=useState(false);
+  const [qaStarting,setQaStarting]=useState(false);
   const [backups,setBackups]=useState<Backup[]>([]);
   const [backupWarning,setBackupWarning]=useState("");
   const [aiProviders,setAiProviders]=useState<AiProvider[]>([]);
@@ -67,6 +73,7 @@ export function ControlWorkspace({view,role,onNavigate}:{view:ControlView;role:s
     if(view==="qa"){
       const data=await getJson<{history:QA[];running:boolean}>("/api/qa");
       setQa(data.history);setQaRunning(data.running);
+      if(role==='owner')setDisposableQa(await getJson<DisposableQA>('/api/qa/disposable'));
     }
     if(view==="backups"){
       const data=await getJson<{backups:Backup[];warning:string}>("/api/backups");
@@ -84,6 +91,23 @@ export function ControlWorkspace({view,role,onNavigate}:{view:ControlView;role:s
     const timer=setInterval(()=>{if(active && (view==="monitoring"||view==="qa"||view==="apps"||view==="databases"))void refresh().catch(()=>{});},30000);
     return ()=>{active=false;clearInterval(timer);};
   },[view]);
+  useEffect(()=>{
+    if(view!=="qa"||role!=="owner"||disposableQa?.state!=="running")return;
+    const timer=setInterval(()=>{void getJson<DisposableQA>("/api/qa/disposable").then(setDisposableQa).catch(()=>{});},2500);
+    return()=>clearInterval(timer);
+  },[view,role,disposableQa?.state]);
+  async function runDisposableQa(){
+    if(role!=="owner"||!qaConfirm||!qaPassword)return;
+    if(!window.confirm("This will CREATE, publish, test and DELETE six disposable test websites on this VPS, then install packages inside a temporary Docker container. It will NOT uninstall shared host packages. Continue?"))return;
+    setQaStarting(true);setError("");setNotice("");
+    try{
+      await sendJson("/api/qa/disposable/start",{confirmed:true,password:qaPassword,mfaCode:qaMfa});
+      setQaPassword("");setQaMfa("");setQaConfirm(false);
+      setDisposableQa(await getJson<DisposableQA>("/api/qa/disposable"));
+      setNotice("Disposable QA started. Test progress and cleanup results will appear below.");
+    }catch(e){setError(e instanceof Error?e.message:"Disposable QA could not start.");}
+    finally{setQaStarting(false);}
+  }
   async function runQa(){
     setBusy(true);setError("");setNotice("");
     try{
@@ -141,6 +165,22 @@ export function ControlWorkspace({view,role,onNavigate}:{view:ControlView;role:s
       <article className="surface-card glass"><div className="section-heading"><div><h2>Live system verification</h2><p>Read-only integrity, encryption, API/Agent and service checks</p></div><button className="primary-button" disabled={busy||qaRunning} onClick={()=>void runQa()}>{busy||qaRunning?"Checking…":"Run QA now"}</button></div>
         <div className="ops-qa-status"><div><small>Last result</small><strong>{qa.length?(qa[0].passed?"PASS":"CHECKS FAILED"):"Awaiting first run"}</strong></div><div><small>Schedule</small><strong>Every 6 hours</strong></div><div><small>Release readiness</small><strong>Not yet certified</strong></div></div>
         <p className="ops-note">The separate GitHub CI regression suite runs automatically on PRs/commits. A green live probe does not verify application CRUD, restores or production safety.</p></article>
+      {role==="owner"&&<article className="surface-card glass ops-panel-gap" aria-label="Disposable hosting and software QA">
+        <div className="section-heading"><div><span className="overline">OWNER-APPROVED HOST ACCEPTANCE</span><h2>Disposable website and software QA</h2>
+          <p>Creates real isolated static, file, PHP, Node, Python and Docker test sites; checks actual responses and deletes only those test sites. Packages are installed inside a temporary Docker container, never removed from the host.</p>
+        </div><span className={"state-chip "+(disposableQa?.state==="passed"?"good":disposableQa?.state==="failed"?"bad":"neutral")}>{disposableQa?.state??"Not run"}</span></div>
+        <p className="ops-warning">Run only on your development VPS. This temporarily creates Linux users and NGINX configurations, starts processes and pulls Docker images. Failed cleanup is reported and requires manual recovery; customer sites are never selected for deletion.</p>
+        {disposableQa?.state!=="running"&&<div className="shield-form">
+          <label className="shield-label">Owner password<input type="password" autoComplete="current-password" value={qaPassword} onChange={e=>setQaPassword(e.target.value)}/></label>
+          <label className="shield-label">MFA code, if enabled<input autoComplete="one-time-code" value={qaMfa} onChange={e=>setQaMfa(e.target.value)} maxLength={17}/></label>
+          <label className="shield-consent"><input type="checkbox" checked={qaConfirm} onChange={e=>setQaConfirm(e.target.checked)}/> I authorize disposable host changes and automatic deletion of QA-owned test sites.</label>
+          <button className="primary-button" disabled={qaStarting||!qaConfirm||!qaPassword} type="button" onClick={()=>void runDisposableQa()}>{qaStarting?"Starting…":"Run disposable host QA"}</button>
+        </div>}
+        {disposableQa&&<div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Test</th><th>Result</th><th>Cleanup</th><th>Verification</th></tr></thead>
+         <tbody>{disposableQa.results.map((x,i)=><tr key={x.name+i}><td><strong>{x.name}</strong></td><td><span className={"state-chip "+(x.status==="pass"?"good":x.status==="fail"?"bad":"neutral")}>{x.status}</span></td><td>{x.cleaned===undefined?"—":x.cleaned?"Deleted":"Needs inspection"}</td><td>{x.detail}</td></tr>)}</tbody></table>
+        {disposableQa.state==="running"&&<p role="status" className="ops-subtext">Real host tests are running. Keep DevOne services online until completion.</p>}
+        </div>}
+      </article>}
       <article className="surface-card glass ops-panel-gap"><div className="section-heading"><h2>Latest check details</h2></div>{qa[0]?<><p className="ops-subtext">Checked {new Date(qa[0].checkedAt).toLocaleString()} · {qa[0].results.filter(x=>x.status==="pass").length} / {qa[0].results.length} passed</p><div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Check</th><th>Status</th><th>What was verified</th></tr></thead><tbody>{qa[0].results.map(x=><tr key={x.check}><td><strong>{x.check}</strong></td><td><span className={"state-chip "+(x.status==="pass"?"good":"bad")}>{x.status}</span></td><td>{x.detail}</td></tr>)}</tbody></table></div></>:<p className="ops-empty">The automatic first-run QA report will appear shortly.</p>}</article>
       <article className="surface-card glass ops-panel-gap"><h2>Recent QA runs</h2><div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Time</th><th>Result</th><th>Passed checks</th></tr></thead><tbody>{qa.slice(0,12).map(x=><tr key={x.id}><td>{new Date(x.checkedAt).toLocaleString()}</td><td><span className={"state-chip "+(x.passed?"good":"bad")}>{x.passed?"Pass":"Fail"}</span></td><td>{x.results.filter(y=>y.status==="pass").length}/{x.results.length}</td></tr>)}</tbody></table></div></article>
     </>}
