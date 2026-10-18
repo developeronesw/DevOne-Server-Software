@@ -72,19 +72,23 @@ export class SiteManager {
   // A Node site without server.mjs is configured but not yet deployed; it is not
   // reported as a running application.
   async runtimeStatus(){
-    const sites=(await this.registry()).filter(site=>site.siteType==='php'||site.siteType==='node');
+    const sites=(await this.registry()).filter(site=>['php','node','python','container'].includes(site.siteType??''));
     const runtimes=await Promise.all(sites.map(async site=>{
-      const location=site.siteType==='php'?phpPoolPath(site.id,this.options.phpPoolDir):nodeUnitPath(site.id,this.options.nodeUnitDir);
+      const location=site.siteType==='php'?phpPoolPath(site.id,this.options.phpPoolDir):site.siteType==='container'?join(this.options.nginx,`devone-${site.id}.conf`):nodeUnitPath(site.id,this.options.nodeUnitDir);
       const config=await lstat(location).catch(()=>null);
       const configured=Boolean(config?.isFile()&&!config.isSymbolicLink());
       const unit=site.siteType==='php'?'php8.3-fpm':nodeUnitName(site.id);
-      const active=await this.command('systemctl',['is-active',unit]).then(v=>v.trim()==='active').catch(()=>false);
-      const source=site.siteType==='node'?await lstat(join(this.options.base,site.id,'public','server.mjs')).catch(()=>null):null;
-      const sourcePresent=site.siteType==='node'?Boolean(source?.isFile()&&!source.isSymbolicLink()):null;
+      const active=site.siteType==='container'?await this.containerRunning(site).catch(()=>false):await this.command('systemctl',['is-active',unit]).then(v=>v.trim()==='active').catch(()=>false);
+      const source=site.siteType==='node'||site.siteType==='python'||site.siteType==='container'?await lstat(join(this.options.base,site.id,'public',site.siteType==='node'?'server.mjs':site.siteType==='python'?'app.py':'index.html')).catch(()=>null):null;
+      const sourcePresent=site.siteType==='node'||site.siteType==='python'||site.siteType==='container'?Boolean(source?.isFile()&&!source.isSymbolicLink()):null;
       return {siteId:site.id,type:site.siteType,configured,serviceActive:active,sourcePresent,
-        status:!configured?'missing_configuration':site.siteType==='node'&&!sourcePresent?'awaiting_source':active?'running':'service_stopped'};
+        status:!configured?'missing_configuration':['node','python','container'].includes(site.siteType??'')&&!sourcePresent?'awaiting_source':active?'running':'service_stopped'};
     }));
-    return {checkedAt:new Date().toISOString(),runtimes,ok:runtimes.every(item=>item.configured&&(item.type==='node'||item.serviceActive))};
+    return {checkedAt:new Date().toISOString(),runtimes,ok:runtimes.every(item=>item.configured&&(item.type!=='php'||item.serviceActive))};
+  }
+  private async containerRunning(site:Site):Promise<boolean>{
+    const value=await this.command('docker',['inspect','--format','{{index .Config.Labels "devone.site"}} {{.State.Running}}',runtimeContainerName(site.id)]);
+    return value.trim()===site.id+' true';
   }
   private serial<T>(work:()=>Promise<T>,siteId?:unknown) {
     const operation = this.queue.then(async()=>{
@@ -130,7 +134,15 @@ export class SiteManager {
       if((await this.command('systemctl',['is-active','php8.3-fpm']).catch(()=>'' )).trim()!=='active')
         throw Error('php83_runtime_not_running');
     }
-    if(['node','python','container'].includes(siteType)){
+    if(siteType==='python'){
+      const version=await this.command('python3.12',['--version']).catch(()=>'');
+      if(!/^Python 3\.12\./.test(version.trim()))throw Error('python312_runtime_not_available');
+    }
+    if(siteType==='container'){
+      const status=await this.command('systemctl',['is-active','docker']).catch(()=>'');
+      if(status.trim()!=='active')throw Error('docker_runtime_not_running');
+    }
+    if(siteType==='node'){
       if(!/^v22\./.test((await this.command('node',['--version']).catch(()=>'')).trim()))
         throw Error('node22_runtime_not_available');
     }
@@ -174,14 +186,12 @@ export class SiteManager {
           try{await pool.writeFile(phpPoolConfig(site,this.options.base));await pool.sync();}finally{await pool.close();}
           await this.command('php-fpm8.3',['-t']);
           await this.command('systemctl',['reload','php8.3-fpm']);
-        }else if(['node','python','container'].includes(siteType)){
-          const version=await this.command('node',['--version']);
-          if(!/^v22\./.test(version.trim()))throw Error('node22_runtime_required');
+        }else if(siteType==='node'||siteType==='python'){
           runtimeConfig=nodeUnitPath(id,this.options.nodeUnitDir);
           const unit=await open(runtimeConfig,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o644);
-          try{await unit.writeFile(nodeUnitConfig(site,this.options.base));await unit.sync();}finally{await unit.close();}
+          try{await unit.writeFile(siteType==='node'?nodeUnitConfig(site,this.options.base):pythonUnitConfig(site,this.options.base));await unit.sync();}finally{await unit.close();}
           await this.command('systemctl',['daemon-reload']);
-          // Start and enable only after application source is uploaded through File Workspace.
+          // Start only after the website author uploads server.mjs or app.py.
         }
         const destination = join(this.options.nginx,`devone-${id}.conf`);
         // Exclusive creation never replaces host-owned configurations.
