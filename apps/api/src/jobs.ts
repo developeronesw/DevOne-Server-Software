@@ -84,7 +84,9 @@ export class JobQueue {
         await this.execute(JSON.parse(job.input), job.operation);
       } catch (e) {
         state = e instanceof OutcomeUnknown ? "interrupted" : "failed";
-        error = e instanceof Error && e.message === "authorization_revoked" ? "authorization_revoked" : state === "interrupted" ? "agent_outcome_unknown" : "agent_operation_failed";
+        const reason=e instanceof Error?e.message:"agent_operation_failed";
+        const known=new Set(["authorization_revoked","node_entry_missing","site_runtime_not_available","php83_runtime_not_running","node22_runtime_not_available","site_port_unavailable","unsupported_runtime_version"]);
+        error=state==="interrupted"?"agent_outcome_unknown":known.has(reason)?reason:"agent_operation_failed";
       }
       this.transaction(() => {
         this.db.prepare("UPDATE jobs SET state=?,error=?,finished_at=? WHERE id=?").run(state, error, new Date().toISOString(), job.id);
