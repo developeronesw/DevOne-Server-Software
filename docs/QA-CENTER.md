@@ -35,3 +35,7 @@ Dashboard QA performs 10 non-destructive checks, including the `agent.software` 
 ## Dynamic hosting verification
 
 The live dashboard QA now includes `agent.site_runtimes`, which checks that every PHP-managed site has an actual PHP-FPM pool definition and active FPM service and every Node-managed site has an actual systemd unit. It reports missing adapters as FAIL. For a Node site intentionally awaiting `server.mjs`, stopped is not falsely reported as a running application. You must still upload actual code and test HTTP/HTTPS on your development VPS for end-to-end acceptance. See [Operational Hosting](PHASE3-OPERATIONAL-HOSTING.md).
+
+## Owner-operated disposable host acceptance
+
+The QA Center includes a second, separate **Disposable website and software QA** application. It is **not scheduled** and runs only after Owner password/MFA and explicit confirmation. The Agent creates and HTTP-tests six one-time test sites (static, file-only, PHP 8.3, Node 22, Python 3.12 and restricted Docker web), then requests deletion of *only those exact newly created site IDs*. The UI displays the result and whether cleanup succeeded. Never assume cleanup if it reports Needs inspection. Software installation tests occur inside a self-removing Ubuntu Docker container; installed host packages are inspected and are **never automatically uninstalled**. Refer to [Python, Docker and disposable host QA](PHASE4-DISPOSABLE-QA-AND-PYTHON-CONTAINERS.md). The 10 existing periodic checks remain read-only and independent.

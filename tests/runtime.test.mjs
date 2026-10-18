@@ -58,7 +58,8 @@ test('authentication, setup, origin, metrics, logout and rate-limit boundaries',
     assert.equal(choices.initialContent,'empty');
     assert.equal(choices.presets.find(x=>x.id==='php').available,true);
     assert.equal(choices.presets.find(x=>x.id==='node').available,true);
-    assert.equal(choices.presets.find(x=>x.id==='python').available,false);
+    assert.equal(choices.presets.find(x=>x.id==='python').available,true);
+    assert.equal(choices.presets.find(x=>x.id==='container').available,true);
     const presetRejected=await securePost('/api/sites',{domain:'runtime.example.com',webServer:'nginx',siteType:'php',runtimeVersion:'8.4',confirmed:true,requestKey:'runtime-blocked'});
     assert.equal(presetRejected.status,400);
     const preflightRejected=await securePost('/api/sites/preflight',{domain:'runtime.example.com',webServer:'nginx',siteType:'node',runtimeVersion:'24'});
@@ -78,6 +79,8 @@ test('authentication, setup, origin, metrics, logout and rate-limit boundaries',
     assert.equal(catalog.items[0].id,'devone-cms-v2');
     assert.equal(catalog.items[1].id,'wordpress');
     assert.equal(catalog.installAvailable,false);
+    assert.equal((await fetch(url+'/api/qa/disposable')).status,401);
+    assert.equal((await post('/api/qa/disposable/start',{})).status,401);
     assert.equal((await fetch(url+'/api/software/capabilities')).status,401);
     assert.equal((await fetch(url+'/api/software/status')).status,401);
     assert.equal((await post('/api/software/install',{})).status,401);
@@ -86,11 +89,11 @@ test('authentication, setup, origin, metrics, logout and rate-limit boundaries',
     const hostCapabilities=await hostSoftware.json();
     assert.equal(hostCapabilities.installAvailable,true);
     assert.equal(hostCapabilities.mode,'managed-install');
-    assert.deepEqual(hostCapabilities.options.map(p=>p.package),['php8.3-fpm','redis-server']);
+    assert.deepEqual(hostCapabilities.options.map(p=>p.package),['php8.3-fpm','redis-server','docker.io']);
     const hostStatus=await secureGet('/api/software/status');
     assert.equal(hostStatus.status,200);
     const hostState=await hostStatus.json();
-    assert.deepEqual(hostState.packages.map(p=>p.package),['php8.3-fpm','redis-server']);
+    assert.deepEqual(hostState.packages.map(p=>p.package),['php8.3-fpm','redis-server','docker.io']);
     assert.ok(hostState.packages.every(p=>typeof p.installed==='boolean'&&typeof p.serviceActive==='boolean'));
     const installRequest={package:'php8.3-fpm',confirmed:true,requestKey:'runtime-install-auth-test-123',password:credentials.password};
     assert.equal((await securePost('/api/software/install',{...installRequest,package:'nginx'})).status,400);
@@ -168,6 +171,8 @@ test('authentication, setup, origin, metrics, logout and rate-limit boundaries',
     assert.equal((await secureGet('/api/security/crowdsec/events')).status,403);
     assert.equal((await secureGet('/api/auth/mfa/status')).status,403);
     assert.equal((await secureGet('/api/security')).status,403);
+    assert.equal((await secureGet('/api/qa/disposable')).status,403);
+    assert.equal((await securePost('/api/qa/disposable/start',{confirmed:true,password:credentials.password})).status,403);
     assert.equal((await secureGet('/api/software/capabilities')).status,403);
     assert.equal((await secureGet('/api/software/status')).status,403);
     assert.equal((await securePost('/api/software/install',{package:'redis-server',confirmed:true,requestKey:'viewer-software-attempt-123',password:credentials.password})).status,403);

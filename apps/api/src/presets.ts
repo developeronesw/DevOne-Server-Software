@@ -12,11 +12,11 @@ export const websitePresets:ReadonlyArray<Preset>=[
  {id:"files",label:"File workspace",description:"Private isolated file storage without a public site.",webServers:["none"],versions:[],runtime:null,root:"public",available:true,initialContent:"empty"},
  {id:"php",label:"PHP 8.3 website",description:"Isolated PHP 8.3-FPM pool, NGINX routing, file editor and SSL; upload index.php to publish.",webServers:["nginx"],versions:["8.3"],runtime:"PHP",root:"public",available:true,initialContent:"empty"},
  {id:"node",label:"Node.js 22 application",description:"Systemd-managed isolated Node.js 22 service and NGINX proxy; upload server.mjs and click Start.",webServers:["nginx"],versions:["22"],runtime:"Node.js",root:"public",available:true,initialContent:"empty"},
- {id:"python",label:"Python application",description:"Isolated Python ASGI/WSGI service with managed process.",webServers:["nginx","apache"],versions:["3.12","3.13"],runtime:"Python",root:"app",available:false,reason:"Per-site virtual environments and managed process isolation require further QA.",initialContent:"empty"},
- {id:"container",label:"Containerized application",description:"Docker or OCI workloads with isolated ingress.",webServers:["nginx","apache"],versions:[],runtime:"Docker",root:"app",available:false,reason:"Per-site container orchestration, quotas and network isolation are not yet implemented.",initialContent:"empty"}
+ {id:"python",label:"Python 3.12 application",description:"Per-site Python systemd service and private NGINX proxy. Upload app.py, then Start.",webServers:["nginx"],versions:["3.12"],runtime:"Python",root:"public",available:true,initialContent:"empty"},
+ {id:"container",label:"Containerized NGINX website",description:"Restricted Docker web container with read-only site files and private NGINX ingress. Only the approved fixed image is supported.",webServers:["nginx"],versions:[],runtime:"Docker",root:"public",available:true,initialContent:"empty"}
 ];
 export function getWebsitePresets(){
- return {presets:websitePresets,defaultPreset:"static",initialContent:"empty",deployableTypes:["static","files","php","node"],
+ return {presets:websitePresets,defaultPreset:"static",initialContent:"empty",deployableTypes:["static","files","php","node","python","container"],
   notes:"PHP 8.3 and Node 22 use real runtime adapters. No sample content is generated. PHP requires active php8.3-fpm; Node requires a user-provided server.mjs and explicit start."};
 }
 export function resolvePreset(value:unknown,server:unknown,version:unknown){
@@ -25,5 +25,5 @@ export function resolvePreset(value:unknown,server:unknown,version:unknown){
  if(typeof server!=="string"||!preset.webServers.includes(server))throw Error("unsupported_web_server");
  if(preset.versions.length === 0 ? version !== undefined && version !== null && version !== "" : typeof version !== "string" || !preset.versions.includes(version))throw Error("unsupported_runtime_version");
  if(!preset.available)throw Error("runtime_not_available");
- return {siteType:preset.id as "static"|"files"|"php"|"node",...(preset.runtime?{runtimeVersion:version as string}:{}),webServer:server as "nginx"|"none"};
+ return {siteType:preset.id as "static"|"files"|"php"|"node"|"python"|"container",...(preset.runtime?{runtimeVersion:version as string}:{}),webServer:server as "nginx"|"none"};
 }

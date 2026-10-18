@@ -13,7 +13,7 @@ test('both host milestone pilots parse as bash',()=>{
 });
 test('software pilot has safe defaults, exact allowlist, APT preflight and confirmation',()=>{
  assert.match(software,/mode="\$\{1:---check\}"/);
- assert.match(software,/php8\.3-fpm\|redis-server/);
+ assert.match(software,/php8\.3-fpm\|redis-server\|docker\.io/);
  assert.match(software,/apt-cache policy/);
  assert.match(software,/o=Ubuntu/);
  assert.match(software,/apt-get -s --no-install-recommends install/);

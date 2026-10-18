@@ -2,7 +2,7 @@ import {execFile} from "node:child_process";
 import {promisify} from "node:util";
 
 const exec=promisify(execFile);
-export const runtimePackages=["php8.3-fpm","redis-server"] as const;
+export const runtimePackages=["php8.3-fpm","redis-server","docker.io"] as const;
 export type RuntimePackage=(typeof runtimePackages)[number];
 export type RuntimePreflight={package:RuntimePackage;status:"ready"|"blocked";installAvailable:false;reason:string};
 export type RuntimeState={package:RuntimePackage;installed:boolean;version:string|null;serviceActive:boolean};
@@ -27,7 +27,7 @@ export function softwareCapabilities(){
  return {
   mode:"managed-install",installAvailable:true,
   options:runtimePackages.map(name=>({
-   package:name,label:name==="php8.3-fpm"?"PHP 8.3 FPM":"Redis Server",installAvailable:true
+   package:name,label:name==="php8.3-fpm"?"PHP 8.3 FPM":name==="docker.io"?"Docker Engine":"Redis Server",installAvailable:true
   })),
   notice:"Owner-approved, audited installs of Ubuntu packages only. CMS/framework catalog entries are not deployable yet."
  };
@@ -44,7 +44,7 @@ export async function softwareStatus(run:Runner=exec):Promise<{packages:RuntimeS
   }catch{}
   if(installed){
    try{
-    const {stdout}=await run("/usr/bin/systemctl",["is-active",name+".service"],{timeout:4500,maxBuffer:4096});
+    const {stdout}=await run("/usr/bin/systemctl",["is-active",(name==="docker.io"?"docker":name)+".service"],{timeout:4500,maxBuffer:4096});
     serviceActive=stdout.trim()==="active";
    }catch{}
   }

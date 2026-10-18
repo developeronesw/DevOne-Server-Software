@@ -7,27 +7,27 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { validateDomain, relativeParts, MAX_FILE_BYTES } from './site-files.js';
 import { defaultWafPolicy, validateWaf, isValidWaf, nginxWafZone, nginxWafLocation, type WafPolicy } from './waf.js';
-import {nodeSitePort,phpPoolPath,phpPoolConfig,nodeUnitPath,nodeUnitName,nodeUnitConfig,runtimeNginxLocation} from './site-runtimes.js';
+import {nodeSitePort,phpPoolPath,phpPoolConfig,nodeUnitPath,nodeUnitName,nodeUnitConfig,pythonUnitConfig,runtimeContainerName,dockerRunArgs,runtimeNginxLocation} from './site-runtimes.js';
 
 const exec = promisify(execFile);
-export type Site = { id: string; domain: string; user: string; uid?: number; gid?: number; siteType?: 'static' | 'files' | 'php' | 'node'; runtimeVersion?:'8.3'|'22'; appActive?:boolean; waf?:WafPolicy; webServer: 'nginx' | 'none'; state: 'provisioning' | 'ready' | 'disabled' | 'updating' | 'needs_inspection'; createdAt: string; aliases?: string[]; revision?: number; configHash?: string; tls?: boolean; certificateIssued?: boolean };
+export type Site = { id: string; domain: string; user: string; uid?: number; gid?: number; siteType?: 'static' | 'files' | 'php' | 'node' | 'python' | 'container'; runtimeVersion?:'8.3'|'22'|'3.12'; appActive?:boolean; waf?:WafPolicy; webServer: 'nginx' | 'none'; state: 'provisioning' | 'ready' | 'disabled' | 'updating' | 'needs_inspection'; createdAt: string; aliases?: string[]; revision?: number; configHash?: string; tls?: boolean; certificateIssued?: boolean };
 type Options = { registry: string; base: string; nginx: string; panelDomain: string; requireRoot?: boolean; certificates?: string; phpPoolDir?:string; nodeUnitDir?:string; ownership?: typeof chown; worker?: (site: Site,request: Record<string,unknown>) => Promise<unknown>; command?: (command: string, args: string[]) => Promise<string> };
-export function siteInput(input: unknown): { domain: string; webServer: 'nginx' | 'none'; siteType: 'static' | 'files' | 'php' | 'node'; runtimeVersion?:'8.3'|'22' } {
+export function siteInput(input: unknown): { domain: string; webServer: 'nginx' | 'none'; siteType: 'static' | 'files' | 'php' | 'node' | 'python' | 'container'; runtimeVersion?:'8.3'|'22'|'3.12' } {
   if (!input || typeof input !== 'object') throw new Error('invalid_site');
   const body = input as Record<string,unknown>;
   const domain = validateDomain(body.domain);
   if (body.webServer !== 'nginx' && body.webServer !== 'none') throw new Error('invalid_web_server');
   const siteType = body.siteType === undefined ? (body.webServer === 'nginx' ? 'static' : 'files') : body.siteType;
-  if(!['static','files','php','node'].includes(siteType as string)||
+  if(!['static','files','php','node','python','container'].includes(siteType as string)||
     (siteType==='files'?body.webServer!=='none':body.webServer!=='nginx'))throw Error('unsupported_site_type');
   const version=body.runtimeVersion;
-  if(siteType==='php'&&version!=='8.3'||siteType==='node'&&version!=='22'||
+  if(siteType==='php'&&version!=='8.3'||siteType==='node'&&version!=='22'||siteType==='python'&&version!=='3.12'||siteType==='container'&&version!==undefined&&version!==''&&version!==null||
     ['static','files'].includes(siteType as string)&&version!==undefined&&version!==''&&version!==null)throw Error('unsupported_runtime_version');
-  return { domain, webServer: body.webServer, siteType:siteType as 'static'|'files'|'php'|'node',
-    ...((siteType==='php'||siteType==='node')?{runtimeVersion:version as '8.3'|'22'}:{}) };
+  return { domain, webServer: body.webServer, siteType:siteType as 'static'|'files'|'php'|'node'|'python'|'container',
+    ...((siteType==='php'||siteType==='node'||siteType==='python')?{runtimeVersion:version as '8.3'|'22'|'3.12'}:{}) };
 }
 function validRecord(site: Site) {
-  return /^site_[a-f0-9]{16}$/.test(site.id) && site.user === `dvs_${site.id.slice(5)}` && validateDomain(site.domain) === site.domain && ['nginx','none'].includes(site.webServer) && (site.siteType === undefined || (site.siteType === 'static' && site.webServer === 'nginx') || (site.siteType === 'files' && site.webServer === 'none') || ((site.siteType === 'php' || site.siteType === 'node') && site.webServer === 'nginx')) && (site.siteType === 'php' ? site.runtimeVersion === '8.3' : site.siteType === 'node' ? site.runtimeVersion === '22' : site.runtimeVersion === undefined) && ['provisioning','ready','disabled','updating','needs_inspection'].includes(site.state) && (site.aliases === undefined || Array.isArray(site.aliases) && site.aliases.length <= 20 && site.aliases.every(alias => validateDomain(alias) === alias)) && (site.revision === undefined || Number.isSafeInteger(site.revision) && site.revision >= 1) && (site.tls === undefined || typeof site.tls === 'boolean') && (site.certificateIssued === undefined || typeof site.certificateIssued === 'boolean') && (site.configHash === undefined || /^[a-f0-9]{64}$/.test(site.configHash)) && (site.waf === undefined || isValidWaf(site.waf)) && (site.appActive === undefined || typeof site.appActive === 'boolean') && (site.uid === undefined || Number.isInteger(site.uid) && site.uid >= 1000) && (site.gid === undefined || Number.isInteger(site.gid) && site.gid >= 1000);
+  return /^site_[a-f0-9]{16}$/.test(site.id) && site.user === `dvs_${site.id.slice(5)}` && validateDomain(site.domain) === site.domain && ['nginx','none'].includes(site.webServer) && (site.siteType === undefined || (site.siteType === 'static' && site.webServer === 'nginx') || (site.siteType === 'files' && site.webServer === 'none') || (['php','node','python','container'].includes(site.siteType) && site.webServer === 'nginx')) && (site.siteType === 'php' ? site.runtimeVersion === '8.3' : site.siteType === 'node' ? site.runtimeVersion === '22' : site.siteType === 'python' ? site.runtimeVersion === '3.12' : site.runtimeVersion === undefined) && ['provisioning','ready','disabled','updating','needs_inspection'].includes(site.state) && (site.aliases === undefined || Array.isArray(site.aliases) && site.aliases.length <= 20 && site.aliases.every(alias => validateDomain(alias) === alias)) && (site.revision === undefined || Number.isSafeInteger(site.revision) && site.revision >= 1) && (site.tls === undefined || typeof site.tls === 'boolean') && (site.certificateIssued === undefined || typeof site.certificateIssued === 'boolean') && (site.configHash === undefined || /^[a-f0-9]{64}$/.test(site.configHash)) && (site.waf === undefined || isValidWaf(site.waf)) && (site.appActive === undefined || typeof site.appActive === 'boolean') && (site.uid === undefined || Number.isInteger(site.uid) && site.uid >= 1000) && (site.gid === undefined || Number.isInteger(site.gid) && site.gid >= 1000);
 }
 export class SiteManager {
   private runningSite: string | null = null;
@@ -37,7 +37,7 @@ export class SiteManager {
   private queue: Promise<unknown> = Promise.resolve();
   private readonly command: (command: string, args: string[]) => Promise<string>;
   constructor(private options: Options) {
-    this.command = options.command ?? (async (command,args) => (await exec(command,args,{timeout:command === 'certbot' ? 180000 : 30000,maxBuffer:command === 'nginx' && args[0] === '-T' ? 1048576 : 65536})).stdout);
+    this.command = options.command ?? (async (command,args) => (await exec(command,args,{timeout:command === 'certbot' ? 180000 : command === 'docker' ? 300000 : 30000,maxBuffer:command === 'nginx' && args[0] === '-T' ? 1048576 : command==='docker'?1048576:65536})).stdout);
   }
   private async registry(): Promise<Site[]> {
     if (this.options.requireRoot !== false && process.getuid?.() !== 0) throw new Error('root_agent_required');
@@ -66,25 +66,29 @@ export class SiteManager {
   async list() {
     const sites = await this.registry();
     // In-progress provisioning is never replayed automatically after a restart.
-    return Promise.all(sites.map(async site => ({ ...site, siteType: site.siteType ?? (site.webServer === 'nginx' ? 'static' : 'files'), appActive:site.siteType==='node'?await this.command('systemctl',['is-active',nodeUnitName(site.id)]).then(v=>v.trim()==='active').catch(()=>false):undefined, state: ['provisioning','updating'].includes(site.state) && this.runningSite !== site.id ? 'needs_inspection' : site.state })));
+    return Promise.all(sites.map(async site => ({ ...site, siteType: site.siteType ?? (site.webServer === 'nginx' ? 'static' : 'files'), appActive:['node','python'].includes(site.siteType??'')?await this.command('systemctl',['is-active',nodeUnitName(site.id)]).then(v=>v.trim()==='active').catch(()=>false):site.siteType==='container'?await this.containerRunning(site).catch(()=>false):undefined, state: ['provisioning','updating'].includes(site.state) && this.runningSite !== site.id ? 'needs_inspection' : site.state })));
   }
   // Read-only runtime acceptance: report actual host artifacts and service state.
   // A Node site without server.mjs is configured but not yet deployed; it is not
   // reported as a running application.
   async runtimeStatus(){
-    const sites=(await this.registry()).filter(site=>site.siteType==='php'||site.siteType==='node');
+    const sites=(await this.registry()).filter(site=>['php','node','python','container'].includes(site.siteType??''));
     const runtimes=await Promise.all(sites.map(async site=>{
-      const location=site.siteType==='php'?phpPoolPath(site.id,this.options.phpPoolDir):nodeUnitPath(site.id,this.options.nodeUnitDir);
+      const location=site.siteType==='php'?phpPoolPath(site.id,this.options.phpPoolDir):site.siteType==='container'?join(this.options.nginx,`devone-${site.id}.conf`):nodeUnitPath(site.id,this.options.nodeUnitDir);
       const config=await lstat(location).catch(()=>null);
       const configured=Boolean(config?.isFile()&&!config.isSymbolicLink());
       const unit=site.siteType==='php'?'php8.3-fpm':nodeUnitName(site.id);
-      const active=await this.command('systemctl',['is-active',unit]).then(v=>v.trim()==='active').catch(()=>false);
-      const source=site.siteType==='node'?await lstat(join(this.options.base,site.id,'public','server.mjs')).catch(()=>null):null;
-      const sourcePresent=site.siteType==='node'?Boolean(source?.isFile()&&!source.isSymbolicLink()):null;
+      const active=site.siteType==='container'?await this.containerRunning(site).catch(()=>false):await this.command('systemctl',['is-active',unit]).then(v=>v.trim()==='active').catch(()=>false);
+      const source=site.siteType==='node'||site.siteType==='python'||site.siteType==='container'?await lstat(join(this.options.base,site.id,'public',site.siteType==='node'?'server.mjs':site.siteType==='python'?'app.py':'index.html')).catch(()=>null):null;
+      const sourcePresent=site.siteType==='node'||site.siteType==='python'||site.siteType==='container'?Boolean(source?.isFile()&&!source.isSymbolicLink()):null;
       return {siteId:site.id,type:site.siteType,configured,serviceActive:active,sourcePresent,
-        status:!configured?'missing_configuration':site.siteType==='node'&&!sourcePresent?'awaiting_source':active?'running':'service_stopped'};
+        status:!configured?'missing_configuration':['node','python','container'].includes(site.siteType??'')&&!sourcePresent?'awaiting_source':active?'running':'service_stopped'};
     }));
-    return {checkedAt:new Date().toISOString(),runtimes,ok:runtimes.every(item=>item.configured&&(item.type==='node'||item.serviceActive))};
+    return {checkedAt:new Date().toISOString(),runtimes,ok:runtimes.every(item=>item.configured&&(item.type!=='php'||item.serviceActive))};
+  }
+  private async containerRunning(site:Site):Promise<boolean>{
+    const value=await this.command('docker',['inspect','--format','{{index .Config.Labels "devone.site"}} {{.State.Running}}',runtimeContainerName(site.id)]);
+    return value.trim()===site.id+' true';
   }
   private serial<T>(work:()=>Promise<T>,siteId?:unknown) {
     const operation = this.queue.then(async()=>{
@@ -130,6 +134,14 @@ export class SiteManager {
       if((await this.command('systemctl',['is-active','php8.3-fpm']).catch(()=>'' )).trim()!=='active')
         throw Error('php83_runtime_not_running');
     }
+    if(siteType==='python'){
+      const version=await this.command('python3.12',['--version']).catch(()=>'');
+      if(!/^Python 3\.12\./.test(version.trim()))throw Error('python312_runtime_not_available');
+    }
+    if(siteType==='container'){
+      const status=await this.command('systemctl',['is-active','docker']).catch(()=>'');
+      if(status.trim()!=='active')throw Error('docker_runtime_not_running');
+    }
     if(siteType==='node'){
       if(!/^v22\./.test((await this.command('node',['--version']).catch(()=>'')).trim()))
         throw Error('node22_runtime_not_available');
@@ -141,9 +153,9 @@ export class SiteManager {
       if (names.some(name => name === domain || name.startsWith('~') || name.startsWith('$') || (name.startsWith('*.') && domain.endsWith(name.slice(1))) || (name.startsWith('.') && (domain === name.slice(1) || domain.endsWith(name))) || (name.endsWith('.*') && domain.startsWith(name.slice(0,-1))))) throw new Error('domain_in_use');
     }
     let id = `site_${randomBytes(8).toString('hex')}`;
-    if(siteType==='node'){
+    if(['node','python','container'].includes(siteType)){
       let retries=0;
-      while(sites.some(other=>other.siteType==='node'&&nodeSitePort(other.id)===nodeSitePort(id))){
+      while(sites.some(other=>['node','python','container'].includes(other.siteType??'')&&nodeSitePort(other.id)===nodeSitePort(id))){
         if(++retries>20)throw Error('site_port_unavailable');
         id=`site_${randomBytes(8).toString('hex')}`;
       }
@@ -174,14 +186,12 @@ export class SiteManager {
           try{await pool.writeFile(phpPoolConfig(site,this.options.base));await pool.sync();}finally{await pool.close();}
           await this.command('php-fpm8.3',['-t']);
           await this.command('systemctl',['reload','php8.3-fpm']);
-        }else if(siteType==='node'){
-          const version=await this.command('node',['--version']);
-          if(!/^v22\./.test(version.trim()))throw Error('node22_runtime_required');
+        }else if(siteType==='node'||siteType==='python'){
           runtimeConfig=nodeUnitPath(id,this.options.nodeUnitDir);
           const unit=await open(runtimeConfig,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o644);
-          try{await unit.writeFile(nodeUnitConfig(site,this.options.base));await unit.sync();}finally{await unit.close();}
+          try{await unit.writeFile(siteType==='node'?nodeUnitConfig(site,this.options.base):pythonUnitConfig(site,this.options.base));await unit.sync();}finally{await unit.close();}
           await this.command('systemctl',['daemon-reload']);
-          // Start and enable only after application source is uploaded through File Workspace.
+          // Start only after the website author uploads server.mjs or app.py.
         }
         const destination = join(this.options.nginx,`devone-${id}.conf`);
         // Exclusive creation never replaces host-owned configurations.
@@ -214,7 +224,7 @@ export class SiteManager {
     const policy=site.waf ?? defaultWafPolicy;
     const zone=site.state === 'disabled' ? '' : nginxWafZone(site.id,policy);
     const protection=nginxWafLocation(site.id,policy);
-    const body = site.state === 'disabled' ? ' location / { return 410; }\n' : (site.siteType==='php'||site.siteType==='node') ? runtimeNginxLocation(site,this.options.base,protection) : ` root ${join(this.options.base,site.id,'public')};\n index index.html;\n disable_symlinks on;\n add_header X-Content-Type-Options nosniff always;\n add_header Referrer-Policy strict-origin-when-cross-origin always;\n location / {\n${protection} try_files $uri $uri/ =404;\n }\n location ~ /\\. { deny all; }\n`;
+    const body = site.state === 'disabled' ? ' location / { return 410; }\n' : (['php','node','python','container'].includes(site.siteType??'')) ? runtimeNginxLocation(site,this.options.base,protection) : ` root ${join(this.options.base,site.id,'public')};\n index index.html;\n disable_symlinks on;\n add_header X-Content-Type-Options nosniff always;\n add_header Referrer-Policy strict-origin-when-cross-origin always;\n location / {\n${protection} try_files $uri $uri/ =404;\n }\n location ~ /\\. { deny all; }\n`;
     const http = `${zone}server {\n listen 80;\n listen [::]:80;\n server_name ${hosts};\n${challenge}${site.tls && site.state !== 'disabled' ? ' location / { return 301 https://$host$request_uri; }\n' : body}}\n`;
     if (!site.tls) return http;
     const certificate = join(this.options.certificates ?? '/etc/letsencrypt/live',`devone-${site.id}`);
@@ -327,16 +337,28 @@ export class SiteManager {
     if (!site || !['ready','disabled'].includes(site.state)) throw new Error('site_not_ready');
     if ((site.revision ?? 1) !== body.expectedRevision) throw new Error('site_revision_conflict');
     if(body.action==='start'||body.action==='stop'){
-      if(site.siteType!=='node'||site.state!=='ready')throw Error('site_runtime_not_available');
+      if(!['node','python','container'].includes(site.siteType??'')||site.state!=='ready')throw Error('site_runtime_not_available');
       const unit=nodeUnitName(site.id);
       if(body.action==='start'){
-        const file=await lstat(join(this.options.base,site.id,'public','server.mjs')).catch(()=>null);
-        if(!file||!file.isFile()||file.isSymbolicLink()||file.size>1048576||file.uid!==site.uid)throw Error('node_entry_missing');
+        const file=await lstat(join(this.options.base,site.id,'public',site.siteType==='node'?'server.mjs':site.siteType==='python'?'app.py':'index.html')).catch(()=>null);
+        if(!file||!file.isFile()||file.isSymbolicLink()||file.size>1048576||file.uid!==site.uid)throw Error('runtime_entry_missing');
       }
-      await this.command('systemctl',[body.action==='start'?'enable':'disable','--now',unit]);
-      const active=await this.command('systemctl',['is-active',unit]).then(value=>value.trim()==='active').catch(()=>false);
+      if(site.siteType==='container'){
+        const container=runtimeContainerName(site.id);
+        if(body.action==='start'){
+          const existing=await this.command('docker',['inspect','--format','{{index .Config.Labels "devone.site"}}',container]).catch(()=>'');
+          if(existing.trim() && existing.trim()!==site.id)throw Error('unsafe_container_ownership');
+          if(existing.trim()===site.id)await this.command('docker',['start',container]);
+          else await this.command('docker',dockerRunArgs(site,site.uid!,site.gid!,this.options.base));
+        }else{
+          if((await this.command('docker',['inspect','--format','{{index .Config.Labels "devone.site"}}',container]).catch(()=>'')).trim()===site.id)
+            await this.command('docker',['stop',container]);
+        }
+      }else await this.command('systemctl',[body.action==='start'?'enable':'disable','--now',unit]);
+      const active=site.siteType==='container'?await this.containerRunning(site).catch(()=>false):
+        await this.command('systemctl',['is-active',unit]).then(value=>value.trim()==='active').catch(()=>false);
       if(body.action==='start'){
-        if(!active)throw Error('node_runtime_not_healthy');
+        if(!active)throw Error('runtime_not_healthy');
         let responding=false;
         for(let attempt=0;attempt<8;attempt++){
           try{
@@ -397,11 +419,16 @@ export class SiteManager {
           await rename(phpPoolPath(site.id,this.options.phpPoolDir),join(this.options.registry,`${site.id}.deleted-php`));
           await this.command('php-fpm8.3',['-t']);
           await this.command('systemctl',['reload','php8.3-fpm']);
-        }else if(site.siteType==='node'){
+        }else if(site.siteType==='node'||site.siteType==='python'){
           await this.command('systemctl',['stop',nodeUnitName(site.id)]);
           await this.command('systemctl',['disable',nodeUnitName(site.id)]);
           await rename(nodeUnitPath(site.id,this.options.nodeUnitDir),join(this.options.registry,`${site.id}.deleted-node`));
           await this.command('systemctl',['daemon-reload']);
+        }else if(site.siteType==='container'){
+          const container=runtimeContainerName(site.id);
+          const label=await this.command('docker',['inspect','--format','{{index .Config.Labels "devone.site"}}',container]).catch(()=>'');
+          if(label.trim()===site.id)await this.command('docker',['rm','-f',container]);
+          else if(label.trim())throw Error('unsafe_container_ownership');
         }
         const home = join(this.options.base,site.id), stat = await lstat(home);
         if (!stat.isDirectory() || stat.isSymbolicLink() || (this.options.requireRoot !== false && stat.uid !== 0)) throw new Error('unsafe_site_home');
@@ -421,7 +448,7 @@ export class SiteManager {
       if(body.action==='delete'&&!destructiveStarted){
         if(site.siteType==='php'){
           try{await rename(join(this.options.registry,`${site.id}.deleted-php`),phpPoolPath(site.id,this.options.phpPoolDir));await this.command('php-fpm8.3',['-t']);await this.command('systemctl',['reload','php8.3-fpm']);}catch{}
-        }else if(site.siteType==='node'){
+        }else if(site.siteType==='node'||site.siteType==='python'){
           try{await rename(join(this.options.registry,`${site.id}.deleted-node`),nodeUnitPath(site.id,this.options.nodeUnitDir));await this.command('systemctl',['daemon-reload']);await this.command('systemctl',['enable',nodeUnitName(site.id)]);}catch{}
         }
       }

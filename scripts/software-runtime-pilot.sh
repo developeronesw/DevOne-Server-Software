@@ -4,7 +4,7 @@
 # Real package mutations must be tested on a disposable Ubuntu VPS.
 set -Eeuo pipefail
 umask 077
-usage() { echo "Usage: $0 [--check|--install|--managed-install] [php8.3-fpm|redis-server]" >&2; exit 2; }
+usage() { echo "Usage: $0 [--check|--install|--managed-install] [php8.3-fpm|redis-server|docker.io]" >&2; exit 2; }
 [[ $# -le 2 ]] || usage
 mode="${1:---check}"
 package="${2:-php8.3-fpm}"
@@ -36,7 +36,7 @@ policy="$(apt-cache policy "$package")"
 printf '%s\n' "$policy" | awk -v version="$candidate" '
   $1 == "***" { active=($2 == version); next }
   $1 ~ /^[0-9][^[:space:]]*$/ && $2 ~ /^[0-9]+$/ { active=($1 == version); next }
-  active && $1 == "release" && /(^|,)o=Ubuntu(,|$)/ && /(^|,)n=noble(,|$)/ && /(^|,)l=Ubuntu(,|$)/ { ok=1 }
+  active && $1 == "release" && /(^|,)o=Ubuntu(,|$)/ && /(^|,)n=noble(-updates|-security)?(,|$)/ && /(^|,)l=Ubuntu(,|$)/ { ok=1 }
   END { exit(ok ? 0 : 1) }
 ' || { echo "Candidate is not proven to originate from Ubuntu Noble metadata." >&2; exit 1; }
 simulation="$(mktemp /tmp/devone-software-apt.XXXXXXXX)"
@@ -66,7 +66,7 @@ nginx -t >/dev/null 2>&1 || { echo "NGINX changed unexpectedly; inspect host. No
 for unit in devone-api devone-agent; do
   systemctl is-active --quiet "$unit" || { echo "$unit is down after install. Manual inspection required." >&2; exit 1; }
 done
-systemctl is-active --quiet "$package" || { echo "$package is installed but its service is not active; inspect host." >&2; exit 1; }
+systemctl is-active --quiet "${package/docker.io/docker}" || { echo "$package is installed but its service is not active; inspect host." >&2; exit 1; }
 if [[ "$package" == "redis-server" ]] && ss -ltnH | awk '{print $4}' | grep -Eq '^(0\.0\.0\.0|\*|\[::\]|::):6379$'; then
   echo "Redis may be exposed on all interfaces; restrict access before continuing." >&2; exit 1
 fi

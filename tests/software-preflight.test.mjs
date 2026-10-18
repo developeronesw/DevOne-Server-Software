@@ -7,7 +7,7 @@ test("managed software catalog is explicit, operational and strictly allowlisted
  const capabilities=softwareCapabilities();
  assert.equal(capabilities.mode,"managed-install");
  assert.equal(capabilities.installAvailable,true);
- assert.deepEqual(capabilities.options.map(v=>v.package),["php8.3-fpm","redis-server"]);
+ assert.deepEqual(capabilities.options.map(v=>v.package),["php8.3-fpm","redis-server","docker.io"]);
  assert.ok(capabilities.options.every(v=>v.installAvailable===true));
  for(const entry of [null,{},[],{package:"php8.3-fpm;id"},{package:"nginx"},{package:"redis-server",run:"install"},{package:"redis-server",path:"/tmp"}])
   assert.throws(()=>parseRuntimePreflight(entry),/invalid_software_preflight/);
@@ -25,7 +25,7 @@ test("Ubuntu installed state is from actual dpkg-query and systemd results",asyn
  };
  const state=await softwareStatus(run);
  assert.equal(state.installAvailable,true);
- assert.deepEqual(state.packages.map(p=>p.installed),[false,true]);
+ assert.deepEqual(state.packages.map(p=>p.installed),[false,true,false]);
  assert.equal(state.packages[1].serviceActive,true);
  assert.ok(commands.every(x=>x[0]==="/usr/bin/dpkg-query"||x[0]==="/usr/bin/systemctl"));
 });

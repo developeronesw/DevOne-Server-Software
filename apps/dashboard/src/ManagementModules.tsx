@@ -76,7 +76,7 @@ function RuntimeManager({role}:{role:string}){
    <h2>Install and manage host runtimes</h2><p>Install PHP-FPM or Redis from Ubuntu's signed package sources with an audited DevOne Agent job.</p>
   </div><button className="ops-secondary" disabled={busy||Boolean(running)} onClick={()=>void refresh().catch(()=>setError("Status refresh failed"))}>Refresh status</button></div>
   <div className="ops-catalog-filters"><select aria-label="Software to manage" value={choice} onChange={e=>{setChoice(e.target.value);setError("");}}>
-   {(capabilities?.options??[{package:"php8.3-fpm",label:"PHP 8.3 FPM"},{package:"redis-server",label:"Redis Server"}]).map(p=><option key={p.package} value={p.package}>{p.label}</option>)}
+   {(capabilities?.options??[{package:"php8.3-fpm",label:"PHP 8.3 FPM"},{package:"redis-server",label:"Redis Server"},{package:"docker.io",label:"Docker Engine"}]).map(p=><option key={p.package} value={p.package}>{p.label}</option>)}
   </select></div>
   {selected?<div className="ops-qa-status">
    <div><small>Installation</small><strong>{selected.installed?"Installed":"Not installed"}</strong></div>

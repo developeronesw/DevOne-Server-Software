@@ -1,4 +1,5 @@
 import { SiteManager } from "./sites.js";
+import {DisposableHostQa} from "./disposable-qa.js";
 import { UpdatesManager } from "./updates.js";
 import { discoverSoftware } from "./discovery.js";
 import { softwareCapabilities, softwarePreflight, softwareStatus, softwareInstall } from "./software.js";
@@ -15,6 +16,7 @@ const token = process.env.DEVONE_AGENT_TOKEN ?? "";
 
 const updates = new UpdatesManager();
 const sites = new SiteManager({registry:'/var/lib/devone-agent',base:'/home/devone-sites',nginx:'/etc/nginx/conf.d',panelDomain:new URL(process.env.DEVONE_PANEL_URL ?? 'http://localhost').hostname});
+const disposableQa=new DisposableHostQa(sites);
 const server = createServer(async (request, response) => {
   if (!token || request.headers.authorization !== `Bearer ${token}`) {
     response.writeHead(401, { "content-type": "application/json" });
@@ -39,6 +41,19 @@ const server = createServer(async (request, response) => {
       const safe=["update_busy","invalid_update_target","update_worker_missing","release_checks_not_passed","update_target_changed","github_rate_limited","github_unavailable"].includes(message)?message:"update_unavailable";
       send(safe==="update_busy"||safe==="update_target_changed"?409:safe==="invalid_update_target"?400:503,{error:safe});
     }
+    return;
+  }
+  if(request.method==="GET"&&request.url==="/v1/qa/disposable/status"){
+    send(200,disposableQa.status());return;
+  }
+  if(request.method==="POST"&&request.url==="/v1/qa/disposable/start"){
+    try{
+      request.setEncoding("utf8");let body="";
+      for await(const chunk of request){body+=chunk;if(Buffer.byteLength(body)>256){send(413,{error:"body_too_large"});return;}}
+      const value=JSON.parse(body);
+      if(!value||Object.keys(value).length!==1||value.confirmed!==true)throw Error("confirmation_required");
+      send(202,disposableQa.start());
+    }catch(e){const code=e instanceof Error?e.message:"qa_unavailable";send(code==="qa_disposable_busy"?409:code==="confirmation_required"?400:503,{error:code==="qa_disposable_busy"?code:code==="confirmation_required"?code:"qa_unavailable"});}
     return;
   }
   if(request.method==="GET"&&request.url==="/v1/sites/runtime/status"){
@@ -75,7 +90,7 @@ const server = createServer(async (request, response) => {
       send(200,request.url === "/v1/sites" ? await sites.create(input) : request.url === "/v1/sites/action" ? await sites.action(input) : request.url === "/v1/sites/tls" ? await sites.tls(input) : await sites.files(input));
     } catch (error) { const code=error instanceof Error?error.message:"site_operation_failed";
       const invalid=/^(invalid_|domain_in_use|site_limit|site_not_ready|file_too_large|unsupported_)/.test(code);
-      const conflict=["file_conflict","destination_exists","site_revision_conflict","node_entry_missing","site_runtime_not_available","php83_runtime_not_running","node22_runtime_not_available","site_port_unavailable"].includes(code);
+      const conflict=["file_conflict","destination_exists","site_revision_conflict","runtime_entry_missing","runtime_not_healthy","python312_runtime_not_available","docker_runtime_not_running","node_entry_missing","site_runtime_not_available","php83_runtime_not_running","node22_runtime_not_available","site_port_unavailable"].includes(code);
       send(conflict?409:invalid?400:503,{error:conflict||code==="unsupported_runtime_version"?code:"site_operation_failed"}); }
     return;
   }

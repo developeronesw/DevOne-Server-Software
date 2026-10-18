@@ -1,5 +1,6 @@
 import { registerSiteRoutes } from "./sites.js";
 import { registerControlRoutes } from "./control.js";
+import {registerDisposableQaRoutes} from "./disposable-qa.js";
 import { registerSecurityRoutes } from "./security.js";
 import {registerSoftwareRoutes} from "./software.js";
 import { listCatalog } from "./catalog.js";
@@ -224,12 +225,12 @@ const jobs = new JobQueue(db, async (input, operation) => {
   if (!agentToken) throw new Error("agent_not_configured");
   let response: Response;
   try {
-    response = await fetch(`${agentUrl}${operation === "site.create" ? "/v1/sites" : operation === "site.action" ? "/v1/sites/action" : operation === "site.tls" ? "/v1/sites/tls" : operation === "software.install" ? "/v1/software/install" : "/v1/services/action"}`, { method: "POST", headers: { Authorization: `Bearer ${agentToken}`, "Content-Type": "application/json" }, body: JSON.stringify(input), signal: AbortSignal.timeout(operation === "software.install" ? 320000 : operation === "site.tls" ? 240000 : operation.startsWith("site.") ? 120000 : 35000) });
+    response = await fetch(`${agentUrl}${operation === "site.create" ? "/v1/sites" : operation === "site.action" ? "/v1/sites/action" : operation === "site.tls" ? "/v1/sites/tls" : operation === "software.install" ? "/v1/software/install" : "/v1/services/action"}`, { method: "POST", headers: { Authorization: `Bearer ${agentToken}`, "Content-Type": "application/json" }, body: JSON.stringify(input), signal: AbortSignal.timeout(operation === "software.install" ? 320000 : operation === "site.tls" ? 240000 : operation.startsWith("site.") ? 330000 : 35000) });
   } catch { throw new OutcomeUnknown("agent_outcome_unknown"); }
   if (response.status >= 500) throw new OutcomeUnknown("agent_outcome_unknown");
   if (!response.ok){
     const error=await response.json().catch(()=>({})) as {error?:unknown};
-    const safe=new Set(["node_entry_missing","site_runtime_not_available","php83_runtime_not_running","node22_runtime_not_available","site_port_unavailable","unsupported_runtime_version"]);
+    const safe=new Set(["runtime_entry_missing","runtime_not_healthy","node_entry_missing","site_runtime_not_available","php83_runtime_not_running","node22_runtime_not_available","site_port_unavailable","unsupported_runtime_version"]);
     if((operation==="site.action"||operation==="site.create")&&safe.has(error.error as string))
       throw Error(error.error as string);
     throw Error("agent_operation_failed");
@@ -286,6 +287,7 @@ app.delete<{ Params: { name: string } }>("/api/secrets/:name", async (request, r
 });
 registerSiteRoutes(app, { requestUser, sameOrigin, agentUrl, agentToken, jobs, audit });
 registerControlRoutes(app, {db,vault,agentUrl,agentToken,requestUser,sameOrigin,audit});
+registerDisposableQaRoutes(app,{agentUrl,agentToken,requestUser,sameOrigin,audit});
 registerSecurityRoutes(app, {db,agentUrl,agentToken,requestUser,sameOrigin,audit});
 registerSoftwareRoutes(app,{agentUrl,agentToken,requestUser,sameOrigin,audit,jobs});
 const updateAttempts = new Map<string,{count:number;until:number}>();
