@@ -14,8 +14,8 @@ test("real PHP and Node presets work; unsupported versions and servers fail clos
  const presets=getWebsitePresets().presets;
  assert.equal(presets.find(p=>p.id==="php").available,true);
  assert.equal(presets.find(p=>p.id==="node").available,true);
- assert.equal(presets.find(p=>p.id==="python").available,false);
- assert.deepEqual(getWebsitePresets().deployableTypes,["static","files","php","node"]);
+ assert.equal(presets.find(p=>p.id==="python").available,true);
+ assert.deepEqual(getWebsitePresets().deployableTypes,["static","files","php","node","python","container"]);
  assert.equal(resolvePreset("php","nginx","8.3").siteType,"php");
  assert.equal(resolvePreset("node","nginx","22").siteType,"node");
  assert.throws(()=>resolvePreset("php","nginx","8.4"));
