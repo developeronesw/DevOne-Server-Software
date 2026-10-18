@@ -1,5 +1,6 @@
 import { registerSiteRoutes } from "./sites.js";
 import { registerControlRoutes } from "./control.js";
+import {registerDisposableQaRoutes} from "./disposable-qa.js";
 import { registerSecurityRoutes } from "./security.js";
 import {registerSoftwareRoutes} from "./software.js";
 import { listCatalog } from "./catalog.js";
@@ -286,6 +287,7 @@ app.delete<{ Params: { name: string } }>("/api/secrets/:name", async (request, r
 });
 registerSiteRoutes(app, { requestUser, sameOrigin, agentUrl, agentToken, jobs, audit });
 registerControlRoutes(app, {db,vault,agentUrl,agentToken,requestUser,sameOrigin,audit});
+registerDisposableQaRoutes(app,{agentUrl,agentToken,requestUser,sameOrigin,audit});
 registerSecurityRoutes(app, {db,agentUrl,agentToken,requestUser,sameOrigin,audit});
 registerSoftwareRoutes(app,{agentUrl,agentToken,requestUser,sameOrigin,audit,jobs});
 const updateAttempts = new Map<string,{count:number;until:number}>();
