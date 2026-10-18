@@ -148,7 +148,7 @@ test('authentication, setup, origin, metrics, logout and rate-limit boundaries',
     assert.equal((await secureGet('/api/backups/not-a-valid-uuid/download')).status, 400);
     const liveQa = await securePost('/api/qa/run', {});
     assert.equal(liveQa.status, 200);
-    assert.equal((await liveQa.json()).results.length, 9);
+    assert.equal((await liveQa.json()).results.length, 10);
     assert.equal((await securePost('/api/qa/run', {})).status, 429);
     assert.equal((await securePost('/api/ai/diagnose', {question:'Check my service status',provider:'gemini'})).status, 409);
     const aiStatus = await (await secureGet('/api/ai/status')).json();
