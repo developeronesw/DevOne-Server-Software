@@ -5,6 +5,7 @@ import { registerSecurityRoutes } from "./security.js";
 import {registerSoftwareRoutes} from "./software.js";
 import { listCatalog } from "./catalog.js";
 import { JobQueue, OutcomeUnknown } from "./jobs.js";
+import {assertAgentMutationResult} from "./job-agent-result.js";
 import { Vault, validSecretName } from "./vault.js";
 import Fastify from "fastify";
 import { readFileSync, unlinkSync } from "node:fs";
@@ -227,21 +228,7 @@ const jobs = new JobQueue(db, async (input, operation) => {
   try {
     response = await fetch(`${agentUrl}${operation === "site.create" ? "/v1/sites" : operation === "site.action" ? "/v1/sites/action" : operation === "site.tls" ? "/v1/sites/tls" : operation === "software.install" ? "/v1/software/install" : "/v1/services/action"}`, { method: "POST", headers: { Authorization: `Bearer ${agentToken}`, "Content-Type": "application/json" }, body: JSON.stringify(input), signal: AbortSignal.timeout(operation === "software.install" ? 320000 : operation === "site.tls" ? 240000 : operation.startsWith("site.") ? 330000 : 35000) });
   } catch { throw new OutcomeUnknown("agent_outcome_unknown"); }
-  if (!response.ok){
-    // The Agent can affirmatively report failure of a host package operation.
-    // A completed HTTP response with this exact Agent-owned error means the
-    // operation needs inspection, not that the API lost contact with the Agent.
-    // Network loss, timeouts and unrecognized 5xx responses remain uncertain.
-    const error=await response.json().catch(()=>({})) as {error?:unknown};
-    if(operation==="software.install"&&response.status===503&&
-       error.error==="software_install_requires_inspection")
-      throw Error("software_install_requires_inspection");
-    if (response.status >= 500) throw new OutcomeUnknown("agent_outcome_unknown");
-    const safe=new Set(["runtime_entry_missing","runtime_not_healthy","node_entry_missing","site_runtime_not_available","php83_runtime_not_running","node22_runtime_not_available","site_port_unavailable","unsupported_runtime_version"]);
-    if((operation==="site.action"||operation==="site.create")&&safe.has(error.error as string))
-      throw Error(error.error as string);
-    throw Error("agent_operation_failed");
-  }
+  await assertAgentMutationResult(response,operation);
 }, audit);
 app.get("/api/jobs", async (request, reply) => {
   const user = requestUser(request);
