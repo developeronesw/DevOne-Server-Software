@@ -297,10 +297,22 @@ export class SiteManager {
   action(input: unknown) { return this.serial(()=>this.lifecycle(input),(input as {siteId?:unknown}|null)?.siteId); }
   private async lifecycle(input: unknown) {
     const body = input as {siteId?:unknown;action?:unknown;expectedRevision?:unknown;domain?:unknown;aliases?:unknown;confirmDomain?:unknown} | null;
-    if (!body || typeof body.siteId !== 'string' || !['update','disable','enable','delete'].includes(body.action as string) || !Number.isSafeInteger(body.expectedRevision)) throw new Error('invalid_site_action');
+    if (!body || typeof body.siteId !== 'string' || !['update','disable','enable','delete','start','stop'].includes(body.action as string) || !Number.isSafeInteger(body.expectedRevision)) throw new Error('invalid_site_action');
     const sites = await this.registry(), site = sites.find(site=>site.id === body.siteId);
     if (!site || !['ready','disabled'].includes(site.state)) throw new Error('site_not_ready');
     if ((site.revision ?? 1) !== body.expectedRevision) throw new Error('site_revision_conflict');
+    if(body.action==='start'||body.action==='stop'){
+      if(site.siteType!=='node'||site.state!=='ready')throw Error('site_runtime_not_available');
+      const unit=nodeUnitName(site.id);
+      if(body.action==='start'){
+        const file=await lstat(join(this.options.base,site.id,'public','server.mjs')).catch(()=>null);
+        if(!file||!file.isFile()||file.isSymbolicLink()||file.size>1048576||file.uid!==site.uid)throw Error('node_entry_missing');
+      }
+      await this.command('systemctl',[body.action,unit]);
+      const active=await this.command('systemctl',['is-active',unit]).then(value=>value.trim()==='active').catch(()=>false);
+      if(body.action==='start'&&!active)throw Error('node_runtime_not_healthy');
+      return {...site,appActive:active};
+    }
     const before = {...site,aliases:[...(site.aliases ?? [])]};
     if (body.action === 'delete' && body.confirmDomain !== site.domain) throw new Error('invalid_delete_confirmation');
     if (body.action === 'update' && site.tls) throw new Error('invalid_tls_domain_change');
@@ -344,6 +356,16 @@ export class SiteManager {
         if (body.action !== 'delete') site.configHash = this.digest(this.configuration(site));
       }
       if (body.action === 'delete') {
+        if(site.siteType==='php'){
+          await rename(phpPoolPath(site.id),join(this.options.registry,`${site.id}.deleted-php`));
+          await this.command('php-fpm8.3',['-t']);
+          await this.command('systemctl',['reload','php8.3-fpm']);
+        }else if(site.siteType==='node'){
+          await this.command('systemctl',['stop',nodeUnitName(site.id)]);
+          await this.command('systemctl',['disable',nodeUnitName(site.id)]);
+          await rename(nodeUnitPath(site.id),join(this.options.registry,`${site.id}.deleted-node`));
+          await this.command('systemctl',['daemon-reload']);
+        }
         const home = join(this.options.base,site.id), stat = await lstat(home);
         if (!stat.isDirectory() || stat.isSymbolicLink() || (this.options.requireRoot !== false && stat.uid !== 0)) throw new Error('unsafe_site_home');
         const passwd = (await this.command('getent',['passwd',site.user])).trim().split(':');
@@ -359,6 +381,13 @@ export class SiteManager {
       }
       site.revision = (before.revision ?? 1)+1; await this.save(sites); return site;
     } catch {
+      if(body.action==='delete'&&!destructiveStarted){
+        if(site.siteType==='php'){
+          try{await rename(join(this.options.registry,`${site.id}.deleted-php`),phpPoolPath(site.id));await this.command('php-fpm8.3',['-t']);await this.command('systemctl',['reload','php8.3-fpm']);}catch{}
+        }else if(site.siteType==='node'){
+          try{await rename(join(this.options.registry,`${site.id}.deleted-node`),nodeUnitPath(site.id));await this.command('systemctl',['daemon-reload']);await this.command('systemctl',['enable',nodeUnitName(site.id)]);}catch{}
+        }
+      }
       if (previous !== undefined) {
         try { await this.writeConfig(destination,destructiveStarted ? this.configuration({...before,state:'disabled',tls:false}) : previous); await this.command('nginx',['-t']); await this.command('systemctl',['reload','nginx']); } catch { /* Keep the inspection state if recovery fails. */ }
       }
