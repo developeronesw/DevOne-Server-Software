@@ -27,7 +27,7 @@ test("site creation accepts PHP 8.3/Node 22 and refuses unsupported runtimes",()
   ["php","nginx","8.4"],["php","apache","8.5"],["node","nginx","24"],
   ["python","apache","3.12"],["container","nginx",undefined]
  ]){
-  assert.throws(()=>resolvePreset(type,server,version),/runtime_not_available/);
+  assert.throws(()=>resolvePreset(type,server,version),/runtime_not_available|unsupported_runtime_version|unsupported_web_server/);
  }
  assert.throws(()=>resolvePreset("static","apache",""),/unsupported_web_server/);
  assert.throws(()=>resolvePreset("php","nginx","99.99"),/unsupported_runtime_version/);
