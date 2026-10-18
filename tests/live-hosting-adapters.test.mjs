@@ -93,6 +93,6 @@ test("SiteManager provisions real PHP pool and Node systemd unit, not empty adap
   assert.equal(status.ok,true);
   assert.equal(status.runtimes.length,2);
   assert.ok(status.runtimes.every(x=>x.configured));
-  await assert.rejects(m.action({siteId:node.id,action:"start",expectedRevision:1}),/node_entry_missing/);
+  await assert.rejects(m.action({siteId:node.id,action:"start",expectedRevision:1}),/runtime_entry_missing/);
  }finally{await rm(dir,{recursive:true,force:true});}
 });
