@@ -65,14 +65,24 @@ export async function softwareInstall(input:unknown,run:Runner=exec):Promise<Run
  const name=parseRuntimeInstall(input);
  if(installing)throw Error("software_install_busy");
  installing=true;
+ let phase="apt_install";
  try{
-  // The Agent is a dedicated privileged service; no shell, custom input or apt command exposed.
+  // The Agent is a dedicated privileged service; no shell or user-supplied
+  // commands. The fixed script performs policy checks before any mutation.
   await run("/usr/bin/bash",[SCRIPT,"--managed-install",name],{timeout:300000,maxBuffer:4194304});
+  phase="verify_package_and_service";
   const info=(await softwareStatus(run)).packages.find(x=>x.package===name)!;
   if(!info.installed||!info.serviceActive)throw Error("software_install_requires_inspection");
   return info;
  }catch(error){
-  if(error instanceof Error && error.message==="software_install_requires_inspection")throw error;
+  const cause=error as Error&{code?:string|number;signal?:string};
+  // Structured, non-secret diagnostic breadcrumbs for journalctl. Raw APT
+  // stdout/stderr may contain sensitive host details and are never sent to UI.
+  console.error("devone_software_install_requires_inspection",{
+   package:name,phase,
+   exitCode:typeof cause?.code==="number"?cause.code:null,
+   timedOut:cause?.signal==="SIGTERM"
+  });
   throw Error("software_install_requires_inspection");
  }finally{installing=false;}
 }
