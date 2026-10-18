@@ -1,6 +1,6 @@
 # Managed host software installation — Phase 2
 
-DevOne Software Center now provides actual, Owner-approved Ubuntu package installation for **PHP 8.3-FPM** and **Redis Server** on the dedicated Ubuntu 24.04 development VPS. Click Install after entering your Owner password and an MFA code when enabled. This runs the allowlisted, root-owned Agent operation as an audited persistent job and shows queued/running/succeeded/failed or interrupted state. The UI reads live dpkg and systemd package states; Services can start/stop/restart either component.
+DevOne Software Center now provides actual, Owner-approved Ubuntu package installation for **PHP 8.3-FPM** and **Redis Server** on the dedicated Ubuntu 24.04 development VPS. Click Install after entering your Owner password and an MFA code when enabled. This runs the allowlisted, root-owned Agent operation as an audited persistent job and shows queued/running/succeeded/failed or interrupted state. The UI reads live dpkg and systemd package states; Services can start/stop/restart either component. Managed PHP 8.3 sites are now available in Websites & Files once php8.3-fpm is installed.
 
 ## Operation sequence
 
@@ -19,6 +19,6 @@ DevOne Software Center now provides actual, Owner-approved Ubuntu package instal
 
 ## Scope boundaries
 
-Application catalog entries including DevOne CMS, WordPress, Next.js, and Ghost still require individual deployment adapters and are not installable from the catalog. Installed PHP/Redis do not automatically create a website or database. This first working package management path does not yet implement package **removal**, automatic dependency **rollback**, multi-version PHP, real WAF blocking, or production release parity. Run it only on a disposable development VPS and retain recoverable snapshot backups before attempting host mutations.
+Application catalog entries including DevOne CMS, WordPress, Next.js, and Ghost still require individual deployment adapters and are not installable from the catalog. Installed PHP/Redis do not automatically create a website or database. This first working package management path does not yet implement phpMyAdmin, package **removal**, automatic dependency **rollback**, multi-version PHP, real WAF blocking, or production release parity. Run it only on a disposable development VPS and retain recoverable snapshot backups before attempting host mutations.
 
 A green `pnpm qa` means CI/regressions passed; production release acceptance must still separately pass `pnpm qa:release` after live-host, restore and legacy parity verification.
