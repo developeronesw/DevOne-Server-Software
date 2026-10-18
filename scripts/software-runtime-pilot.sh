@@ -28,17 +28,21 @@ done
 free_kb="$(df -Pk / | awk 'NR==2{print $4}')"
 [[ "$free_kb" =~ ^[0-9]+$ ]] || { echo "Disk inventory failed." >&2; exit 1; }
 (( free_kb >= 524288 )) || { echo "Need at least 512 MiB free disk." >&2; exit 1; }
-candidate="$(apt-cache policy "$package" | awk '$1=="Candidate:"{print $2;exit}')"
+# Capture APT policy exactly once, before parsing. The old
+# apt-cache | awk '...{ print; exit }' pipeline generated SIGPIPE (exit 141)
+# under 'set -o pipefail' on hosts with longer policy output, even though the
+# Ubuntu candidate was valid and no package operation had begun.
+policy="$(apt-cache policy "$package")" || { echo "APT package policy could not be read." >&2; exit 1; }
+candidate="$(awk '$1=="Candidate:"{value=$2;found=1} END {if(found)print value;else exit 1}' <<< "$policy")" || { echo "APT candidate could not be identified." >&2; exit 1; }
 [[ "$candidate" =~ ^[0-9A-Za-z.+~:-]+$ && "$candidate" != "(none)" ]] || { echo "No valid candidate in current APT metadata." >&2; exit 1; }
 # Candidate must have the Ubuntu Noble release origin, never an arbitrary PPA.
-# This is a preflight; operator must independently review APT trust and freshness.
-policy="$(apt-cache policy "$package")"
-printf '%s\n' "$policy" | awk -v version="$candidate" '
+# Awk reads a here-string; no producer is killed by an early pipe close.
+awk -v version="$candidate" '
   $1 == "***" { active=($2 == version); next }
   $1 ~ /^[0-9][^[:space:]]*$/ && $2 ~ /^[0-9]+$/ { active=($1 == version); next }
   active && $1 == "release" && /(^|,)o=Ubuntu(,|$)/ && /(^|,)n=noble(-updates|-security)?(,|$)/ && /(^|,)l=Ubuntu(,|$)/ { ok=1 }
   END { exit(ok ? 0 : 1) }
-' || { echo "Candidate is not proven to originate from Ubuntu Noble metadata." >&2; exit 1; }
+' <<< "$policy" || { echo "Candidate is not proven to originate from Ubuntu Noble metadata." >&2; exit 1; }
 simulation="$(mktemp /tmp/devone-software-apt.XXXXXXXX)"
 trap 'rm -f "$simulation"' EXIT
 apt-get -s --no-install-recommends install "$package=$candidate" > "$simulation" || { echo "APT simulation failed; no install attempted." >&2; exit 1; }
