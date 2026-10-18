@@ -71,7 +71,11 @@ for unit in devone-api devone-agent; do
   systemctl is-active --quiet "$unit" || { echo "$unit is down after install. Manual inspection required." >&2; exit 1; }
 done
 systemctl is-active --quiet "${package/docker.io/docker}" || { echo "$package is installed but its service is not active; inspect host." >&2; exit 1; }
-if [[ "$package" == "redis-server" ]] && ss -ltnH | awk '{print $4}' | grep -Eq '^(0\.0\.0\.0|\*|\[::\]|::):6379$'; then
-  echo "Redis may be exposed on all interfaces; restrict access before continuing." >&2; exit 1
+if [[ "$package" == "redis-server" ]]; then
+  redis_listeners="$(ss -ltnH)" || { echo "Unable to validate Redis listening sockets." >&2; exit 1; }
+  # Here-string parsing avoids another potential SIGPIPE from grep -q + pipefail.
+  if awk '$4 ~ /^(0[.]0[.]0[.]0|\*|\[::\]|::):6379$/ { exposed=1 } END { exit(!exposed) }' <<< "$redis_listeners"; then
+    echo "Redis may be exposed on all interfaces; restrict access before continuing." >&2; exit 1
+  fi
 fi
 echo "Managed package installed and service active. Site integration and package-level rollback are separate capabilities."
