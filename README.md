@@ -103,9 +103,7 @@ Open `https://YOUR_SERVER_IP:8443` and run QA Center after installation. Permit
 legacy edition, including its original UI. It does not restore customer data.
 Do not install over CloudPanel or the Node edition.
 
-The Node edition remains under development. It now has functional sign-in,
-logout, authenticated host metrics and allowlisted service controls, but its management modules are not yet
-ported. See [the comparison and remaining work](docs/LEGACY-COMPARISON.md).
+The Node edition remains a developer preview. It now supports authenticated PHP 8.3 and Node.js 22 site provisioning with NGINX adapters, PHP-FPM pools, per-site Node systemd units, file editing and runtime operations. phpMyAdmin, WordPress, container deployments and full legacy parity remain pending. See [operational hosting and QA](docs/PHASE3-OPERATIONAL-HOSTING.md) and [the comparison](docs/LEGACY-COMPARISON.md).
 The fresh Node installer uses the exact clean checkout commit and refuses an
 existing installation. An explicit, rollback-aware in-place updater is available for reviewed Node commits; see [in-place updates](docs/INSTALLATION.md#in-place-updates-existing-node-installations). Legacy migrations remain pending.
 

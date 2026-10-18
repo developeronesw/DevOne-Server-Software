@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 
 export type ServiceInput = { service: string; action: string };
-export type SiteInput = { domain: string; webServer: "nginx" | "none"; siteType?: "static" | "files" };
+export type SiteInput = { domain: string; webServer: "nginx" | "none"; siteType?: "static" | "files" | "php" | "node"; runtimeVersion?:string };
 export type SiteActionInput = {siteId:string;action:string;expectedRevision:number;domain?:string;aliases?:string[];confirmDomain?:string};
 export type SiteTlsInput = {siteId:string;action:string;expectedRevision:number;email?:string;agreeTerms?:boolean};
 export type SoftwareInstallInput={package:"php8.3-fpm"|"redis-server";confirmed:true};
@@ -36,7 +36,7 @@ export class JobQueue {
     const serialized = operation === "service.action"
       ? JSON.stringify({ service: (input as ServiceInput).service, action: (input as ServiceInput).action })
       : operation === "software.install" ? JSON.stringify({package:(input as SoftwareInstallInput).package,confirmed:(input as SoftwareInstallInput).confirmed})
-      : operation === "site.create" ? JSON.stringify({ domain: (input as SiteInput).domain, webServer: (input as SiteInput).webServer })
+      : operation === "site.create" ? JSON.stringify({ domain: (input as SiteInput).domain, webServer: (input as SiteInput).webServer, siteType:(input as SiteInput).siteType, runtimeVersion:(input as SiteInput).runtimeVersion })
       : operation === "site.tls" ? JSON.stringify({siteId:(input as SiteTlsInput).siteId,action:(input as SiteTlsInput).action,expectedRevision:(input as SiteTlsInput).expectedRevision,email:(input as SiteTlsInput).email,agreeTerms:(input as SiteTlsInput).agreeTerms})
       : JSON.stringify({siteId:(input as SiteActionInput).siteId,action:(input as SiteActionInput).action,expectedRevision:(input as SiteActionInput).expectedRevision,domain:(input as SiteActionInput).domain,aliases:(input as SiteActionInput).aliases,confirmDomain:(input as SiteActionInput).confirmDomain});
     const existing = this.db.prepare("SELECT * FROM jobs WHERE requested_by=? AND request_key=?").get(actor, key) as Job | undefined;
@@ -84,7 +84,9 @@ export class JobQueue {
         await this.execute(JSON.parse(job.input), job.operation);
       } catch (e) {
         state = e instanceof OutcomeUnknown ? "interrupted" : "failed";
-        error = e instanceof Error && e.message === "authorization_revoked" ? "authorization_revoked" : state === "interrupted" ? "agent_outcome_unknown" : "agent_operation_failed";
+        const reason=e instanceof Error?e.message:"agent_operation_failed";
+        const known=new Set(["authorization_revoked","node_entry_missing","site_runtime_not_available","php83_runtime_not_running","node22_runtime_not_available","site_port_unavailable","unsupported_runtime_version"]);
+        error=state==="interrupted"?"agent_outcome_unknown":known.has(reason)?reason:"agent_operation_failed";
       }
       this.transaction(() => {
         this.db.prepare("UPDATE jobs SET state=?,error=?,finished_at=? WHERE id=?").run(state, error, new Date().toISOString(), job.id);

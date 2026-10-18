@@ -131,6 +131,11 @@ export function registerControlRoutes(app:FastifyInstance,deps:Deps) {
       await check("agent.metrics",async()=>Boolean((await agent("/v1/metrics")).ok),"Readable live system metrics");
       await check("agent.services",async()=>Array.isArray(await agent("/v1/services")),"Allowlisted system service inventory");
       await check("agent.sites",async()=>Array.isArray((await agent("/v1/sites")).sites),"Hosted site registry readable");
+      await check("agent.site_runtimes",async()=>{
+        const result=await agent("/v1/sites/runtime/status",8000);
+        return result.ok===true&&Array.isArray(result.runtimes)&&
+          result.runtimes.every((x:any)=>["php","node"].includes(x.type)&&x.configured===true);
+      },"Real PHP-FPM pools and Node systemd units exist for all managed runtime websites; stopped Node apps are distinguished from running apps");
       await check("agent.software",async()=>{
         const capabilities=await agent("/v1/software/capabilities");
         if(capabilities.mode!=="managed-install"||capabilities.installAvailable!==true||
@@ -140,7 +145,7 @@ export function registerControlRoutes(app:FastifyInstance,deps:Deps) {
           status.packages.every((p:any)=>["php8.3-fpm","redis-server"].includes(p.package)&&
             typeof p.installed==="boolean"&&typeof p.serviceActive==="boolean"&&
             (!p.installed||(p.serviceActive&&typeof p.version==="string"&&p.version.length>0)));
-      },"Software Center allowlisted read-only preflight capabilities; installation remains disabled");
+      },"Software Center managed installation capability, installed package versions and active services");
       await check("agent.crowdsec",async()=>{
         const status=await agent("/v1/security/crowdsec");
         return status.phase==="detection-readiness"&&status.enforcementVerified===false;
