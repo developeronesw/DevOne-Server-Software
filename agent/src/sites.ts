@@ -11,7 +11,7 @@ import {nodeSitePort,phpPoolPath,phpPoolConfig,nodeUnitPath,nodeUnitName,nodeUni
 
 const exec = promisify(execFile);
 export type Site = { id: string; domain: string; user: string; uid?: number; gid?: number; siteType?: 'static' | 'files' | 'php' | 'node'; runtimeVersion?:'8.3'|'22'; appActive?:boolean; waf?:WafPolicy; webServer: 'nginx' | 'none'; state: 'provisioning' | 'ready' | 'disabled' | 'updating' | 'needs_inspection'; createdAt: string; aliases?: string[]; revision?: number; configHash?: string; tls?: boolean; certificateIssued?: boolean };
-type Options = { registry: string; base: string; nginx: string; panelDomain: string; requireRoot?: boolean; certificates?: string; ownership?: typeof chown; worker?: (site: Site,request: Record<string,unknown>) => Promise<unknown>; command?: (command: string, args: string[]) => Promise<string> };
+type Options = { registry: string; base: string; nginx: string; panelDomain: string; requireRoot?: boolean; certificates?: string; phpPoolDir?:string; nodeUnitDir?:string; ownership?: typeof chown; worker?: (site: Site,request: Record<string,unknown>) => Promise<unknown>; command?: (command: string, args: string[]) => Promise<string> };
 export function siteInput(input: unknown): { domain: string; webServer: 'nginx' | 'none'; siteType: 'static' | 'files' | 'php' | 'node'; runtimeVersion?:'8.3'|'22' } {
   if (!input || typeof input !== 'object') throw new Error('invalid_site');
   const body = input as Record<string,unknown>;
@@ -151,7 +151,7 @@ export class SiteManager {
         await this.command('setfacl',['-m','u:www-data:rx,d:u:www-data:rx',publicRoot]);
         if(siteType==='php'){
           await this.command('systemctl',['is-active','php8.3-fpm']);
-          runtimeConfig=phpPoolPath(id);
+          runtimeConfig=phpPoolPath(id,this.options.phpPoolDir);
           const pool=await open(runtimeConfig,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o644);
           try{await pool.writeFile(phpPoolConfig(site,this.options.base));await pool.sync();}finally{await pool.close();}
           await this.command('php-fpm8.3',['-t']);
@@ -159,7 +159,7 @@ export class SiteManager {
         }else if(siteType==='node'){
           const version=await this.command('node',['--version']);
           if(!/^v22\./.test(version.trim()))throw Error('node22_runtime_required');
-          runtimeConfig=nodeUnitPath(id);
+          runtimeConfig=nodeUnitPath(id,this.options.nodeUnitDir);
           const unit=await open(runtimeConfig,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o644);
           try{await unit.writeFile(nodeUnitConfig(site,this.options.base));await unit.sync();}finally{await unit.close();}
           await this.command('systemctl',['daemon-reload']);
@@ -364,13 +364,13 @@ export class SiteManager {
       }
       if (body.action === 'delete') {
         if(site.siteType==='php'){
-          await rename(phpPoolPath(site.id),join(this.options.registry,`${site.id}.deleted-php`));
+          await rename(phpPoolPath(site.id,this.options.phpPoolDir),join(this.options.registry,`${site.id}.deleted-php`));
           await this.command('php-fpm8.3',['-t']);
           await this.command('systemctl',['reload','php8.3-fpm']);
         }else if(site.siteType==='node'){
           await this.command('systemctl',['stop',nodeUnitName(site.id)]);
           await this.command('systemctl',['disable',nodeUnitName(site.id)]);
-          await rename(nodeUnitPath(site.id),join(this.options.registry,`${site.id}.deleted-node`));
+          await rename(nodeUnitPath(site.id,this.options.nodeUnitDir),join(this.options.registry,`${site.id}.deleted-node`));
           await this.command('systemctl',['daemon-reload']);
         }
         const home = join(this.options.base,site.id), stat = await lstat(home);
@@ -390,9 +390,9 @@ export class SiteManager {
     } catch {
       if(body.action==='delete'&&!destructiveStarted){
         if(site.siteType==='php'){
-          try{await rename(join(this.options.registry,`${site.id}.deleted-php`),phpPoolPath(site.id));await this.command('php-fpm8.3',['-t']);await this.command('systemctl',['reload','php8.3-fpm']);}catch{}
+          try{await rename(join(this.options.registry,`${site.id}.deleted-php`),phpPoolPath(site.id,this.options.phpPoolDir));await this.command('php-fpm8.3',['-t']);await this.command('systemctl',['reload','php8.3-fpm']);}catch{}
         }else if(site.siteType==='node'){
-          try{await rename(join(this.options.registry,`${site.id}.deleted-node`),nodeUnitPath(site.id));await this.command('systemctl',['daemon-reload']);await this.command('systemctl',['enable',nodeUnitName(site.id)]);}catch{}
+          try{await rename(join(this.options.registry,`${site.id}.deleted-node`),nodeUnitPath(site.id,this.options.nodeUnitDir));await this.command('systemctl',['daemon-reload']);await this.command('systemctl',['enable',nodeUnitName(site.id)]);}catch{}
         }
       }
       if (previous !== undefined) {
