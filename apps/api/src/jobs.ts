@@ -5,7 +5,7 @@ export type ServiceInput = { service: string; action: string };
 export type SiteInput = { domain: string; webServer: "nginx" | "none"; siteType?: "static" | "files" | "php" | "node" | "python" | "container"; runtimeVersion?:string };
 export type SiteActionInput = {siteId:string;action:string;expectedRevision:number;domain?:string;aliases?:string[];confirmDomain?:string};
 export type SiteTlsInput = {siteId:string;action:string;expectedRevision:number;email?:string;agreeTerms?:boolean};
-export type SoftwareInstallInput={package:"php8.3-fpm"|"redis-server";confirmed:true};
+export type SoftwareInstallInput={package:"php8.3-fpm"|"redis-server"|"docker.io";confirmed:true};
 export type JobInput = ServiceInput | SiteInput | SiteActionInput | SiteTlsInput | SoftwareInstallInput;
 export type JobState = "queued" | "running" | "succeeded" | "failed" | "interrupted";
 export type Job = { id: string; requested_by: string; operation: string; input: string; state: JobState; error: string | null; created_at: string; started_at: string | null; finished_at: string | null };
@@ -32,7 +32,7 @@ export class JobQueue {
   enqueue(actor: string, key: string, input: JobInput, operation = "service.action"): Job {
     if (!/^[a-zA-Z0-9_-]{16,128}$/.test(key)) throw new Error("invalid_request_key");
     if (!["service.action", "site.create", "site.action", "site.tls", "software.install"].includes(operation)) throw new Error("invalid_operation");
-    if(operation==="software.install" && (!input || !["php8.3-fpm","redis-server"].includes((input as SoftwareInstallInput).package) || (input as SoftwareInstallInput).confirmed!==true)) throw Error("invalid_software_install");
+    if(operation==="software.install" && (!input || !["php8.3-fpm","redis-server","docker.io"].includes((input as SoftwareInstallInput).package) || (input as SoftwareInstallInput).confirmed!==true)) throw Error("invalid_software_install");
     const serialized = operation === "service.action"
       ? JSON.stringify({ service: (input as ServiceInput).service, action: (input as ServiceInput).action })
       : operation === "software.install" ? JSON.stringify({package:(input as SoftwareInstallInput).package,confirmed:(input as SoftwareInstallInput).confirmed})
