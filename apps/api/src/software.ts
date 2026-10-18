@@ -9,7 +9,7 @@ type Deps={
  sameOrigin:(request:any)=>boolean;
  audit:(id:string|null,event:string,details?:unknown)=>void;
 };
-const packages=["php8.3-fpm","redis-server"] as const;
+const packages=["php8.3-fpm","redis-server","docker.io"] as const;
 const validPackage=(p:unknown):p is (typeof packages)[number]=>packages.includes(p as any);
 export function registerSoftwareRoutes(app:FastifyInstance,deps:Deps){
  const attempts=new Map<string,{count:number;reset:number}>();
@@ -38,7 +38,7 @@ export function registerSoftwareRoutes(app:FastifyInstance,deps:Deps){
   try{
    const data=await agent("/v1/software/capabilities");
    if(data?.mode!=="managed-install"||data?.installAvailable!==true||
-     !Array.isArray(data.options)||data.options.length!==2||
+     !Array.isArray(data.options)||data.options.length!==packages.length||
      data.options.some((p:any,i:number)=>p.package!==packages[i]||p.installAvailable!==true))
       throw Error("invalid_capabilities");
    return data;
@@ -49,7 +49,7 @@ export function registerSoftwareRoutes(app:FastifyInstance,deps:Deps){
   reply.header("Cache-Control","no-store");
   try{
    const data=await agent("/v1/software/status");
-   if(data?.installAvailable!==true||!Array.isArray(data.packages)||data.packages.length!==2||
+   if(data?.installAvailable!==true||!Array.isArray(data.packages)||data.packages.length!==packages.length||
      data.packages.some((p:any,i:number)=>p.package!==packages[i]||typeof p.installed!=="boolean"||
        typeof p.serviceActive!=="boolean"||(p.version!==null&&typeof p.version!=="string")))
     throw Error("invalid_software_status");
