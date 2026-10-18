@@ -93,7 +93,7 @@ test('authentication, setup, origin, metrics, logout and rate-limit boundaries',
     const hostStatus=await secureGet('/api/software/status');
     assert.equal(hostStatus.status,200);
     const hostState=await hostStatus.json();
-    assert.deepEqual(hostState.packages.map(p=>p.package),['php8.3-fpm','redis-server']);
+    assert.deepEqual(hostState.packages.map(p=>p.package),['php8.3-fpm','redis-server','docker.io']);
     assert.ok(hostState.packages.every(p=>typeof p.installed==='boolean'&&typeof p.serviceActive==='boolean'));
     const installRequest={package:'php8.3-fpm',confirmed:true,requestKey:'runtime-install-auth-test-123',password:credentials.password};
     assert.equal((await securePost('/api/software/install',{...installRequest,package:'nginx'})).status,400);
