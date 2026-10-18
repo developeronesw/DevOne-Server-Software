@@ -41,6 +41,11 @@ const server = createServer(async (request, response) => {
     }
     return;
   }
+  if(request.method==="GET"&&request.url==="/v1/sites/runtime/status"){
+    try{send(200,await sites.runtimeStatus());}
+    catch{send(503,{error:"runtime_status_unavailable"});}
+    return;
+  }
   if (request.method === "POST" && request.url === "/v1/sites/preflight") {
     try {
       request.setEncoding("utf8");
