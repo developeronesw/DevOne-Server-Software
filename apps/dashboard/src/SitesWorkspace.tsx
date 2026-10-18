@@ -15,7 +15,7 @@ async function waitForJob(id:string) {
   while(Date.now()<deadline) {
     const {job}=await api(`/api/jobs/${encodeURIComponent(id)}`);
     if(job.state === 'succeeded') return;
-    if(['failed','interrupted'].includes(job.state)) throw new Error(`Operation ${job.state}. Check Recent jobs and inspect the site before retrying.`);
+    if(['failed','interrupted'].includes(job.state)) throw new Error(`Operation ${job.state}: ${job.error??'see Activity & Jobs'}. ${job.error==='node_entry_missing'?'Upload server.mjs to the site files, then start the app.':'Review Recent jobs before retrying.'}`);
     await new Promise(resolve=>setTimeout(resolve,1000));
   }
   throw new Error('Operation is still pending. Check Recent jobs before requesting another change.');
