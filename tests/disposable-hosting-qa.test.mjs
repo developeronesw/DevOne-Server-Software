@@ -11,7 +11,7 @@ test("Python 3.12 adapter starts isolated systemd app on private loopback port",
  assert.match(config,/NoNewPrivileges=true/);
  const proxy=runtimeNginxLocation(site);
  assert.match(proxy,/proxy_pass http:\/\/127\.0\.0\.1:/);
- assert.match(proxy,/limit_req test;/m)===false;
+ assert.doesNotMatch(proxy,/limit_req test;/m);
  assert.throws(()=>pythonUnitConfig({...site,runtimeVersion:"3.13"}));
 });
 test("Docker adapter has fixed unprivileged image, loopback publishing and no host control mounts",()=>{
