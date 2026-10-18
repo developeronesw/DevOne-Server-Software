@@ -1,7 +1,7 @@
 // Runtime-backed hosting templates. These are actual PHP-FPM / systemd adapters,
 // not starter site content. Never incorporate arbitrary shell commands or paths.
 export type RuntimeSite={id:string;user:string;siteType?:string;runtimeVersion?:string};
-export const runtimeTypes=["php","node"] as const;
+export const runtimeTypes=["php","node","python","container"] as const;
 export function nodeSitePort(id:string):number{
  if(!/^site_[a-f0-9]{16}$/.test(id))throw Error("invalid_site");
  return 30000+(Number.parseInt(id.slice(5,13),16)%15000);
@@ -72,6 +72,45 @@ export function nodeUnitConfig(site:RuntimeSite,base="/home/devone-sites"):strin
   ""
  ].join("\n");
 }
+
+export function runtimeContainerName(id:string):string{
+ if(!/^site_[a-f0-9]{16}$/.test(id))throw Error("invalid_site");
+ return "devone_"+id;
+}
+export function pythonUnitConfig(site:RuntimeSite,base="/home/devone-sites"):string{
+ if(!/^site_[a-f0-9]{16}$/.test(site.id)||site.user!=="dvs_"+site.id.slice(5)||site.siteType!=="python"||site.runtimeVersion!=="3.12")throw Error("invalid_python_site");
+ const home=base+"/"+site.id+"/public";
+ return [
+ "[Unit]","Description=DevOne Python application "+site.id,"After=network-online.target",
+ "[Service]","Type=simple","User="+site.user,"Group="+site.user,"WorkingDirectory="+home,
+ "Environment=PYTHONUNBUFFERED=1","Environment=PYTHONDONTWRITEBYTECODE=1",
+ "Environment=HOST=127.0.0.1","Environment=PORT="+nodeSitePort(site.id),
+ "ExecStart=/usr/bin/python3.12 "+home+"/app.py",
+ "Restart=on-failure","RestartSec=3","NoNewPrivileges=true","PrivateTmp=true",
+ "ProtectSystem=strict","ProtectHome=false","ReadWritePaths="+home,
+ "CapabilityBoundingSet=","RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6",
+ "LimitNOFILE=2048","[Install]","WantedBy=multi-user.target",""
+ ].join("\n");
+}
+// The only approved container workload is a fixed unprivileged NGINX web image.
+// This is NOT arbitrary Docker Compose or user-supplied image execution.
+export const managedContainerImage="nginxinc/nginx-unprivileged:stable-alpine";
+export function dockerRunArgs(site:RuntimeSite,uid:number,gid:number,base="/home/devone-sites"):string[]{
+ if(!/^site_[a-f0-9]{16}$/.test(site.id)||site.siteType!=="container"||
+ site.user!=="dvs_"+site.id.slice(5)||!Number.isSafeInteger(uid)||uid<1000||
+ !Number.isSafeInteger(gid)||gid<1000)throw Error("invalid_container_site");
+ return ["run","-d","--name",runtimeContainerName(site.id),
+ "--label","devone.site="+site.id,"--restart","unless-stopped",
+ "--network","bridge","--publish","127.0.0.1:"+nodeSitePort(site.id)+":8080",
+ "--user",uid+":"+gid,"--read-only","--cap-drop=ALL",
+ "--security-opt","no-new-privileges","--pids-limit","64","--memory","128m","--cpus","0.5",
+ "--tmpfs","/tmp:rw,nosuid,noexec,size=16m",
+ "--tmpfs","/var/cache/nginx:rw,nosuid,noexec,size=16m",
+ "--tmpfs","/var/run:rw,nosuid,noexec,size=4m",
+ "--mount","type=bind,source="+base+"/"+site.id+"/public,target=/usr/share/nginx/html,readonly",
+ managedContainerImage];
+}
+
 export function runtimeNginxLocation(site:RuntimeSite,base="/home/devone-sites",protection=""):string{
  if(!/^site_[a-f0-9]{16}$/.test(site.id))throw Error("invalid_site");
  if(site.siteType==="php"){
@@ -96,8 +135,8 @@ export function runtimeNginxLocation(site:RuntimeSite,base="/home/devone-sites",
    ""
   ].join("\n");
  }
- if(site.siteType==="node"){
-  if(site.runtimeVersion!=="22")throw Error("unsupported_node_version");
+ if(["node","python","container"].includes(site.siteType??"")){
+  if(site.siteType==="node"&&site.runtimeVersion!=="22"||site.siteType==="python"&&site.runtimeVersion!=="3.12"||site.siteType==="container"&&site.runtimeVersion!==undefined)throw Error("unsupported_runtime_version");
   return [
    " location / {",
    protection,
