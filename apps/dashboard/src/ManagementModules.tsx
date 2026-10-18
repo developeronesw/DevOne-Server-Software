@@ -94,7 +94,7 @@ function RuntimeManager({role}:{role:string}){
    </button>
   </div>}
   {job&&<p role="status" className={job.state==="succeeded"?"inline-notice":job.state==="failed"||job.state==="interrupted"?"ops-warning":"ops-subtext"}>
-   Installation job {job.state}. {job.state==="interrupted"?"Outcome uncertain; inspect package status before retrying.":job.state==="failed"?"Review Activity & Jobs and server logs.":""}
+   Installation job {job.state}. {job.state==="interrupted"?"Outcome uncertain; inspect package status before retrying.":job.state==="failed"?(job.error==="software_install_requires_inspection"?"The Agent reported an installation problem. Check package and service state plus Agent journal before retrying.":"Review Activity & Jobs and server logs."):""}
   </p>}
   {error&&<p role="alert" className="inline-error">{error}</p>}
   <p className="ops-note">Only these two Ubuntu runtimes are managed here. Installed services can be started, stopped or restarted under Services. This does not install WordPress, DevOne CMS, or other catalog applications. Package removal and automatic dependency rollback are not available yet.</p>
