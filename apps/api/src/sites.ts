@@ -59,7 +59,7 @@ export function registerSiteRoutes(app: FastifyInstance, dependencies: Dependenc
       return reply.code(400).send({error:error instanceof Error ? error.message : 'invalid_site_preset'});
     }
     try {
-      return reply.code(202).send({job:jobs.enqueue(user.id,body.requestKey,{domain:body.domain,webServer:body.webServer as 'nginx'|'none',siteType:(body.siteType ?? (body.webServer==='nginx'?'static':'files')) as 'static'|'files'|'php'|'node',runtimeVersion:body.runtimeVersion as string|undefined},'site.create')});
+      return reply.code(202).send({job:jobs.enqueue(user.id,body.requestKey,{domain:body.domain,webServer:body.webServer as 'nginx'|'none',siteType:(body.siteType ?? (body.webServer==='nginx'?'static':'files')) as 'static'|'files'|'php'|'node'|'python'|'container',runtimeVersion:body.runtimeVersion as string|undefined},'site.create')});
     } catch (error) {
       const code = error instanceof Error ? error.message : 'queue_error';
       return reply.code(code === 'request_key_conflict' ? 409 : ['queue_full','queue_stopping'].includes(code) ? 503 : 400).send({error:code});
