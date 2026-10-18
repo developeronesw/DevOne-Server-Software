@@ -56,10 +56,12 @@ test('authentication, setup, origin, metrics, logout and rate-limit boundaries',
     assert.equal(presetReply.status,200);
     const choices=await presetReply.json();
     assert.equal(choices.initialContent,'empty');
-    assert.equal(choices.presets.find(x=>x.id==='php').available,false);
+    assert.equal(choices.presets.find(x=>x.id==='php').available,true);
+    assert.equal(choices.presets.find(x=>x.id==='node').available,true);
+    assert.equal(choices.presets.find(x=>x.id==='python').available,false);
     const presetRejected=await securePost('/api/sites',{domain:'runtime.example.com',webServer:'nginx',siteType:'php',runtimeVersion:'8.4',confirmed:true,requestKey:'runtime-blocked'});
     assert.equal(presetRejected.status,400);
-    const preflightRejected=await securePost('/api/sites/preflight',{domain:'runtime.example.com',webServer:'nginx',siteType:'node',runtimeVersion:'22'});
+    const preflightRejected=await securePost('/api/sites/preflight',{domain:'runtime.example.com',webServer:'nginx',siteType:'node',runtimeVersion:'24'});
     assert.equal(preflightRejected.status,400);
     assert.equal((await post('/api/ai/code-assist',{provider:'gemini',task:'review',path:'index.js',source:'let x=1;',confirmed:true})).status,401);
     assert.equal((await securePost('/api/ai/code-assist',{provider:'gemini',task:'review',path:'index.js',source:'let x=1;',confirmed:false})).status,400);
