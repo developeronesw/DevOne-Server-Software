@@ -25,5 +25,5 @@ export function resolvePreset(value:unknown,server:unknown,version:unknown){
  if(typeof server!=="string"||!preset.webServers.includes(server))throw Error("unsupported_web_server");
  if(preset.versions.length === 0 ? version !== undefined && version !== null && version !== "" : typeof version !== "string" || !preset.versions.includes(version))throw Error("unsupported_runtime_version");
  if(!preset.available)throw Error("runtime_not_available");
- return {siteType:preset.id as "static"|"files"|"php"|"node",runtimeVersion:version as string|undefined,webServer:server as "nginx"|"none"};
+ return {siteType:preset.id as "static"|"files"|"php"|"node",...(preset.runtime?{runtimeVersion:version as string}:{}),webServer:server as "nginx"|"none"};
 }
