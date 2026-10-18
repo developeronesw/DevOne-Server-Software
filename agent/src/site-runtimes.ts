@@ -32,9 +32,8 @@ export function phpPoolConfig(site:RuntimeSite,base="/home/devone-sites"):string
   "pm.max_requests = 300",
   "clear_env = yes",
   "security.limit_extensions = .php",
-  "php_admin_value[open_basedir] = "+home+"/public:/tmp",
+  "php_admin_value[open_basedir] = "+home+"/public:/tmp:/var/lib/php/sessions:/usr/share/php",
   "php_admin_flag[log_errors] = on",
-  "php_admin_value[error_log] = "+home+"/php-errors.log",
   "chdir = "+home+"/public",
   ""
  ].join("\n");
@@ -73,7 +72,7 @@ export function nodeUnitConfig(site:RuntimeSite,base="/home/devone-sites"):strin
   ""
  ].join("\n");
 }
-export function runtimeNginxLocation(site:RuntimeSite,base="/home/devone-sites"):string{
+export function runtimeNginxLocation(site:RuntimeSite,base="/home/devone-sites",protection=""):string{
  if(!/^site_[a-f0-9]{16}$/.test(site.id))throw Error("invalid_site");
  if(site.siteType==="php"){
   if(site.runtimeVersion!=="8.3")throw Error("unsupported_php_version");
@@ -82,7 +81,10 @@ export function runtimeNginxLocation(site:RuntimeSite,base="/home/devone-sites")
    " index index.php index.html;",
    " disable_symlinks on;",
    " add_header X-Content-Type-Options nosniff always;",
-   " location / { try_files $uri $uri/ /index.php?$query_string; }",
+   " location / {",
+   protection,
+   "  try_files $uri $uri/ /index.php?$query_string;",
+   " }",
    " location ~ \\.php$ {",
    "  try_files $uri =404;",
    "  include fastcgi_params;",
@@ -97,6 +99,7 @@ export function runtimeNginxLocation(site:RuntimeSite,base="/home/devone-sites")
   if(site.runtimeVersion!=="22")throw Error("unsupported_node_version");
   return [
    " location / {",
+   protection,
    "  proxy_pass http://127.0.0.1:"+nodeSitePort(site.id)+";",
    "  proxy_http_version 1.1;",
    "  proxy_set_header Host $host;",
