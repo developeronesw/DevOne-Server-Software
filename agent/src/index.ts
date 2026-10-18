@@ -90,7 +90,7 @@ const server = createServer(async (request, response) => {
       send(200,request.url === "/v1/sites" ? await sites.create(input) : request.url === "/v1/sites/action" ? await sites.action(input) : request.url === "/v1/sites/tls" ? await sites.tls(input) : await sites.files(input));
     } catch (error) { const code=error instanceof Error?error.message:"site_operation_failed";
       const invalid=/^(invalid_|domain_in_use|site_limit|site_not_ready|file_too_large|unsupported_)/.test(code);
-      const conflict=["file_conflict","destination_exists","site_revision_conflict","node_entry_missing","site_runtime_not_available","php83_runtime_not_running","node22_runtime_not_available","site_port_unavailable"].includes(code);
+      const conflict=["file_conflict","destination_exists","site_revision_conflict","runtime_entry_missing","runtime_not_healthy","python312_runtime_not_available","docker_runtime_not_running","node_entry_missing","site_runtime_not_available","php83_runtime_not_running","node22_runtime_not_available","site_port_unavailable"].includes(code);
       send(conflict?409:invalid?400:503,{error:conflict||code==="unsupported_runtime_version"?code:"site_operation_failed"}); }
     return;
   }
