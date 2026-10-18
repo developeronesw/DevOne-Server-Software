@@ -81,6 +81,7 @@ export class DisposableHostQa {
    const name="devone-qa-packages-"+stamp;
    const args=["run","--rm","--name",name,"--label","devone.qa="+stamp,
      "--pids-limit","96","--memory","512m","--cpus","1","--cap-drop=ALL",
+     "--cap-add=CHOWN","--cap-add=FOWNER","--cap-add=SETUID","--cap-add=SETGID","--cap-add=DAC_OVERRIDE",
      "--security-opt","no-new-privileges","ubuntu:24.04","/bin/sh","-c",
      "apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends php8.3-cli redis-server python3.12 && php -v >/dev/null && redis-server --version >/dev/null && python3.12 --version >/dev/null"];
    try{
