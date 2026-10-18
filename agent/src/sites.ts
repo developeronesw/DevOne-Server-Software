@@ -68,6 +68,24 @@ export class SiteManager {
     // In-progress provisioning is never replayed automatically after a restart.
     return Promise.all(sites.map(async site => ({ ...site, siteType: site.siteType ?? (site.webServer === 'nginx' ? 'static' : 'files'), appActive:site.siteType==='node'?await this.command('systemctl',['is-active',nodeUnitName(site.id)]).then(v=>v.trim()==='active').catch(()=>false):undefined, state: ['provisioning','updating'].includes(site.state) && this.runningSite !== site.id ? 'needs_inspection' : site.state })));
   }
+  // Read-only runtime acceptance: report actual host artifacts and service state.
+  // A Node site without server.mjs is configured but not yet deployed; it is not
+  // reported as a running application.
+  async runtimeStatus(){
+    const sites=(await this.registry()).filter(site=>site.siteType==='php'||site.siteType==='node');
+    const runtimes=await Promise.all(sites.map(async site=>{
+      const location=site.siteType==='php'?phpPoolPath(site.id,this.options.phpPoolDir):nodeUnitPath(site.id,this.options.nodeUnitDir);
+      const config=await lstat(location).catch(()=>null);
+      const configured=Boolean(config?.isFile()&&!config.isSymbolicLink());
+      const unit=site.siteType==='php'?'php8.3-fpm':nodeUnitName(site.id);
+      const active=await this.command('systemctl',['is-active',unit]).then(v=>v.trim()==='active').catch(()=>false);
+      const source=site.siteType==='node'?await lstat(join(this.options.base,site.id,'public','server.mjs')).catch(()=>null):null;
+      const sourcePresent=site.siteType==='node'?Boolean(source?.isFile()&&!source.isSymbolicLink()):null;
+      return {siteId:site.id,type:site.siteType,configured,serviceActive:active,sourcePresent,
+        status:!configured?'missing_configuration':site.siteType==='node'&&!sourcePresent?'awaiting_source':active?'running':'service_stopped'};
+    }));
+    return {checkedAt:new Date().toISOString(),runtimes,ok:runtimes.every(item=>item.configured&&(item.type==='node'||item.serviceActive))};
+  }
   private serial<T>(work:()=>Promise<T>,siteId?:unknown) {
     const operation = this.queue.then(async()=>{
       this.runningSite = typeof siteId === 'string' ? siteId : null;
