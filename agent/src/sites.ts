@@ -163,8 +163,7 @@ export class SiteManager {
           const unit=await open(runtimeConfig,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o644);
           try{await unit.writeFile(nodeUnitConfig(site,this.options.base));await unit.sync();}finally{await unit.close();}
           await this.command('systemctl',['daemon-reload']);
-          await this.command('systemctl',['enable',nodeUnitName(id)]);
-          // Start after application source is uploaded through File Workspace.
+          // Start and enable only after application source is uploaded through File Workspace.
         }
         const destination = join(this.options.nginx,`devone-${id}.conf`);
         // Exclusive creation never replaces host-owned configurations.
@@ -197,7 +196,7 @@ export class SiteManager {
     const policy=site.waf ?? defaultWafPolicy;
     const zone=site.state === 'disabled' ? '' : nginxWafZone(site.id,policy);
     const protection=nginxWafLocation(site.id,policy);
-    const body = site.state === 'disabled' ? ' location / { return 410; }\n' : (site.siteType==='php'||site.siteType==='node') ? runtimeNginxLocation(site,this.options.base) : ` root ${join(this.options.base,site.id,'public')};\n index index.html;\n disable_symlinks on;\n add_header X-Content-Type-Options nosniff always;\n add_header Referrer-Policy strict-origin-when-cross-origin always;\n location / {\n${protection} try_files $uri $uri/ =404;\n }\n location ~ /\\. { deny all; }\n`;
+    const body = site.state === 'disabled' ? ' location / { return 410; }\n' : (site.siteType==='php'||site.siteType==='node') ? runtimeNginxLocation(site,this.options.base,protection) : ` root ${join(this.options.base,site.id,'public')};\n index index.html;\n disable_symlinks on;\n add_header X-Content-Type-Options nosniff always;\n add_header Referrer-Policy strict-origin-when-cross-origin always;\n location / {\n${protection} try_files $uri $uri/ =404;\n }\n location ~ /\\. { deny all; }\n`;
     const http = `${zone}server {\n listen 80;\n listen [::]:80;\n server_name ${hosts};\n${challenge}${site.tls && site.state !== 'disabled' ? ' location / { return 301 https://$host$request_uri; }\n' : body}}\n`;
     if (!site.tls) return http;
     const certificate = join(this.options.certificates ?? '/etc/letsencrypt/live',`devone-${site.id}`);
@@ -316,7 +315,7 @@ export class SiteManager {
         const file=await lstat(join(this.options.base,site.id,'public','server.mjs')).catch(()=>null);
         if(!file||!file.isFile()||file.isSymbolicLink()||file.size>1048576||file.uid!==site.uid)throw Error('node_entry_missing');
       }
-      await this.command('systemctl',[body.action,unit]);
+      await this.command('systemctl',[body.action==='start'?'enable':'disable','--now',unit]);
       const active=await this.command('systemctl',['is-active',unit]).then(value=>value.trim()==='active').catch(()=>false);
       if(body.action==='start'&&!active)throw Error('node_runtime_not_healthy');
       return {...site,appActive:active};
