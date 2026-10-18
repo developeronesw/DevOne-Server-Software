@@ -73,7 +73,10 @@ const server = createServer(async (request, response) => {
       for await (const chunk of request) { body += chunk; if (Buffer.byteLength(body) > 1500000) { send(413,{error:"body_too_large"}); return; } }
       const input = JSON.parse(body);
       send(200,request.url === "/v1/sites" ? await sites.create(input) : request.url === "/v1/sites/action" ? await sites.action(input) : request.url === "/v1/sites/tls" ? await sites.tls(input) : await sites.files(input));
-    } catch (error) { const invalid = error instanceof Error && /^(invalid_|domain_in_use|site_limit|site_not_ready|file_too_large)/.test(error.message); const conflict = error instanceof Error && ["file_conflict","destination_exists","site_revision_conflict"].includes(error.message); send(conflict ? 409 : invalid ? 400 : 503,{error:conflict && error instanceof Error ? error.message : "site_operation_failed"}); }
+    } catch (error) { const code=error instanceof Error?error.message:"site_operation_failed";
+      const invalid=/^(invalid_|domain_in_use|site_limit|site_not_ready|file_too_large|unsupported_)/.test(code);
+      const conflict=["file_conflict","destination_exists","site_revision_conflict","node_entry_missing","site_runtime_not_available","php83_runtime_not_running","node22_runtime_not_available","site_port_unavailable"].includes(code);
+      send(conflict?409:invalid?400:503,{error:conflict||code==="unsupported_runtime_version"?code:"site_operation_failed"}); }
     return;
   }
   if(request.method==="POST"&&request.url==="/v1/sites/waf"){
