@@ -230,7 +230,7 @@ const jobs = new JobQueue(db, async (input, operation) => {
   if (response.status >= 500) throw new OutcomeUnknown("agent_outcome_unknown");
   if (!response.ok){
     const error=await response.json().catch(()=>({})) as {error?:unknown};
-    const safe=new Set(["node_entry_missing","site_runtime_not_available","php83_runtime_not_running","node22_runtime_not_available","site_port_unavailable","unsupported_runtime_version"]);
+    const safe=new Set(["runtime_entry_missing","runtime_not_healthy","node_entry_missing","site_runtime_not_available","php83_runtime_not_running","node22_runtime_not_available","site_port_unavailable","unsupported_runtime_version"]);
     if((operation==="site.action"||operation==="site.create")&&safe.has(error.error as string))
       throw Error(error.error as string);
     throw Error("agent_operation_failed");
