@@ -108,6 +108,14 @@ export class SiteManager {
     const sites = await this.registry();
     if (domain === this.options.panelDomain || sites.some(site => [site.domain,...(site.aliases ?? [])].includes(domain))) throw new Error('domain_in_use');
     if (sites.length >= 100) throw new Error('site_limit');
+    if(siteType==='php'){
+      if((await this.command('systemctl',['is-active','php8.3-fpm']).catch(()=>'' )).trim()!=='active')
+        throw Error('php83_runtime_not_running');
+    }
+    if(siteType==='node'){
+      if(!/^v22\./.test((await this.command('node',['--version']).catch(()=>'')).trim()))
+        throw Error('node22_runtime_not_available');
+    }
     if (webServer === 'nginx') {
       // Refuse duplicate or wildcard ownership anywhere in effective configuration.
       const config = await this.command('nginx',['-T']);
