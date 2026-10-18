@@ -139,10 +139,10 @@ export function registerControlRoutes(app:FastifyInstance,deps:Deps) {
       await check("agent.software",async()=>{
         const capabilities=await agent("/v1/software/capabilities");
         if(capabilities.mode!=="managed-install"||capabilities.installAvailable!==true||
-           !Array.isArray(capabilities.options)||capabilities.options.length!==2)return false;
+           !Array.isArray(capabilities.options)||capabilities.options.length!==3)return false;
         const status=await agent("/v1/software/status");
-        return status.installAvailable===true&&Array.isArray(status.packages)&&status.packages.length===2&&
-          status.packages.every((p:any)=>["php8.3-fpm","redis-server"].includes(p.package)&&
+        return status.installAvailable===true&&Array.isArray(status.packages)&&status.packages.length===3&&
+          status.packages.every((p:any)=>["php8.3-fpm","redis-server","docker.io"].includes(p.package)&&
             typeof p.installed==="boolean"&&typeof p.serviceActive==="boolean"&&
             (!p.installed||(p.serviceActive&&typeof p.version==="string"&&p.version.length>0)));
       },"Software Center managed installation capability, installed package versions and active services");
