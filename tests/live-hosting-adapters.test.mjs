@@ -89,5 +89,10 @@ test("SiteManager provisions real PHP pool and Node systemd unit, not empty adap
   const sites=await m.list();
   assert.equal(sites.length,2);
   assert.equal(sites.find(x=>x.siteType==="node").appActive,true); // mocked systemd state
+  const status=await m.runtimeStatus();
+  assert.equal(status.ok,true);
+  assert.equal(status.runtimes.length,2);
+  assert.ok(status.runtimes.every(x=>x.configured));
+  await assert.rejects(m.action({siteId:node.id,action:"start",expectedRevision:1}),/node_entry_missing/);
  }finally{await rm(dir,{recursive:true,force:true});}
 });
