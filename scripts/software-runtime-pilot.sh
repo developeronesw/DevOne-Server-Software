@@ -9,7 +9,7 @@ usage() { echo "Usage: $0 [--check|--install|--managed-install] [php8.3-fpm|redi
 mode="${1:---check}"
 package="${2:-php8.3-fpm}"
 [[ "$mode" == "--check" || "$mode" == "--install" || "$mode" == "--managed-install" ]] || usage
-case "$package" in php8.3-fpm|redis-server) ;; *) usage ;; esac
+case "$package" in php8.3-fpm|redis-server|docker.io) ;; *) usage ;; esac
 [[ "$EUID" -eq 0 ]] || { echo "Run with sudo/root." >&2; exit 2; }
 . /etc/os-release
 [[ "${ID:-}" == "ubuntu" && "${VERSION_ID:-}" == "24.04" ]] || { echo "Requires Ubuntu 24.04." >&2; exit 2; }
