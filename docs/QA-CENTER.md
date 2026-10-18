@@ -30,4 +30,8 @@ The dashboard now provides authenticated read-only probes for SQLite integrity, 
 
 ## Software Center and Security integration (Phase 2)
 
-Dashboard QA performs 9 non-destructive checks, including the `agent.software` managed-install capability and `agent.crowdsec` readiness. Package installation is now an independent, Owner-approved, audited operation through the existing JobQueue. QA reports do not install software or claim WAF enforcement, and green CI is not evidence of successful package installation on the test VPS. See [Managed Software Installation](SOFTWARE-RUNTIME-PREFLIGHT.md).
+Dashboard QA performs 10 non-destructive checks, including the `agent.software` managed-install capability and `agent.crowdsec` readiness. Package installation is now an independent, Owner-approved, audited operation through the existing JobQueue. QA reports do not install software or claim WAF enforcement, and green CI is not evidence of successful package installation on the test VPS. See [Managed Software Installation](SOFTWARE-RUNTIME-PREFLIGHT.md).
+
+## Dynamic hosting verification
+
+The live dashboard QA now includes `agent.site_runtimes`, which checks that every PHP-managed site has an actual PHP-FPM pool definition and active FPM service and every Node-managed site has an actual systemd unit. It reports missing adapters as FAIL. For a Node site intentionally awaiting `server.mjs`, stopped is not falsely reported as a running application. You must still upload actual code and test HTTP/HTTPS on your development VPS for end-to-end acceptance. See [Operational Hosting](PHASE3-OPERATIONAL-HOSTING.md).
