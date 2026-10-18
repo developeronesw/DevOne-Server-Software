@@ -6,13 +6,13 @@ export function nodeSitePort(id:string):number{
  if(!/^site_[a-f0-9]{16}$/.test(id))throw Error("invalid_site");
  return 30000+(Number.parseInt(id.slice(5,13),16)%15000);
 }
-export function phpPoolPath(id:string):string{
+export function phpPoolPath(id:string,base='/etc/php/8.3/fpm/pool.d'):string{
  if(!/^site_[a-f0-9]{16}$/.test(id))throw Error("invalid_site");
- return "/etc/php/8.3/fpm/pool.d/devone-"+id+".conf";
+ return base+"/devone-"+id+".conf";
 }
-export function nodeUnitPath(id:string):string{
+export function nodeUnitPath(id:string,base='/etc/systemd/system'):string{
  if(!/^site_[a-f0-9]{16}$/.test(id))throw Error("invalid_site");
- return "/etc/systemd/system/devone-"+id+".service";
+ return base+"/devone-"+id+".service";
 }
 export function nodeUnitName(id:string):string{return "devone-"+id+".service";}
 export function phpPoolConfig(site:RuntimeSite,base="/home/devone-sites"):string{
