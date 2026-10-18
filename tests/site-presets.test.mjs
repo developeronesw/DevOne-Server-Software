@@ -6,7 +6,7 @@ import {getWebsitePresets,resolvePreset} from "../apps/api/dist/presets.js";
 test("website presets are infrastructure-only and do not generate code",()=>{
  const response=getWebsitePresets();
  assert.equal(response.initialContent,"empty");
- assert.deepEqual(response.deployableTypes,["static","files","php","node"]);
+ assert.deepEqual(response.deployableTypes,["static","files","php","node","python","container"]);
  assert.ok(response.presets.length>=6);
  assert.equal(new Set(response.presets.map(p=>p.id)).size,response.presets.length);
  for(const item of response.presets){
@@ -25,7 +25,7 @@ test("site creation accepts PHP 8.3/Node 22 and refuses unsupported runtimes",()
  assert.deepEqual(resolvePreset("files","none",undefined),{siteType:"files",webServer:"none"});
  for(const [type,server,version] of [
   ["php","nginx","8.4"],["php","apache","8.5"],["node","nginx","24"],
-  ["python","apache","3.12"],["container","nginx",undefined]
+  ["python","apache","3.13"],["container","apache",undefined]
  ]){
   assert.throws(()=>resolvePreset(type,server,version),/runtime_not_available|unsupported_runtime_version|unsupported_web_server/);
  }
@@ -35,6 +35,8 @@ test("site creation accepts PHP 8.3/Node 22 and refuses unsupported runtimes",()
  assert.throws(()=>siteInput({domain:"x.example.com",webServer:"nginx",siteType:"php"}),/unsupported_runtime_version/);
  assert.equal(siteInput({domain:"x.example.com",webServer:"nginx",siteType:"php",runtimeVersion:"8.3"}).siteType,"php");
  assert.equal(resolvePreset("node","nginx","22").siteType,"node");
+ assert.equal(resolvePreset("python","nginx","3.12").siteType,"python");
+ assert.equal(resolvePreset("container","nginx","").siteType,"container");
  assert.deepEqual(siteInput({domain:"x.example.com",webServer:"nginx"}),{domain:"x.example.com",webServer:"nginx",siteType:"static"});
  assert.deepEqual(siteInput({domain:"x.example.com",webServer:"none"}),{domain:"x.example.com",webServer:"none",siteType:"files"});
 });
