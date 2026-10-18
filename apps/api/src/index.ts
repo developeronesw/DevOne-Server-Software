@@ -227,7 +227,13 @@ const jobs = new JobQueue(db, async (input, operation) => {
     response = await fetch(`${agentUrl}${operation === "site.create" ? "/v1/sites" : operation === "site.action" ? "/v1/sites/action" : operation === "site.tls" ? "/v1/sites/tls" : operation === "software.install" ? "/v1/software/install" : "/v1/services/action"}`, { method: "POST", headers: { Authorization: `Bearer ${agentToken}`, "Content-Type": "application/json" }, body: JSON.stringify(input), signal: AbortSignal.timeout(operation === "software.install" ? 320000 : operation === "site.tls" ? 240000 : operation.startsWith("site.") ? 120000 : 35000) });
   } catch { throw new OutcomeUnknown("agent_outcome_unknown"); }
   if (response.status >= 500) throw new OutcomeUnknown("agent_outcome_unknown");
-  if (!response.ok) throw new Error("agent_operation_failed");
+  if (!response.ok){
+    const error=await response.json().catch(()=>({})) as {error?:unknown};
+    const safe=new Set(["node_entry_missing","site_runtime_not_available","php83_runtime_not_running","node22_runtime_not_available","site_port_unavailable","unsupported_runtime_version"]);
+    if((operation==="site.action"||operation==="site.create")&&safe.has(error.error as string))
+      throw Error(error.error as string);
+    throw Error("agent_operation_failed");
+  }
 }, audit);
 app.get("/api/jobs", async (request, reply) => {
   const user = requestUser(request);
