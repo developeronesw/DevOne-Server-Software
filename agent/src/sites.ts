@@ -7,23 +7,27 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { validateDomain, relativeParts, MAX_FILE_BYTES } from './site-files.js';
 import { defaultWafPolicy, validateWaf, isValidWaf, nginxWafZone, nginxWafLocation, type WafPolicy } from './waf.js';
+import {nodeSitePort,phpPoolPath,phpPoolConfig,nodeUnitPath,nodeUnitName,nodeUnitConfig,runtimeNginxLocation} from './site-runtimes.js';
 
 const exec = promisify(execFile);
-export type Site = { id: string; domain: string; user: string; uid?: number; gid?: number; siteType?: 'static' | 'files'; waf?:WafPolicy; webServer: 'nginx' | 'none'; state: 'provisioning' | 'ready' | 'disabled' | 'updating' | 'needs_inspection'; createdAt: string; aliases?: string[]; revision?: number; configHash?: string; tls?: boolean; certificateIssued?: boolean };
+export type Site = { id: string; domain: string; user: string; uid?: number; gid?: number; siteType?: 'static' | 'files' | 'php' | 'node'; runtimeVersion?:'8.3'|'22'; appActive?:boolean; waf?:WafPolicy; webServer: 'nginx' | 'none'; state: 'provisioning' | 'ready' | 'disabled' | 'updating' | 'needs_inspection'; createdAt: string; aliases?: string[]; revision?: number; configHash?: string; tls?: boolean; certificateIssued?: boolean };
 type Options = { registry: string; base: string; nginx: string; panelDomain: string; requireRoot?: boolean; certificates?: string; ownership?: typeof chown; worker?: (site: Site,request: Record<string,unknown>) => Promise<unknown>; command?: (command: string, args: string[]) => Promise<string> };
-export function siteInput(input: unknown): { domain: string; webServer: 'nginx' | 'none'; siteType: 'static' | 'files' } {
+export function siteInput(input: unknown): { domain: string; webServer: 'nginx' | 'none'; siteType: 'static' | 'files' | 'php' | 'node'; runtimeVersion?:'8.3'|'22' } {
   if (!input || typeof input !== 'object') throw new Error('invalid_site');
   const body = input as Record<string,unknown>;
   const domain = validateDomain(body.domain);
   if (body.webServer !== 'nginx' && body.webServer !== 'none') throw new Error('invalid_web_server');
-  // Only deployable types may be accepted by the privileged Agent.
-  // PHP, Node, Python and containers require isolated runtime adapters.
   const siteType = body.siteType === undefined ? (body.webServer === 'nginx' ? 'static' : 'files') : body.siteType;
-  if (!['static','files'].includes(siteType as string) || (siteType === 'static' ? body.webServer !== 'nginx' : body.webServer !== 'none')) throw new Error('unsupported_site_type');
-  return { domain, webServer: body.webServer, siteType: siteType as 'static' | 'files' };
+  if(!['static','files','php','node'].includes(siteType as string)||
+    (siteType==='files'?body.webServer!=='none':body.webServer!=='nginx'))throw Error('unsupported_site_type');
+  const version=body.runtimeVersion;
+  if(siteType==='php'&&version!=='8.3'||siteType==='node'&&version!=='22'||
+    ['static','files'].includes(siteType as string)&&version!==undefined&&version!==''&&version!==null)throw Error('unsupported_runtime_version');
+  return { domain, webServer: body.webServer, siteType:siteType as 'static'|'files'|'php'|'node',
+    ...((siteType==='php'||siteType==='node')?{runtimeVersion:version as '8.3'|'22'}:{}) };
 }
 function validRecord(site: Site) {
-  return /^site_[a-f0-9]{16}$/.test(site.id) && site.user === `dvs_${site.id.slice(5)}` && validateDomain(site.domain) === site.domain && ['nginx','none'].includes(site.webServer) && (site.siteType === undefined || (site.siteType === 'static' && site.webServer === 'nginx') || (site.siteType === 'files' && site.webServer === 'none')) && ['provisioning','ready','disabled','updating','needs_inspection'].includes(site.state) && (site.aliases === undefined || Array.isArray(site.aliases) && site.aliases.length <= 20 && site.aliases.every(alias => validateDomain(alias) === alias)) && (site.revision === undefined || Number.isSafeInteger(site.revision) && site.revision >= 1) && (site.tls === undefined || typeof site.tls === 'boolean') && (site.certificateIssued === undefined || typeof site.certificateIssued === 'boolean') && (site.configHash === undefined || /^[a-f0-9]{64}$/.test(site.configHash)) && (site.waf === undefined || isValidWaf(site.waf)) && (site.uid === undefined || Number.isInteger(site.uid) && site.uid >= 1000) && (site.gid === undefined || Number.isInteger(site.gid) && site.gid >= 1000);
+  return /^site_[a-f0-9]{16}$/.test(site.id) && site.user === `dvs_${site.id.slice(5)}` && validateDomain(site.domain) === site.domain && ['nginx','none'].includes(site.webServer) && (site.siteType === undefined || (site.siteType === 'static' && site.webServer === 'nginx') || (site.siteType === 'files' && site.webServer === 'none') || ((site.siteType === 'php' || site.siteType === 'node') && site.webServer === 'nginx')) && (site.siteType === 'php' ? site.runtimeVersion === '8.3' : site.siteType === 'node' ? site.runtimeVersion === '22' : site.runtimeVersion === undefined) && ['provisioning','ready','disabled','updating','needs_inspection'].includes(site.state) && (site.aliases === undefined || Array.isArray(site.aliases) && site.aliases.length <= 20 && site.aliases.every(alias => validateDomain(alias) === alias)) && (site.revision === undefined || Number.isSafeInteger(site.revision) && site.revision >= 1) && (site.tls === undefined || typeof site.tls === 'boolean') && (site.certificateIssued === undefined || typeof site.certificateIssued === 'boolean') && (site.configHash === undefined || /^[a-f0-9]{64}$/.test(site.configHash)) && (site.waf === undefined || isValidWaf(site.waf)) && (site.appActive === undefined || typeof site.appActive === 'boolean') && (site.uid === undefined || Number.isInteger(site.uid) && site.uid >= 1000) && (site.gid === undefined || Number.isInteger(site.gid) && site.gid >= 1000);
 }
 export class SiteManager {
   private runningSite: string | null = null;
@@ -62,7 +66,7 @@ export class SiteManager {
   async list() {
     const sites = await this.registry();
     // In-progress provisioning is never replayed automatically after a restart.
-    return sites.map(site => ({ ...site, siteType: site.siteType ?? (site.webServer === 'nginx' ? 'static' : 'files'), state: ['provisioning','updating'].includes(site.state) && this.runningSite !== site.id ? 'needs_inspection' : site.state }));
+    return Promise.all(sites.map(async site => ({ ...site, siteType: site.siteType ?? (site.webServer === 'nginx' ? 'static' : 'files'), appActive:site.siteType==='node'?await this.command('systemctl',['is-active',nodeUnitName(site.id)]).then(v=>v.trim()==='active').catch(()=>false):undefined, state: ['provisioning','updating'].includes(site.state) && this.runningSite !== site.id ? 'needs_inspection' : site.state })));
   }
   private serial<T>(work:()=>Promise<T>,siteId?:unknown) {
     const operation = this.queue.then(async()=>{
@@ -73,10 +77,10 @@ export class SiteManager {
   }
   // Advisory only: queued changes revalidate conflicts before mutation.
   async preflight(input: unknown) {
-    const body = input as {domain?:unknown;webServer?:unknown;siteType?:unknown;aliases?:unknown;siteId?:unknown;expectedRevision?:unknown} | null;
+    const body = input as {domain?:unknown;webServer?:unknown;siteType?:unknown;runtimeVersion?:unknown;aliases?:unknown;siteId?:unknown;expectedRevision?:unknown} | null;
     if (!body || !['nginx','none'].includes(body.webServer as string)) throw new Error('invalid_web_server');
     const domain = validateDomain(body.domain);
-    siteInput({domain,webServer:body.webServer,siteType:body.siteType});
+    siteInput({domain,webServer:body.webServer,siteType:body.siteType,runtimeVersion:body.runtimeVersion});
     const aliases = body.aliases === undefined ? [] : body.aliases;
     if (!Array.isArray(aliases) || aliases.length > 20 || aliases.some(alias=>validateDomain(alias) !== alias)) throw new Error('invalid_aliases');
     const hosts = [domain,...aliases] as string[];
@@ -100,7 +104,7 @@ export class SiteManager {
   }
   create(input: unknown) { return this.serial(()=>this.provision(input)); }
   private async provision(input: unknown) {
-    const {domain,webServer,siteType} = siteInput(input);
+    const {domain,webServer,siteType,runtimeVersion} = siteInput(input);
     const sites = await this.registry();
     if (domain === this.options.panelDomain || sites.some(site => [site.domain,...(site.aliases ?? [])].includes(domain))) throw new Error('domain_in_use');
     if (sites.length >= 100) throw new Error('site_limit');
@@ -110,11 +114,19 @@ export class SiteManager {
       const names = [...config.matchAll(/\bserver_name\s+([^;]+);/g)].flatMap(match => match[1].split(/\s+/).map(name => name.replace(/^['"]|['"]$/g,'')));
       if (names.some(name => name === domain || name.startsWith('~') || name.startsWith('$') || (name.startsWith('*.') && domain.endsWith(name.slice(1))) || (name.startsWith('.') && (domain === name.slice(1) || domain.endsWith(name))) || (name.endsWith('.*') && domain.startsWith(name.slice(0,-1))))) throw new Error('domain_in_use');
     }
-    const id = `site_${randomBytes(8).toString('hex')}`;
-    const site: Site = {id,domain,user:`dvs_${id.slice(5)}`,webServer,siteType,state:'provisioning',createdAt:new Date().toISOString(),aliases:[],revision:1};
+    let id = `site_${randomBytes(8).toString('hex')}`;
+    if(siteType==='node'){
+      let retries=0;
+      while(sites.some(other=>other.siteType==='node'&&nodeSitePort(other.id)===nodeSitePort(id))){
+        if(++retries>20)throw Error('site_port_unavailable');
+        id=`site_${randomBytes(8).toString('hex')}`;
+      }
+    }
+    const site: Site = {id,domain,user:`dvs_${id.slice(5)}`,webServer,siteType,...(runtimeVersion?{runtimeVersion}:{}),state:'provisioning',createdAt:new Date().toISOString(),aliases:[],revision:1};
     this.runningSite = id;
     sites.push(site); await this.save(sites);
     let ownedConfig: string | undefined;
+    let runtimeConfig: string | undefined;
     try {
       await this.command('useradd',['--user-group','--no-create-home','--home-dir',join(this.options.base,id),'--shell','/usr/sbin/nologin',site.user]);
       const passwd = (await this.command('getent',['passwd',site.user])).trim().split(':');
@@ -129,6 +141,23 @@ export class SiteManager {
       if (webServer === 'nginx') {
         await this.command('setfacl',['-m','u:www-data:rx',home]);
         await this.command('setfacl',['-m','u:www-data:rx,d:u:www-data:rx',publicRoot]);
+        if(siteType==='php'){
+          await this.command('systemctl',['is-active','php8.3-fpm']);
+          runtimeConfig=phpPoolPath(id);
+          const pool=await open(runtimeConfig,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o644);
+          try{await pool.writeFile(phpPoolConfig(site,this.options.base));await pool.sync();}finally{await pool.close();}
+          await this.command('php-fpm8.3',['-t']);
+          await this.command('systemctl',['reload','php8.3-fpm']);
+        }else if(siteType==='node'){
+          const version=await this.command('node',['--version']);
+          if(!/^v22\./.test(version.trim()))throw Error('node22_runtime_required');
+          runtimeConfig=nodeUnitPath(id);
+          const unit=await open(runtimeConfig,constants.O_WRONLY|constants.O_CREAT|constants.O_EXCL|constants.O_NOFOLLOW,0o644);
+          try{await unit.writeFile(nodeUnitConfig(site,this.options.base));await unit.sync();}finally{await unit.close();}
+          await this.command('systemctl',['daemon-reload']);
+          await this.command('systemctl',['enable',nodeUnitName(id)]);
+          // Start after application source is uploaded through File Workspace.
+        }
         const destination = join(this.options.nginx,`devone-${id}.conf`);
         // Exclusive creation never replaces host-owned configurations.
         const config = await open(destination,constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW,0o644);
@@ -138,6 +167,13 @@ export class SiteManager {
       }
       site.state = 'ready'; await this.save(sites); return site;
     } catch {
+      if(runtimeConfig){
+        try{
+          await rename(runtimeConfig,join(this.options.registry,`${id}.runtime-quarantine`));
+          if(siteType==='php'){await this.command('php-fpm8.3',['-t']);await this.command('systemctl',['reload','php8.3-fpm']);}
+          else{await this.command('systemctl',['disable',nodeUnitName(id)]).catch(()=>{});await this.command('systemctl',['daemon-reload']);}
+        }catch{}
+      }
       if (ownedConfig) {
         try { await rename(ownedConfig,join(this.options.registry,`${id}.nginx-quarantine`)); await this.command('nginx',['-t']); await this.command('systemctl',['reload','nginx']); } catch { /* Recovery needs operator inspection. */ }
       }
@@ -153,7 +189,7 @@ export class SiteManager {
     const policy=site.waf ?? defaultWafPolicy;
     const zone=site.state === 'disabled' ? '' : nginxWafZone(site.id,policy);
     const protection=nginxWafLocation(site.id,policy);
-    const body = site.state === 'disabled' ? ' location / { return 410; }\n' : ` root ${join(this.options.base,site.id,'public')};\n index index.html;\n disable_symlinks on;\n add_header X-Content-Type-Options nosniff always;\n add_header Referrer-Policy strict-origin-when-cross-origin always;\n location / {\n${protection} try_files $uri $uri/ =404;\n }\n location ~ /\\. { deny all; }\n`;
+    const body = site.state === 'disabled' ? ' location / { return 410; }\n' : (site.siteType==='php'||site.siteType==='node') ? runtimeNginxLocation(site,this.options.base) : ` root ${join(this.options.base,site.id,'public')};\n index index.html;\n disable_symlinks on;\n add_header X-Content-Type-Options nosniff always;\n add_header Referrer-Policy strict-origin-when-cross-origin always;\n location / {\n${protection} try_files $uri $uri/ =404;\n }\n location ~ /\\. { deny all; }\n`;
     const http = `${zone}server {\n listen 80;\n listen [::]:80;\n server_name ${hosts};\n${challenge}${site.tls && site.state !== 'disabled' ? ' location / { return 301 https://$host$request_uri; }\n' : body}}\n`;
     if (!site.tls) return http;
     const certificate = join(this.options.certificates ?? '/etc/letsencrypt/live',`devone-${site.id}`);
