@@ -12,19 +12,22 @@ const policyCheck=script.slice(begin,end);
 // Use a huge policy output to emulate the original premature-close SIGPIPE
 // without requiring sudo, systemd, actual APT or any host package mutation.
 function executePolicy(origin){
- const output=[
-  "redis-server:",
-  "  Installed: (none)",
-  "  Candidate: 5:7.0.15-1ubuntu0.24.04.5",
-  "  Version table:",
-  "     5:7.0.15-1ubuntu0.24.04.5 500",
-  "        500 http://us-east-1.ec2.archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages",
-  "            release v=24.04,o="+origin+",a=noble-updates,n=noble,l="+origin+",c=universe,b=amd64",
-  "            origin archive.ubuntu.com",
-  ...Array.from({length:15000},(_,i)=>"  extra-policy-entry-"+i+": "+"x".repeat(90)),
-  "     5:7.0.15-1build2 500",
+ // Generate large output inside Bash, not inside the argv passed to bash -c
+ // (Linux limits each argv string to ~128 KiB).
+ const body=[
+   "set -Eeuo pipefail",
+   "package=redis-server",
+   "origin="+JSON.stringify(origin),
+   "apt-cache(){",
+   "  printf 'redis-server:\\n  Installed: (none)\\n  Candidate: 5:7.0.15-1ubuntu0.24.04.5\\n  Version table:\\n     5:7.0.15-1ubuntu0.24.04.5 500\\n'",
+   "  printf '       500 http://archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages\\n'",
+   "  printf '            release v=24.04,o=%s,a=noble-updates,n=noble,l=%s,c=universe,b=amd64\\n' \"$origin\" \"$origin\"",
+   "  for ((i=0;i<9000;i++)); do printf '   extra-policy-entry-%s: %090d\\n' \"$i\" \"$i\"; done",
+   "  printf '     5:7.0.15-1build2 500\\n'",
+   "}",
+   policyCheck,
+   "printf '%s\\n' \"$candidate\"",
  ].join("\n");
- const body="set -Eeuo pipefail\npackage=redis-server\napt-cache(){ cat <<'POLICY'\n"+output+"\nPOLICY\n}\n"+policyCheck+"\nprintf '%s\\n' \"$candidate\"\n";
  return spawnSync("bash",["-c",body],{encoding:"utf8",timeout:12000,maxBuffer:4*1024*1024});
 }
 test("large Ubuntu Noble policy completes without SIGPIPE 141",()=>{
