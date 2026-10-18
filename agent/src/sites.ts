@@ -337,16 +337,28 @@ export class SiteManager {
     if (!site || !['ready','disabled'].includes(site.state)) throw new Error('site_not_ready');
     if ((site.revision ?? 1) !== body.expectedRevision) throw new Error('site_revision_conflict');
     if(body.action==='start'||body.action==='stop'){
-      if(site.siteType!=='node'||site.state!=='ready')throw Error('site_runtime_not_available');
+      if(!['node','python','container'].includes(site.siteType??'')||site.state!=='ready')throw Error('site_runtime_not_available');
       const unit=nodeUnitName(site.id);
       if(body.action==='start'){
-        const file=await lstat(join(this.options.base,site.id,'public','server.mjs')).catch(()=>null);
-        if(!file||!file.isFile()||file.isSymbolicLink()||file.size>1048576||file.uid!==site.uid)throw Error('node_entry_missing');
+        const file=await lstat(join(this.options.base,site.id,'public',site.siteType==='node'?'server.mjs':site.siteType==='python'?'app.py':'index.html')).catch(()=>null);
+        if(!file||!file.isFile()||file.isSymbolicLink()||file.size>1048576||file.uid!==site.uid)throw Error('runtime_entry_missing');
       }
-      await this.command('systemctl',[body.action==='start'?'enable':'disable','--now',unit]);
-      const active=await this.command('systemctl',['is-active',unit]).then(value=>value.trim()==='active').catch(()=>false);
+      if(site.siteType==='container'){
+        const container=runtimeContainerName(site.id);
+        if(body.action==='start'){
+          const existing=await this.command('docker',['inspect','--format','{{index .Config.Labels "devone.site"}}',container]).catch(()=>'');
+          if(existing.trim() && existing.trim()!==site.id)throw Error('unsafe_container_ownership');
+          if(existing.trim()===site.id)await this.command('docker',['start',container]);
+          else await this.command('docker',dockerRunArgs(site,site.uid!,site.gid!,this.options.base));
+        }else{
+          if((await this.command('docker',['inspect','--format','{{index .Config.Labels "devone.site"}}',container]).catch(()=>'')).trim()===site.id)
+            await this.command('docker',['stop',container]);
+        }
+      }else await this.command('systemctl',[body.action==='start'?'enable':'disable','--now',unit]);
+      const active=site.siteType==='container'?await this.containerRunning(site).catch(()=>false):
+        await this.command('systemctl',['is-active',unit]).then(value=>value.trim()==='active').catch(()=>false);
       if(body.action==='start'){
-        if(!active)throw Error('node_runtime_not_healthy');
+        if(!active)throw Error('runtime_not_healthy');
         let responding=false;
         for(let attempt=0;attempt<8;attempt++){
           try{
@@ -407,11 +419,16 @@ export class SiteManager {
           await rename(phpPoolPath(site.id,this.options.phpPoolDir),join(this.options.registry,`${site.id}.deleted-php`));
           await this.command('php-fpm8.3',['-t']);
           await this.command('systemctl',['reload','php8.3-fpm']);
-        }else if(site.siteType==='node'){
+        }else if(site.siteType==='node'||site.siteType==='python'){
           await this.command('systemctl',['stop',nodeUnitName(site.id)]);
           await this.command('systemctl',['disable',nodeUnitName(site.id)]);
           await rename(nodeUnitPath(site.id,this.options.nodeUnitDir),join(this.options.registry,`${site.id}.deleted-node`));
           await this.command('systemctl',['daemon-reload']);
+        }else if(site.siteType==='container'){
+          const container=runtimeContainerName(site.id);
+          const label=await this.command('docker',['inspect','--format','{{index .Config.Labels "devone.site"}}',container]).catch(()=>'');
+          if(label.trim()===site.id)await this.command('docker',['rm','-f',container]);
+          else if(label.trim())throw Error('unsafe_container_ownership');
         }
         const home = join(this.options.base,site.id), stat = await lstat(home);
         if (!stat.isDirectory() || stat.isSymbolicLink() || (this.options.requireRoot !== false && stat.uid !== 0)) throw new Error('unsafe_site_home');
@@ -431,7 +448,7 @@ export class SiteManager {
       if(body.action==='delete'&&!destructiveStarted){
         if(site.siteType==='php'){
           try{await rename(join(this.options.registry,`${site.id}.deleted-php`),phpPoolPath(site.id,this.options.phpPoolDir));await this.command('php-fpm8.3',['-t']);await this.command('systemctl',['reload','php8.3-fpm']);}catch{}
-        }else if(site.siteType==='node'){
+        }else if(site.siteType==='node'||site.siteType==='python'){
           try{await rename(join(this.options.registry,`${site.id}.deleted-node`),nodeUnitPath(site.id,this.options.nodeUnitDir));await this.command('systemctl',['daemon-reload']);await this.command('systemctl',['enable',nodeUnitName(site.id)]);}catch{}
         }
       }
