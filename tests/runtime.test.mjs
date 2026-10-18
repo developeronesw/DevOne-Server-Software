@@ -60,7 +60,6 @@ test('authentication, setup, origin, metrics, logout and rate-limit boundaries',
     assert.equal(choices.presets.find(x=>x.id==='node').available,true);
     assert.equal(choices.presets.find(x=>x.id==='python').available,true);
     assert.equal(choices.presets.find(x=>x.id==='container').available,true);
-    assert.equal(choices.presets.find(x=>x.id==='python').available,false);
     const presetRejected=await securePost('/api/sites',{domain:'runtime.example.com',webServer:'nginx',siteType:'php',runtimeVersion:'8.4',confirmed:true,requestKey:'runtime-blocked'});
     assert.equal(presetRejected.status,400);
     const preflightRejected=await securePost('/api/sites/preflight',{domain:'runtime.example.com',webServer:'nginx',siteType:'node',runtimeVersion:'24'});
