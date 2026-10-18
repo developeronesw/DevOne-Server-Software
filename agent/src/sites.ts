@@ -335,7 +335,19 @@ export class SiteManager {
       }
       await this.command('systemctl',[body.action==='start'?'enable':'disable','--now',unit]);
       const active=await this.command('systemctl',['is-active',unit]).then(value=>value.trim()==='active').catch(()=>false);
-      if(body.action==='start'&&!active)throw Error('node_runtime_not_healthy');
+      if(body.action==='start'){
+        if(!active)throw Error('node_runtime_not_healthy');
+        let responding=false;
+        for(let attempt=0;attempt<8;attempt++){
+          try{
+            // HTTP status may be 404/401 for real apps. A successful TCP/HTTP
+            // handshake is enough to prove NGINX can reach the Node process.
+            await fetch('http://127.0.0.1:'+nodeSitePort(site.id)+'/',{signal:AbortSignal.timeout(900)});
+            responding=true;break;
+          }catch{await new Promise(resolve=>setTimeout(resolve,300));}
+        }
+        if(!responding)throw Error('node_runtime_not_healthy');
+      }
       return {...site,appActive:active};
     }
     const before = {...site,aliases:[...(site.aliases ?? [])]};
