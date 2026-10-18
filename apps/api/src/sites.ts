@@ -4,7 +4,7 @@ import { getWebsitePresets, resolvePreset } from './presets.js';
 type Dependencies = { requestUser: (request: any) => {id:string;role:string} | undefined | null; sameOrigin: (request:any) => boolean; agentUrl:string; agentToken:string; jobs:JobQueue; audit:(actor:string|null,action:string,details?:unknown)=>void };
 function siteTypeIsSupported(siteType:unknown,webServer:unknown){
   const choice = siteType === undefined ? (webServer === 'nginx' ? 'static' : 'files') : siteType;
-  return (choice === 'static' && webServer === 'nginx') || (choice === 'files' && webServer === 'none');
+  return (['static','php','node'].includes(choice as string) && webServer === 'nginx') || (choice === 'files' && webServer === 'none');
 }
 function validDomain(value: unknown): value is string {
   return typeof value === 'string' && value.length <= 253 && value.includes('.') && /^[a-z]{2,63}$/.test(value.split('.').at(-1)!) && value.split('.').every(label => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label));
@@ -43,7 +43,7 @@ export function registerSiteRoutes(app: FastifyInstance, dependencies: Dependenc
     }
     try {
       if (!agentToken) throw new Error();
-      const response = await fetch(`${agentUrl}/v1/sites/preflight`,{method:'POST',headers:{Authorization:`Bearer ${agentToken}`,'Content-Type':'application/json'},body:JSON.stringify({domain:body.domain,aliases:body.aliases,webServer:body.webServer,siteType:body.siteType,siteId:body.siteId,expectedRevision:body.expectedRevision}),signal:AbortSignal.timeout(8000)});
+      const response = await fetch(`${agentUrl}/v1/sites/preflight`,{method:'POST',headers:{Authorization:`Bearer ${agentToken}`,'Content-Type':'application/json'},body:JSON.stringify({domain:body.domain,aliases:body.aliases,webServer:body.webServer,siteType:body.siteType,runtimeVersion:body.runtimeVersion,siteId:body.siteId,expectedRevision:body.expectedRevision}),signal:AbortSignal.timeout(8000)});
       const result = await response.json() as {error?:string};
       if (!response.ok) return reply.code(response.status === 409 ? 409 : response.status === 400 ? 400 : 503).send({error:response.status === 409 && result.error === 'domain_in_use' ? 'domain_in_use' : 'preflight_failed'});
       return result;
@@ -59,7 +59,7 @@ export function registerSiteRoutes(app: FastifyInstance, dependencies: Dependenc
       return reply.code(400).send({error:error instanceof Error ? error.message : 'invalid_site_preset'});
     }
     try {
-      return reply.code(202).send({job:jobs.enqueue(user.id,body.requestKey,{domain:body.domain,webServer:body.webServer as 'nginx'|'none',siteType:(body.siteType ?? (body.webServer==='nginx'?'static':'files')) as 'static'|'files'},'site.create')});
+      return reply.code(202).send({job:jobs.enqueue(user.id,body.requestKey,{domain:body.domain,webServer:body.webServer as 'nginx'|'none',siteType:(body.siteType ?? (body.webServer==='nginx'?'static':'files')) as 'static'|'files'|'php'|'node',runtimeVersion:body.runtimeVersion as string|undefined},'site.create')});
     } catch (error) {
       const code = error instanceof Error ? error.message : 'queue_error';
       return reply.code(code === 'request_key_conflict' ? 409 : ['queue_full','queue_stopping'].includes(code) ? 503 : 400).send({error:code});
@@ -68,7 +68,7 @@ export function registerSiteRoutes(app: FastifyInstance, dependencies: Dependenc
   app.post('/api/sites/action',async(request,reply)=>{
     const user = authorize(request,reply,true); if (!user) return;
     const body = request.body as Record<string,unknown> | null;
-    if (!body || typeof body.siteId !== 'string' || !/^site_[a-f0-9]{16}$/.test(body.siteId) || !['update','disable','enable','delete'].includes(body.action as string) || body.confirmed !== true || typeof body.requestKey !== 'string' || !Number.isSafeInteger(body.expectedRevision) || Number(body.expectedRevision) < 1) return reply.code(400).send({error:'invalid_site_action'});
+    if (!body || typeof body.siteId !== 'string' || !/^site_[a-f0-9]{16}$/.test(body.siteId) || !['update','disable','enable','delete','start','stop'].includes(body.action as string) || body.confirmed !== true || typeof body.requestKey !== 'string' || !Number.isSafeInteger(body.expectedRevision) || Number(body.expectedRevision) < 1) return reply.code(400).send({error:'invalid_site_action'});
     if (body.action === 'update' && (!validDomain(body.domain) || !Array.isArray(body.aliases) || body.aliases.length > 20 || !body.aliases.every(validDomain))) return reply.code(400).send({error:'invalid_site_domains'});
     if (body.action === 'delete' && !validDomain(body.confirmDomain)) return reply.code(400).send({error:'delete_confirmation_required'});
     const input:SiteActionInput={siteId:body.siteId,action:body.action as string,expectedRevision:body.expectedRevision as number};
