@@ -9,6 +9,7 @@ export function WordPressInstaller({siteId,domain,expectedRevision,onBusy}:{site
  const [title,setTitle]=useState('My WordPress website'),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[mfaCode,setMfaCode]=useState(''),[confirmed,setConfirmed]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[job,setJob]=useState<Job|null>(null),[id,setId]=useState(''),[progress,setProgress]=useState<Progress|null>(null),[history,setHistory]=useState<Installation[]>([]),[credentials,setCredentials]=useState<{username:string;password:string;loginUrl:string}|null>(null);
  const reservation=useRef<{signature:string;key:string}|null>(null);
  const running=Boolean(job&&['queued','running'].includes(job.state));
+ useEffect(()=>{setCredentials(null);},[siteId,domain]);
  useEffect(()=>{if(!credentials)return;const timer=setTimeout(()=>setCredentials(null),60000);return ()=>clearTimeout(timer);},[credentials]);
  useEffect(()=>{onBusy(busy||running);return ()=>onBusy(false);},[busy,running,onBusy]);
  async function refreshHistory(){setHistory((await api<{installations:Installation[]}>('/api/apps/wordpress')).installations);}
@@ -16,7 +17,7 @@ export function WordPressInstaller({siteId,domain,expectedRevision,onBusy}:{site
  useEffect(()=>{
   if(!id||!job)return;
   let active=true;
-  async function refresh(){try{const [j,p]=await Promise.all([api<{job:Job}>('/api/jobs/'+job!.id),api<{installation:Progress|null}>('/api/apps/wordpress/'+id)]);if(active){setJob(j.job);setProgress(p.installation);}}catch(e){if(active)setError(e instanceof Error?e.message:'Status unavailable');}}
+  async function refresh(){try{const [j,p]=await Promise.all([api<{job:Job}>('/api/jobs/'+job!.id),api<{installation:Progress|null}>('/api/apps/wordpress/'+id)]);if(active){setJob(j.job);setProgress(p.installation);setHistory(rows=>rows.map(row=>row.id===id?{...row,job:j.job}:row));}}catch(e){if(active)setError(e instanceof Error?e.message:'Status unavailable');}}
   void refresh();const timer=setInterval(()=>void refresh(),2500);
   return ()=>{active=false;clearInterval(timer);};
  },[id,job?.id]);
