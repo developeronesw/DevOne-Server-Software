@@ -2,7 +2,7 @@ import { SiteManager } from "./sites.js";
 import {DisposableHostQa} from "./disposable-qa.js";
 import { UpdatesManager } from "./updates.js";
 import { discoverSoftware } from "./discovery.js";
-import { softwareCapabilities, softwarePreflight, softwareStatus, softwareInstall } from "./software.js";
+import { softwareCapabilities, softwarePreflight, softwareStatus, softwareInstall, SoftwareInstallFailure } from "./software.js";
 import { inspectSecurity } from "./security.js";
 import { crowdSecReadiness } from "./crowdsec.js";
 import {recentCrowdSecEvents} from "./crowdsec-events.js";
@@ -123,8 +123,7 @@ const server = createServer(async (request, response) => {
     catch { send(503,{error:"security_scan_unavailable"}); }
     return;
   }
-  // The software phase starts with a non-mutating, audited host preflight.
-  // No remote package installations or arbitrary commands are enabled.
+  // Managed software operations remain fixed-allowlist and Agent-authenticated.
   if(request.method==="GET"&&request.url==="/v1/software/capabilities"){
     send(200,softwareCapabilities());return;
   }
@@ -143,7 +142,7 @@ const server = createServer(async (request, response) => {
     }catch(error){
       const message=error instanceof Error?error.message:"software_install_requires_inspection";
       const invalid=message==="invalid_software_install",busy=message==="software_install_busy";
-      send(invalid?400:busy?409:503,{error:invalid?"invalid_software_install":busy?"software_install_busy":"software_install_requires_inspection"});
+      send(invalid?400:busy?409:503,{error:invalid?"invalid_software_install":busy?"software_install_busy":"software_install_requires_inspection",...(!invalid&&!busy?{reason:error instanceof SoftwareInstallFailure?error.reason:"unclassified"}:{})});
     }
     return;
   }
