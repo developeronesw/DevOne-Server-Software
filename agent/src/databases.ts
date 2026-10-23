@@ -49,14 +49,26 @@ export class DatabaseManager{
  }
  async list(){return (await this.records()).map(r=>({...r,state:r.state==='provisioning'&&this.active!==r.id?'needs_inspection':r.state}));}
  create(value:unknown){
-  const input=databaseRequest(value);const operation=this.queue.then(()=>this.options.withSite?this.options.withSite(input.siteId,()=>this.provision(input)):this.provision(input));this.queue=operation.catch(()=>{});return operation;
+  const input=databaseRequest(value);
+  // Always acquire the site lock before the database queue. Application installs
+  // hold the same site lock, so reversing this order would deadlock both queues.
+  const work=()=>this.enqueue(input);
+  return this.options.withSite?this.options.withSite(input.siteId,work):work();
  }
- private async provision(input:DatabaseRequest){
+ // Internal only: caller must already hold SiteManager's mutation lock.
+ createForLockedSite(value:unknown,siteId:string){
+  const input=databaseRequest(value);if(input.siteId!==siteId)throw Error('invalid_database');
+  return this.enqueue(input,siteId);
+ }
+ private enqueue(input:DatabaseRequest,lockedSiteId?:string){
+  const operation=this.queue.then(()=>this.provision(input,lockedSiteId));this.queue=operation.catch(()=>{});return operation;
+ }
+ private async provision(input:DatabaseRequest,lockedSiteId?:string){
   const records=await this.records();const existing=records.find(r=>r.id===input.id);
   // No replay after process loss or partial SQL execution. No IF NOT EXISTS or automatic DROP.
   if(existing)throw Error('database_already_recorded');
   if(records.length>=500)throw Error('database_limit');
-  if(!this.options.withSite&&!(await this.options.sites()).some(s=>s.id===input.siteId&&s.state==='ready'))throw Error('database_site_not_ready');
+  if(!lockedSiteId&&!this.options.withSite&&!(await this.options.sites()).some(s=>s.id===input.siteId&&s.state==='ready'))throw Error('database_site_not_ready');
   const config=databaseSql(input),entry:RecordEntry={id:input.id,siteId:input.siteId,engine:input.engine,name:config.name,username:config.username,host:config.host,state:'provisioning',createdAt:new Date().toISOString()};
   const run=this.options.run??execute;
   try{

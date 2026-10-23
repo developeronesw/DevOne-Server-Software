@@ -40,3 +40,10 @@ if id www-data >/dev/null 2>&1; then
   runuser -u www-data -- test -r "$WEB_DIST/index.html"
 fi
 echo "Verified runtime artifact permissions for devone and NGINX."
+
+# Site workers read these two trusted helpers after dropping their identity.
+for helper in "$APP/scripts/wordpress-extract.py" "$APP/scripts/wordpress-install.php"; do
+  [[ -f "$helper" && ! -L "$helper" ]] || { echo "Missing or linked WordPress helper." >&2; exit 1; }
+  chown root:root "$helper"
+  chmod 644 "$helper"
+done

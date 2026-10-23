@@ -1,0 +1,25 @@
+# Managed WordPress installer
+
+Owners can choose WordPress in Websites & files → Install an app, select a new domain or an empty PHP 8.3 site, provide a title/admin email and explicitly approve the package/database/site changes with their Owner password and MFA when enabled. Installation is a durable `wordpress.install` job; recent installations and live stages remain available after reloading the dashboard. Admin/viewer roles cannot request this workflow or reveal credentials.
+
+The reviewed release is WordPress 7.1.3, verified against the official download/release pages on 2026-10-23:
+
+- https://wordpress.org/news/2026/10/wordpress-7-1-3-maintenance-and-security-release/
+- https://wordpress.org/wordpress-7.1.3.tar.gz
+- SHA-256: `d2a09acb6a15e3b9c471d72557753c266d6f41a79ed19bfe04cbfe49e283b2a5`
+
+The digest is DevOne's recorded digest of the official HTTPS archive, not an upstream signature. The installer pins this release; it never substitutes an unreviewed `latest` URL. Updating the pin requires downloading/reviewing the new release, recording its digest and passing actual WordPress installation QA.
+
+Missing PHP 8.3 CLI/FPM/extensions and MariaDB are installed through the existing guarded Ubuntu 24.04 package workflow. Each fixed package candidate is checked against Ubuntu repository metadata, the entire transaction is simulated, and removals/protected package changes are rejected. Existing configurations/services are retained; package or service failures require inspection. PHP's fixed profile now includes mysqli, curl, gd, mbstring, XML/DOM, zip and intl. This profile also ships through the normal Software Center PHP installer. No global unverified PHP scripts, Composer lifecycle hooks or WP-CLI downloads run as root.
+
+The Agent downloads a bounded artifact into a root-owned verified cache. The site worker drops supplementary groups and switches UID/GID before reading secrets, re-verifying/extracting the archive, writing configuration and running WordPress. Extraction rejects links, traversal, duplicate names, special files, unexpected wp-config.php and excessive file/archive sizes. Setup creates a random database/account using the existing database manager. Root does not execute WordPress PHP.
+
+Files are staged outside the public document root. Configuration has mode 0600, random authentication salts, disabled built-in code editing and minor/security core background updates enabled through WordPress. The administrator is `devone_admin`, with a random generated password encrypted separately in the API Vault. Jobs/audits retain only an installation identifier. Neither admin nor database passwords appear in job metadata, status responses or command arguments.
+
+The Agent publishes the configured tree only after setup succeeds, then verifies the actual WordPress login page through local NGINX/PHP-FPM with the site's domain. A failed final check restores the original empty document root when possible; staged files, database and failure state remain for inspection. Unknown outcomes are never replayed automatically. Do not delete/retry partial SQL resources blindly. Failed attempts may retain newly installed prerequisites and a site/database; this is deliberate preservation, not whole-server rollback.
+
+Point DNS at the server, issue HTTPS through Websites & files, then use Reveal administrator login with a fresh Owner password/MFA check. Reveal is refused until HTTPS is enabled; credentials are kept only in component memory and hidden after one minute or when leaving the installer. The generated URL configuration follows NGINX's HTTPS state for the fixed site domain, so enabling TLS does not leave hard-coded HTTP links. Changing an installed site's primary domain still requires application URL/content migration; this installer does not provide that migration. WordPress handles its background updates after publication; DevOne app update/version rollback orchestration is not yet implemented.
+
+CI extends the isolated SQL container with real WordPress, PHP 8.3 FPM and NGINX. Eight checks cover new-site installation/front page, actual administrator cookie login/dashboard, unprivileged/private configuration and duplicate protection, NGINX config/upload protections, preservation of nonempty sites, an existing empty-site install, failed-health rollback and HTTPS URL transition. The runtime container has no external network or host mounts; the pinned cache is prepared during image build. Service reloads use real daemon signals in this harness; this does not certify systemd, APT-on-VPS, public DNS/ACME, a rendered browser or host reboot. API authorization/vault/idempotency, archive rejection, staging failure and controller cleanup have separate automated regressions.
+
+Fresh installation and in-place updates include all modules, helpers and the API table migration. No server-specific patch is needed. Existing hosted content is never overwritten by this installer. DevOne CMS, other CMS products, site backup/restore, app rollback and an AI-local step-up flow for this operation remain separate work. No phase or stable-release gate closes solely from these tests.

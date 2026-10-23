@@ -75,3 +75,21 @@ test('unsupported engine or admin authentication is rejected before creating obj
  const manager=new DatabaseManager({registry,requireRoot:false,sites:async()=>[{id:siteId,state:'ready'}],run:async()=>{calls++;return '8.0.40 MySQL';}});
  try{await assert.rejects(manager.create({id,siteId,engine:'mariadb',password}),/engine_unavailable/);assert.equal(calls,1);assert.equal((await manager.list()).length,0);}finally{await rm(registry,{recursive:true,force:true});}
 });
+test('application/site locking cannot deadlock with a concurrent database request',async()=>{
+ const registry=await mkdtemp(join(tmpdir(),'devone-db-lock-'));let tail=Promise.resolve(),release;
+ const siteLock=work=>{const operation=tail.then(work);tail=operation.catch(()=>{});return operation;};
+ const gate=new Promise(r=>{release=r;});
+ const manager=new DatabaseManager({registry,requireRoot:false,sites:async()=>[{id:siteId,state:'ready'}],withSite:(id,work)=>siteLock(work),run:async(binary,args,query)=>{
+  if(/SELECT VERSION/i.test(query))return '10.11.8-MariaDB';
+  if(query.startsWith('SELECT')){const name=args.find(a=>a.startsWith('--database=')).slice(11);return name+'\t'+name+'@localhost';}return '';
+ }});
+ let timer;
+ try{
+  const app=siteLock(async()=>{await gate;return manager.createForLockedSite({id,siteId,engine:'mariadb',password},siteId);});
+  await Promise.resolve();
+  const concurrent=manager.create({id:'db_1111111111111111',siteId,engine:'mariadb',password});
+  release();
+  await Promise.race([Promise.all([app,concurrent]),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('lock_deadlock')),1500);})]);
+  assert.equal((await manager.list()).length,2);
+ }finally{clearTimeout(timer);await rm(registry,{recursive:true,force:true});}
+});

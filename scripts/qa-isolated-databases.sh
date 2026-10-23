@@ -23,7 +23,12 @@ cleanup() {
   exit "$status"
 }
 trap cleanup EXIT
-# Allowlist only the compiled production module and test harness into the image.
+# Allowlist compiled Agent modules and the two trusted WordPress helpers.
+mkdir -p "$context/agent/dist" "$context/scripts"
+cp agent/dist/*.js "$context/agent/dist/"
+cp scripts/wordpress-extract.py scripts/wordpress-install.php "$context/scripts/"
+cp qa/isolated-databases/wordpress-integration.mjs "$context/"
+printf '{"type":"module"}\n' > "$context/package.json"
 cp qa/isolated-databases/Dockerfile qa/isolated-databases/integration.mjs "$context/"
 cp agent/dist/databases.js "$context/"
 docker build --label "devone.qa=$identity" -t "$identity" "$context"
@@ -37,7 +42,7 @@ if [[ "$status" -eq 0 ]]; then
   node --input-type=module - "$report" <<'JS'
 import {readFileSync} from 'node:fs';
 const r=JSON.parse(readFileSync(process.argv[2],'utf8'));
-if(r.scope!=='isolated-real-sql'||r.productionReady!==false||r.checks.length!==16||r.checks.some(c=>c.status!=='pass'))process.exit(1);
+if(r.scope!=='isolated-real-sql'||r.productionReady!==false||r.checks.length!==24||r.checks.some(c=>c.status!=='pass'))process.exit(1);
 JS
 fi
 exit "$status"

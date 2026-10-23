@@ -33,7 +33,14 @@ free_kb="$(df -Pk / | awk 'NR==2{print $4}')"
 # apt-cache | awk '...{ print; exit }' pipeline generated SIGPIPE (exit 141)
 # under 'set -o pipefail' on hosts with longer policy output, even though the
 # Ubuntu candidate was valid and no package operation had begun.
-policy="$(apt-cache policy "$package")" || fail "apt_policy_unavailable" "APT package policy could not be read."
+# PHP's fixed profile includes the extensions needed by managed WordPress sites.
+packages=("$package")
+if [[ "$package" == "php8.3-fpm" ]]; then
+  packages+=(php8.3-cli php8.3-mysql php8.3-curl php8.3-gd php8.3-mbstring php8.3-xml php8.3-zip php8.3-intl)
+fi
+install_targets=()
+for selected_package in "${packages[@]}"; do
+policy="$(apt-cache policy "$selected_package")" || fail "apt_policy_unavailable" "APT package policy could not be read."
 candidate="$(awk '$1=="Candidate:"{value=$2;found=1} END {if(found)print value;else exit 1}' <<< "$policy")" || fail "apt_candidate_unavailable" "APT candidate could not be identified."
 [[ "$candidate" =~ ^[0-9A-Za-z.+~:-]+$ && "$candidate" != "(none)" ]] || fail "apt_candidate_unavailable" "No valid candidate in current APT metadata."
 # Validate the selected candidate against Ubuntu's signed repository metadata.
@@ -72,9 +79,11 @@ awk -v sources="$candidate_sources" '
 ' <<< "$repository_policy" || {
   fail "repository_origin_unverified" "APT candidate cannot be linked to signed Ubuntu Noble release metadata."
 }
+install_targets+=("$selected_package=$candidate")
+done
 simulation="$(mktemp /tmp/devone-software-apt.XXXXXXXX)"
 trap 'rm -f "$simulation"' EXIT
-apt-get -s --no-install-recommends install "$package=$candidate" > "$simulation" || fail "apt_simulation_failed" "APT dependency simulation failed; nothing installed."
+apt-get -s --no-install-recommends install "${install_targets[@]}" > "$simulation" || fail "apt_simulation_failed" "APT dependency simulation failed; nothing installed."
 if grep -Eq '^Remv |^Inst (nginx([^ ]*)|devone([^ ]*)|openssh-([^ ]*)|systemd([^ ]*)|linux-image([^ ]*)|linux-generic([^ ]*)) ' "$simulation"; then
   fail "protected_package_change" "APT would remove packages or alter protected components."
 fi
@@ -94,7 +103,7 @@ else
   # the private host endpoint; this script still requires root.
   [[ ! -t 0 ]] || { echo "Managed installs run without an interactive terminal." >&2; exit 1; }
 fi
-DEBIAN_FRONTEND=noninteractive apt-get -y --no-install-recommends install "$package=$candidate" || fail "apt_transaction_failed" "APT installation failed. Inspect apt logs and package state before retry."
+DEBIAN_FRONTEND=noninteractive apt-get -y --no-install-recommends install "${install_targets[@]}" || fail "apt_transaction_failed" "APT installation failed. Inspect apt logs and package state before retry."
 nginx -t >/dev/null 2>&1 || fail "nginx_postcheck_failed" "NGINX validation failed following APT. No automatic removal attempted."
 for unit in devone-api devone-agent; do
   systemctl is-active --quiet "$unit" || fail "devone_postcheck_failed" "Required DevOne service went down during installation."

@@ -4,7 +4,7 @@ import {readFileSync} from "node:fs";
 import {spawnSync} from "node:child_process";
 
 const script=readFileSync(new URL("../scripts/software-runtime-pilot.sh",import.meta.url),"utf8");
-const begin=script.indexOf('policy="$(apt-cache policy "$package")"');
+const begin=script.indexOf('packages=("$package")');
 const end=script.indexOf('simulation="$(mktemp ',begin);
 assert.ok(begin>=0&&end>begin,"APT candidate and origin validation block must exist");
 const policyCheck=script.slice(begin,end);
@@ -47,7 +47,7 @@ test("policy still rejects non-Ubuntu origins",()=>{
 });
 test("host installer never pipes early-exiting candidate parser",()=>{
  assert.doesNotMatch(script,/apt-cache policy "\$package" *\| *awk/);
- assert.match(script,/policy="\$\(apt-cache policy "\$package"\)"/);
+ assert.match(script,/policy="\$\(apt-cache policy "\$selected_package"\)"/);
  assert.match(script,/awk -v version="\$candidate"/);
  assert.match(script,/<<< "\$policy"/);
  const syntax=spawnSync("bash",["-n",new URL("../scripts/software-runtime-pilot.sh",import.meta.url).pathname],{encoding:"utf8"});

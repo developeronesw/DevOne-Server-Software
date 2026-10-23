@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {spawnSync} from "node:child_process";
 const sh=readFileSync(new URL("../scripts/software-runtime-pilot.sh",import.meta.url),"utf8");
-const start=sh.indexOf('policy="$(apt-cache policy "$package")"');
+const start=sh.indexOf('packages=("$package")');
 const end=sh.indexOf('simulation="$(mktemp ',start);
 assert.ok(start>=0&&end>start);
 const code=sh.slice(start,end);
@@ -44,7 +44,8 @@ function check({name="redis-server",packagePolicy=ubuntu(name),repoPolicy=aptRep
  "fi",
  "}",
  code,
- "echo APT_ORIGIN_ACCEPTED"
+ "echo APT_ORIGIN_ACCEPTED",
+ 'printf "%s\\n" "${install_targets[@]}"'
  ].join("\n");
  return spawnSync("bash",["-c",body],{encoding:"utf8",timeout:8000,maxBuffer:2000000});
 }
@@ -93,4 +94,9 @@ test("script does not use unreliable package-policy release parsing or early-exi
  assert.match(code,/repository_policy="\$\(apt-cache policy\)"/);
  const r=spawnSync("bash",["-n",new URL("../scripts/software-runtime-pilot.sh",import.meta.url).pathname],{encoding:"utf8"});
  assert.equal(r.status,0,r.stderr);
+});
+
+test("PHP prerequisites are included as independently verified pinned candidates",()=>{
+ const r=check({name:"php8.3-fpm"});assert.equal(r.status,0,r.stderr);
+ for(const p of ["php8.3-cli","php8.3-mysql","php8.3-curl","php8.3-gd","php8.3-mbstring","php8.3-xml","php8.3-zip","php8.3-intl"])assert.ok(r.stdout.includes(p+"=8.3.6-0ubuntu0.24.04.1"));
 });
