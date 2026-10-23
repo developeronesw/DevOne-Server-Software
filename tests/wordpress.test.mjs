@@ -65,3 +65,11 @@ for(const scenario of ['success','worker-failure','health-failure'])test('WordPr
   assert.equal(database,1);assert.equal(prepared,1);
  }finally{await rm(root,{recursive:true,force:true});}
 });
+
+test('acknowledged WordPress prerequisite/target failures keep safe actionable job errors',async()=>{
+ const {assertAgentMutationResult}=await import('../apps/api/dist/job-agent-result.js');
+ for(const error of ['software_install_requires_inspection','site_provisioning_requires_inspection','domain_in_use','site_limit']){
+  const response=new Response(JSON.stringify({error,stderr:'private diagnostic'}),{status:error.includes('inspection')?503:409});
+  await assert.rejects(assertAgentMutationResult(response,'wordpress.install'),{name:'Error',message:error});
+ }
+});
