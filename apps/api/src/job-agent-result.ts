@@ -6,6 +6,7 @@ import {isSafeInstallFailureReason} from "./software-reasons.js";
 export async function assertAgentMutationResult(response:Response,operation:string):Promise<void>{
  if(response.ok)return;
  const payload=await response.json().catch(()=>({})) as {error?:unknown;reason?:unknown};
+ if(operation==="cms.install"&&["cms_install_requires_inspection","cms_already_recorded","cms_private_data_exists","cms_runtime_must_be_stopped","cms_runtime_config_changed","app_target_not_empty","app_target_incompatible","site_revision_conflict","node22_runtime_not_available","domain_in_use","site_limit","site_provisioning_requires_inspection"].includes(payload.error as string))throw Error(payload.error as string);
  if(operation==="wordpress.install"&&["software_install_requires_inspection","site_provisioning_requires_inspection","domain_in_use","site_limit","php83_runtime_not_running","wordpress_install_requires_inspection","wordpress_prerequisites_unavailable","wordpress_artifact_unavailable","wordpress_already_recorded","app_target_not_empty","app_target_incompatible","site_revision_conflict"].includes(payload.error as string))throw Error(payload.error as string);
  if(operation==="software.install"&&response.status===503&&
     payload.error==="software_install_requires_inspection"){

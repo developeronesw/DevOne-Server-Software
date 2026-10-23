@@ -1,3 +1,4 @@
+import {runCmsChecks} from './cms-integration.mjs';
 // Runs as root ONLY inside the disposable, network-isolated QA image.
 import {execFile,spawn} from 'node:child_process';
 import {promisify} from 'node:util';
@@ -76,6 +77,7 @@ try{
   });
  }
  await runWordPressChecks(check,command);
+ await runCmsChecks(check,command);
 }catch{process.exitCode=1;console.error('Isolated SQL QA failed; consult named check results.');}
 finally{
  await writeFile('/qa/result.json',JSON.stringify(report,null,2)+'\n',{mode:0o600});

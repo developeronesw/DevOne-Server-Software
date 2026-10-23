@@ -1,3 +1,4 @@
+import {CmsInstaller} from "./CmsInstaller";
 import {WordPressInstaller} from "./WordPressInstaller";
 import {useEffect,useState} from "react";
 type App={id:string;name:string;siteType:string;version:string};
@@ -23,13 +24,13 @@ export function AppInstaller(){
   try{const data=await api<{job:Job}>("/api/apps/install",{appId,confirmed:true,requestKey:crypto.randomUUID(),...(target==="new"?{domain:domain.trim().toLowerCase()}:{siteId:site?.id,expectedRevision:site?.revision??1})});setJob(data.job);}
   catch(e){setError(e instanceof Error?e.message:"Installation request failed. Check Activity & jobs before retrying.");}finally{setBusy(false);}
  }
- return <section className="surface-card glass"><span className="overline">INSTALL AN APP</span><h2>From an idea to a running website.</h2><p>Launch a built-in starter in one step. Existing sites must be empty; DevOne checks again before writing files. Node apps start automatically. Owners can also install WordPress with a private database and generated administrator credentials.</p>
+ return <section className="surface-card glass"><span className="overline">INSTALL AN APP</span><h2>From an idea to a running website.</h2><p>Launch a built-in starter in one step. Existing sites must be empty; DevOne checks again before writing files. Node apps start automatically. Owners can also install WordPress or the DevOne CMS local preview with generated administrator credentials.</p>
  <label>Application <select disabled={running} value={appId} onChange={e=>{setAppId(e.target.value);setTarget("new");}}>{apps.map(a=><option key={a.id} value={a.id}>{a.name} · {a.version}</option>)}</select></label>{" "}
  <label>Destination <select disabled={running} value={target} onChange={e=>setTarget(e.target.value)}><option value="new">Create a new website</option>{sites.filter(s=>s.state==="ready"&&s.siteType===selected?.siteType).map(s=><option key={s.id} value={s.id}>{s.domain}</option>)}</select></label>
  {target==="new"&&<label> Domain <input disabled={running} value={domain} onChange={e=>setDomain(e.target.value)} placeholder="app.example.com"/></label>}
  <p>Uses the site's isolated user and managed runtime. Point the domain's DNS at this server, then issue HTTPS from Websites &amp; files.</p>
- {appId==="wordpress"?<WordPressInstaller siteId={target!=="new"?site?.id:undefined} expectedRevision={site?.revision??1} domain={target==="new"?domain:undefined} onBusy={setBusy}/>:<><button className="primary-button" disabled={running||!selected||(target==="new"?!domain.trim():!site)} onClick={()=>void install()}>{running?"Installing…":target==="new"?"Create website & install":"Install on selected website"}</button>
+ {appId==="wordpress"?<WordPressInstaller siteId={target!=="new"?site?.id:undefined} expectedRevision={site?.revision??1} domain={target==="new"?domain:undefined} onBusy={setBusy}/>:appId==="devone-cms-v2"?<CmsInstaller siteId={target!=="new"?site?.id:undefined} expectedRevision={site?.revision??1} domain={target==="new"?domain:undefined} onBusy={setBusy}/>:<><button className="primary-button" disabled={running||!selected||(target==="new"?!domain.trim():!site)} onClick={()=>void install()}>{running?"Installing…":target==="new"?"Create website & install":"Install on selected website"}</button>
  </>}
- {appId!=="wordpress"&&job&&<p role="status">Installation {job.state}. Job: {job.id}{job.state==="succeeded"?" — Open Websites & files to manage your app.":""}{job.error?" — "+job.error+". Inspect the site and Agent journal before retrying.":""}</p>}{error&&<p role="alert" className="inline-error">{error}</p>}
+ {!["wordpress","devone-cms-v2"].includes(appId)&&job&&<p role="status">Installation {job.state}. Job: {job.id}{job.state==="succeeded"?" — Open Websites & files to manage your app.":""}{job.error?" — "+job.error+". Inspect the site and Agent journal before retrying.":""}</p>}{error&&<p role="alert" className="inline-error">{error}</p>}
  </section>;
 }

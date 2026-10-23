@@ -52,7 +52,7 @@ export function softwareCapabilities(){
   options:runtimePackages.map(name=>({
    package:name,label:name==="php8.3-fpm"?"PHP 8.3 FPM":name==="docker.io"?"Docker Engine":name==="mariadb-server"?"MariaDB Server":name==="postgresql"?"PostgreSQL":"Redis Server",installAvailable:true
   })),
-  notice:"Owner-approved, audited installs of Ubuntu packages only. WordPress has a dedicated managed installer; other CMS/framework catalog entries remain planning-only."
+  notice:"Owner-approved, audited installs of Ubuntu packages only. WordPress and the DevOne CMS local preview have dedicated managed installers; other CMS/framework catalog entries remain planning-only."
  };
 }
 export async function softwareStatus(run:Runner=exec):Promise<{packages:RuntimeState[];installAvailable:true}>{

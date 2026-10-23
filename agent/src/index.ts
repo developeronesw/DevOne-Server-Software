@@ -30,6 +30,12 @@ const server = createServer(async (request, response) => {
     response.end(JSON.stringify({ error: "unauthorized" })); return;
   }
   const send = (code: number, value: unknown) => { response.writeHead(code, { "content-type": "application/json" }); response.end(JSON.stringify(value)); };
+  if(request.method==='POST'&&request.url==='/v1/apps/devone-cms/install'){
+    try{
+      request.setEncoding('utf8');let body='';for await(const chunk of request){body+=chunk;if(Buffer.byteLength(body)>4096){send(413,{error:'body_too_large'});return;}}
+      send(200,await sites.installCms(JSON.parse(body)));
+    }catch(e){const code=e instanceof Error?e.message:'';const safe=['invalid_cms_request','invalid_cms_target','cms_already_recorded','cms_install_requires_inspection','cms_private_data_exists','cms_runtime_must_be_stopped','cms_runtime_config_changed','app_target_not_empty','app_target_incompatible','site_revision_conflict','node22_runtime_not_available','domain_in_use','site_limit','site_provisioning_requires_inspection'].includes(code)?code:'cms_install_requires_inspection';send(safe.startsWith('invalid_')?400:safe.endsWith('requires_inspection')?503:409,{error:safe});}return;
+  }
   if(request.method==='POST'&&request.url==='/v1/apps/wordpress/install'){
     try{
       request.setEncoding('utf8');let body='';for await(const chunk of request){body+=chunk;if(Buffer.byteLength(body)>4096){send(413,{error:'body_too_large'});return;}}

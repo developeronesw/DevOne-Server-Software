@@ -1,6 +1,6 @@
 // Curated source-first DevOne software catalog.
 // Items are discoverable catalog entries, NOT installed application instances.
-// Only WordPress has a dedicated managed installer; remaining catalog entries are planning references.
+// WordPress and the DevOne CMS local preview have dedicated managed installers; remaining catalog entries are planning references.
 export type CatalogEntry={
  id:string;name:string;category:"cms"|"framework"|"platform"|"runtime";
  description:string;sourceUrl:string;docsUrl:string;runtime:string[];
@@ -9,7 +9,7 @@ export type CatalogEntry={
  releaseChannel:"stable"|"preview"|"rolling";
 };
 export const softwareCatalog:ReadonlyArray<CatalogEntry>=[
- {id:"devone-cms-v2",name:"DevOne CMS v2",category:"cms",description:"Developer One's proprietary PHP-free CMS. Local TypeScript/Node edition and Cloudflare Workers edition.",sourceUrl:"https://github.com/developeronesw/DevOneCMS-v2",docsUrl:"https://github.com/developeronesw/DevOneCMS-v2/blob/main/README.md",runtime:["Node.js","TypeScript","local database adapter or Cloudflare D1/KV/R2"],latestKnownVersion:"2.0.0-alpha.3",verifiedAt:"2026-10-14",featured:true,deployment:"local-node",releaseChannel:"preview"},
+ {id:"devone-cms-v2",name:"DevOne CMS v2",category:"cms",description:"Developer One's proprietary PHP-free CMS. Local TypeScript/Node edition and Cloudflare Workers edition.",sourceUrl:"https://github.com/developeronesw/DevOneCMS-v2",docsUrl:"https://github.com/developeronesw/DevOneCMS-v2/blob/main/README.md",runtime:["Node.js","TypeScript","local database adapter or Cloudflare D1/KV/R2"],latestKnownVersion:"2.0.0-alpha.4",verifiedAt:"2026-10-23",featured:true,deployment:"local-node",releaseChannel:"preview"},
  {id:"wordpress",name:"WordPress",category:"cms",description:"Open-source PHP content management and publishing platform.",sourceUrl:"https://wordpress.org/download/",docsUrl:"https://wordpress.org/documentation/article/how-to-install-wordpress/",runtime:["PHP","MySQL or MariaDB","NGINX or Apache"],latestKnownVersion:"7.1.3",verifiedAt:"2026-10-14",featured:true,deployment:"php-database",releaseChannel:"stable"},
  {id:"ghost",name:"Ghost",category:"cms",description:"Publishing and memberships for modern websites.",sourceUrl:"https://github.com/TryGhost/Ghost",docsUrl:"https://ghost.org/docs/install/",runtime:["Node.js","MySQL","NGINX"],deployment:"node-app",releaseChannel:"stable"},
  {id:"strapi",name:"Strapi",category:"cms",description:"TypeScript headless CMS with customizable content APIs.",sourceUrl:"https://github.com/strapi/strapi",docsUrl:"https://docs.strapi.io/",runtime:["Node.js","Database"],deployment:"node-app",releaseChannel:"stable"},
@@ -31,5 +31,5 @@ export const softwareCatalog:ReadonlyArray<CatalogEntry>=[
  {id:"php",name:"PHP",category:"runtime",description:"PHP application runtime required by WordPress and Laravel.",sourceUrl:"https://github.com/php/php-src",docsUrl:"https://www.php.net/manual/en/",runtime:["PHP"],deployment:"php-database",releaseChannel:"stable"}
 ];
 export function listCatalog(){
- return {items:softwareCatalog,checkedAt:"2026-10-14",installMode:"planning-only",installAvailable:false,notice:"Versions are last verified references, not live release checks. WordPress installation is available in Install an app for Owners. Other catalog products remain planning-only. Review upstream releases and prerequisites."};
+ return {items:softwareCatalog,checkedAt:"2026-10-14",installMode:"planning-only",installAvailable:false,notice:"Versions are last verified references, not live release checks. WordPress and the DevOne CMS local preview are available in Install an app for Owners. Other catalog products remain planning-only. Review upstream releases and prerequisites."};
 }

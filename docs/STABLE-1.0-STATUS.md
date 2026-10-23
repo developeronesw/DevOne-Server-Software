@@ -23,7 +23,7 @@ No full phase is newly certified complete by this status. Earlier host success i
 
 ## Priority order for the next work
 
-1. Complete database provisioning and isolated database users/credentials, then the DevOne CMS installer adapter; WordPress now has a managed installation increment. Each supports an existing compatible site or a new site, with trustworthy artifacts, prerequisites, configuration, health checks and failure recovery. Keep unimplemented catalog products visibly unavailable.
+1. Complete database provisioning and isolated database users/credentials, then deployment/recovery controls and acceptance of the DevOne CMS local preview; WordPress and DevOne CMS now have managed installation increments. Each supports an existing compatible site or a new site, with trustworthy artifacts, prerequisites, configuration, health checks and failure recovery. Keep unimplemented catalog products visibly unavailable.
 2. Finish deployment controls: app environment/secrets, Git deployment/history, health checks, application rollback and update behavior. Verify code-editor workflows; full browser VS Code remains separate unfinished integration.
 3. Complete backups/restores and host package/update recovery. Restore websites, application databases, control state and encryption keys on a separate VPS; prove interruption and reboot behavior.
 4. Expand AI to the remaining frontend capabilities through their existing APIs, including appropriate local step-up authentication and previews. Add multi-step execution with accurate progress, explicit failure handling and no invented success. Current AI actions cover a subset and require reviewing one action at a time.
@@ -58,3 +58,7 @@ GitHub-hosted CI now includes disposable Ubuntu SQL integration tests using the 
 ## WordPress installation increment
 
 The Owner dashboard now includes a managed WordPress installer for new domains or empty PHP 8.3 websites, guarded prerequisites, per-site database/account generation, encrypted administrator credentials, durable progress/history, staged publication and failed-health preservation. See [WordPress scope and verification](WORDPRESS-INSTALLER.md). CI now includes eight real WordPress checks alongside sixteen SQL checks. Systemd/APT/public-TLS/browser/host acceptance is still separate. DevOne CMS and other product installers, full app update/rollback and the remaining phase 3–4 scope remain open; this increment does not certify a full phase or stable release.
+
+## DevOne CMS preview installation increment
+
+The Owner app installer now includes a pinned, prebuilt DevOne CMS 2.0.0-alpha.4 local preview for new or empty Node sites. Offline unprivileged initialization, private SQLite/key storage, encrypted initial credentials, guarded service configuration, health checks and failure preservation ship through the normal installer/updater. See [CMS installation scope](DEVONE-CMS-INSTALLER.md). CMS packaging remains preview software, with full module/browser/host acceptance, application updates/rollback and backups still open. CI includes reproducible source-package comparison and eight real CMS checks alongside the existing eight WordPress and sixteen SQL checks; no phase or stable gate closes from this increment.

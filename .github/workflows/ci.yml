@@ -28,8 +28,29 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  cms-package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/checkout@v4
+        with:
+          repository: developeronesw/DevOneCMS-v2
+          ref: 76170ee10e59f1f8fc772951b6796a57a122ed14
+          path: qa-cms-source
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: qa-cms-source
+      - run: npm run build:local
+        working-directory: qa-cms-source
+      - run: python3 scripts/package-local.py /tmp/devone-cms-rebuilt.tar.gz
+        working-directory: qa-cms-source
+      - run: cmp /tmp/devone-cms-rebuilt.tar.gz distributions/devone-cms-local/2.0.0-alpha.4.tar.gz
+
   validate:
-    needs: [isolated-databases]
+    needs: [isolated-databases, cms-package]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
