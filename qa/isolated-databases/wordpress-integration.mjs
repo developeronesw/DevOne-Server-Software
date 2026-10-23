@@ -1,6 +1,7 @@
 // Real WordPress/NGINX/PHP-FPM/MariaDB inside the disposable QA container.
 // systemctl is adapted to real daemon signals: this does not certify systemd.
 import assert from 'node:assert/strict';
+import {request as httpRequest} from 'node:http';
 import {readFile,writeFile,mkdir,stat,readdir} from 'node:fs/promises';
 import {randomBytes} from 'node:crypto';
 import {SiteManager} from './agent/dist/sites.js';
@@ -32,7 +33,13 @@ export async function runWordPressChecks(check,command){
  const request=domain=>({id:'app_'+randomBytes(8).toString('hex'),databaseId:'db_'+randomBytes(8).toString('hex'),databasePassword:randomBytes(32).toString('hex'),adminPassword:randomBytes(32).toString('hex'),title:'DevOne QA WordPress',email:'qa@example.test',domain});
  const deps={prepare:async()=>{},database:(site,b)=>databases.createForLockedSite({id:b.databaseId,siteId:site.id,engine:'mariadb',password:b.databasePassword},site.id)};
  const first=request('wordpress.example.test');let site;
- const web=(path,options={})=>fetch('http://127.0.0.1'+path,{redirect:'manual',...options,headers:{Host:first.domain,...options.headers},signal:AbortSignal.timeout(15000)});
+ // Native fetch ignores an explicit Host header in supported Node releases.
+ // Use the HTTP client so every request actually reaches this site's vhost.
+ const web=(path,options={})=>new Promise((resolve,reject)=>{
+  const req=httpRequest({hostname:'127.0.0.1',port:80,path,method:options.method??'GET',headers:{Host:first.domain,...options.headers}},res=>{
+   const chunks=[];res.on('data',b=>chunks.push(b));res.on('end',()=>{const headers=new Headers();for(let i=0;i<res.rawHeaders.length;i+=2)headers.append(res.rawHeaders[i],res.rawHeaders[i+1]);resolve(new Response(Buffer.concat(chunks),{status:res.statusCode,headers}));});res.on('error',reject);
+  });req.on('error',reject);req.setTimeout(15000,()=>req.destroy(Error('http_timeout')));req.end(options.body?.toString());
+ });
  await check('wordpress.new-site-install',async()=>{
   let result;try{result=await manager.installWordPress(first,deps);}catch{const states=await manager.list();console.error('WordPress stage evidence',JSON.stringify(states.map(s=>({state:s.state,stage:s.application?.stage}))));throw Error('wordpress_install_failed');}site=(await manager.list()).find(s=>s.id===result.siteId);
   assert.equal(site.state,'ready');assert.equal(site.application.stage,'complete');
