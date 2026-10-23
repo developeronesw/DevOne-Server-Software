@@ -42,7 +42,7 @@ fi
 echo "Verified runtime artifact permissions for devone and NGINX."
 
 # Site workers read these two trusted helpers after dropping their identity.
-for helper in "$APP/scripts/wordpress-extract.py" "$APP/scripts/wordpress-install.php"; do
+for helper in "$APP/scripts/wordpress-extract.py" "$APP/scripts/wordpress-install.php" "$APP/scripts/cms-extract.py" "$APP/distributions/devone-cms-local/2.0.0-alpha.4.tar.gz"; do
   [[ -f "$helper" && ! -L "$helper" ]] || { echo "Missing or linked WordPress helper." >&2; exit 1; }
   chown root:root "$helper"
   chmod 644 "$helper"

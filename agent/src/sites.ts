@@ -1,3 +1,5 @@
+import {cmsInput,cmsRelease,type CmsInstall} from './cms-release.js';
+import {runCmsWorker} from './cms.js';
 import {wordpressInput,wordpressRelease,type WordPressInstall} from './wordpress-release.js';
 import {runWordPressWorker} from './wordpress.js';
 import { starter, starterSource } from './app-starters.js';
@@ -13,9 +15,9 @@ import { defaultWafPolicy, validateWaf, isValidWaf, nginxWafZone, nginxWafLocati
 import {nodeSitePort,phpPoolPath,phpPoolConfig,nodeUnitPath,nodeUnitName,nodeUnitConfig,pythonUnitConfig,runtimeContainerName,dockerRunArgs,runtimeNginxLocation} from './site-runtimes.js';
 
 const exec = promisify(execFile);
-export type Application={id:string;appId:'wordpress';version:string;databaseId:string;stage:'database'|'installing'|'publishing'|'verifying'|'complete'};
+export type Application={id:string;appId:'wordpress'|'devone-cms-v2';version:string;databaseId?:string;stage:'database'|'installing'|'publishing'|'verifying'|'complete'};
 export type Site = { application?:Application; id: string; domain: string; user: string; uid?: number; gid?: number; siteType?: 'static' | 'files' | 'php' | 'node' | 'python' | 'container'; runtimeVersion?:'8.3'|'22'|'3.12'; appActive?:boolean; waf?:WafPolicy; webServer: 'nginx' | 'none'; state: 'provisioning' | 'ready' | 'disabled' | 'updating' | 'needs_inspection'; createdAt: string; aliases?: string[]; revision?: number; configHash?: string; tls?: boolean; certificateIssued?: boolean };
-type Options = { registry: string; base: string; nginx: string; panelDomain: string; requireRoot?: boolean; certificates?: string; phpPoolDir?:string; nodeUnitDir?:string; ownership?: typeof chown; worker?: (site: Site,request: Record<string,unknown>) => Promise<unknown>; command?: (command: string, args: string[]) => Promise<string>; wordpressWorker?:typeof runWordPressWorker; wordpressHealth?:(site:Site)=>Promise<void> };
+type Options = { registry: string; base: string; nginx: string; panelDomain: string; requireRoot?: boolean; certificates?: string; phpPoolDir?:string; nodeUnitDir?:string; ownership?: typeof chown; worker?: (site: Site,request: Record<string,unknown>) => Promise<unknown>; command?: (command: string, args: string[]) => Promise<string>; cmsWorker?:typeof runCmsWorker;cmsHealth?:(site:Site)=>Promise<void>;wordpressWorker?:typeof runWordPressWorker; wordpressHealth?:(site:Site)=>Promise<void> };
 export function siteInput(input: unknown): { domain: string; webServer: 'nginx' | 'none'; siteType: 'static' | 'files' | 'php' | 'node' | 'python' | 'container'; runtimeVersion?:'8.3'|'22'|'3.12' } {
   if (!input || typeof input !== 'object') throw new Error('invalid_site');
   const body = input as Record<string,unknown>;
@@ -31,7 +33,7 @@ export function siteInput(input: unknown): { domain: string; webServer: 'nginx' 
     ...((siteType==='php'||siteType==='node'||siteType==='python')?{runtimeVersion:version as '8.3'|'22'|'3.12'}:{}) };
 }
 function validRecord(site: Site) {
-  return (site.application===undefined||( /^app_[a-f0-9]{16}$/.test(site.application.id)&&site.application.appId==='wordpress'&&/^\d+\.\d+\.\d+$/.test(site.application.version)&&/^db_[a-f0-9]{16}$/.test(site.application.databaseId)&&['database','installing','publishing','verifying','complete'].includes(site.application.stage))) && /^site_[a-f0-9]{16}$/.test(site.id) && site.user === `dvs_${site.id.slice(5)}` && validateDomain(site.domain) === site.domain && ['nginx','none'].includes(site.webServer) && (site.siteType === undefined || (site.siteType === 'static' && site.webServer === 'nginx') || (site.siteType === 'files' && site.webServer === 'none') || (['php','node','python','container'].includes(site.siteType) && site.webServer === 'nginx')) && (site.siteType === 'php' ? site.runtimeVersion === '8.3' : site.siteType === 'node' ? site.runtimeVersion === '22' : site.siteType === 'python' ? site.runtimeVersion === '3.12' : site.runtimeVersion === undefined) && ['provisioning','ready','disabled','updating','needs_inspection'].includes(site.state) && (site.aliases === undefined || Array.isArray(site.aliases) && site.aliases.length <= 20 && site.aliases.every(alias => validateDomain(alias) === alias)) && (site.revision === undefined || Number.isSafeInteger(site.revision) && site.revision >= 1) && (site.tls === undefined || typeof site.tls === 'boolean') && (site.certificateIssued === undefined || typeof site.certificateIssued === 'boolean') && (site.configHash === undefined || /^[a-f0-9]{64}$/.test(site.configHash)) && (site.waf === undefined || isValidWaf(site.waf)) && (site.appActive === undefined || typeof site.appActive === 'boolean') && (site.uid === undefined || Number.isInteger(site.uid) && site.uid >= 1000) && (site.gid === undefined || Number.isInteger(site.gid) && site.gid >= 1000);
+  return (site.application===undefined||( /^app_[a-f0-9]{16}$/.test(site.application.id)&&['wordpress','devone-cms-v2'].includes(site.application.appId)&&/^\d+\.\d+\.\d+(?:-[a-z0-9.]+)?$/.test(site.application.version)&&(site.application.appId==='wordpress'?/^db_[a-f0-9]{16}$/.test(site.application.databaseId??''):site.application.databaseId===undefined)&&['database','installing','publishing','verifying','complete'].includes(site.application.stage))) && /^site_[a-f0-9]{16}$/.test(site.id) && site.user === `dvs_${site.id.slice(5)}` && validateDomain(site.domain) === site.domain && ['nginx','none'].includes(site.webServer) && (site.siteType === undefined || (site.siteType === 'static' && site.webServer === 'nginx') || (site.siteType === 'files' && site.webServer === 'none') || (['php','node','python','container'].includes(site.siteType) && site.webServer === 'nginx')) && (site.siteType === 'php' ? site.runtimeVersion === '8.3' : site.siteType === 'node' ? site.runtimeVersion === '22' : site.siteType === 'python' ? site.runtimeVersion === '3.12' : site.runtimeVersion === undefined) && ['provisioning','ready','disabled','updating','needs_inspection'].includes(site.state) && (site.aliases === undefined || Array.isArray(site.aliases) && site.aliases.length <= 20 && site.aliases.every(alias => validateDomain(alias) === alias)) && (site.revision === undefined || Number.isSafeInteger(site.revision) && site.revision >= 1) && (site.tls === undefined || typeof site.tls === 'boolean') && (site.certificateIssued === undefined || typeof site.certificateIssued === 'boolean') && (site.configHash === undefined || /^[a-f0-9]{64}$/.test(site.configHash)) && (site.waf === undefined || isValidWaf(site.waf)) && (site.appActive === undefined || typeof site.appActive === 'boolean') && (site.uid === undefined || Number.isInteger(site.uid) && site.uid >= 1000) && (site.gid === undefined || Number.isInteger(site.gid) && site.gid >= 1000);
 }
 export class SiteManager {
   private runningSite: string | null = null;
@@ -233,6 +235,59 @@ export class SiteManager {
         if(moved){try{if(published)await rename(publicRoot,stage);await rename(backup,publicRoot);}catch{}}
         if(previousConfig!==undefined){try{await this.writeConfig(configPath,previousConfig);await this.command('nginx',['-t']);await this.command('systemctl',['reload','nginx']);record.configHash=previousHash;}catch{}}
         record.state='needs_inspection';await this.save(records);throw Error('wordpress_install_requires_inspection');
+      }
+    },siteId));
+    if(siteId)this.fileQueues.set(siteId,operation);
+    return operation.finally(()=>{if(siteId&&this.fileQueues.get(siteId)===operation)this.fileQueues.delete(siteId);});
+  }
+  installCms(value:unknown){
+    const input=cmsInput(value),siteId=input.siteId;
+    const previous=siteId?this.fileQueues.get(siteId):undefined;
+    const operation=(previous??Promise.resolve()).catch(()=>{}).then(()=>this.serial(async()=>{
+      const all=await this.registry();if(all.some(s=>s.application?.id===input.id))throw Error('cms_already_recorded');
+      const site=siteId?all.find(s=>s.id===siteId):await this.provision({domain:input.domain,webServer:'nginx',siteType:'node',runtimeVersion:'22'});
+      if(!site||site.state!=='ready'||site.siteType!=='node'||site.runtimeVersion!=='22'||site.webServer!=='nginx'||site.application)throw Error('app_target_incompatible');
+      if(siteId&&(site.revision??1)!==input.expectedRevision)throw Error('site_revision_conflict');
+      this.runningSite=site.id;
+      const entries=await this.invokeWorker(site,{operation:'list',path:''});if(!Array.isArray(entries)||entries.length)throw Error('app_target_not_empty');
+      if(await this.command('systemctl',['is-active',nodeUnitName(site.id)]).then(s=>s.trim()==='active').catch(()=>false))throw Error('cms_runtime_must_be_stopped');
+      const passwd=(await this.command('getent',['passwd',site.user])).trim().split(':');if(passwd[0]!==site.user||Number(passwd[2])!==site.uid||Number(passwd[3])!==site.gid||passwd[5]!==join(this.options.base,site.id)||passwd[6]!=='/usr/sbin/nologin')throw Error('site_identity_changed');
+      const home=join(this.options.base,site.id),data=join(home,'data'),stage=join(home,'.cms-'+input.id),publicRoot=join(home,'public'),backup=join(home,'.cms-empty-'+input.id);
+      if(await lstat(data).then(()=>true).catch(e=>{if(e.code==='ENOENT')return false;throw e;}))throw Error('cms_private_data_exists');
+      const unit=nodeUnitPath(site.id,this.options.nodeUnitDir),file=await open(unit,constants.O_RDONLY|constants.O_NOFOLLOW);let previousUnit:string;
+      try{const st=await file.stat();if(!st.isFile()||st.nlink!==1||st.size>65536||(this.options.requireRoot!==false&&st.uid!==0))throw Error('unsafe_site_config');previousUnit=await file.readFile('utf8');if(previousUnit!==nodeUnitConfig(site,this.options.base))throw Error('cms_runtime_config_changed');}finally{await file.close();}
+      const records=await this.registry(),record=records.find(s=>s.id===site.id)!;
+      record.application={id:input.id,appId:'devone-cms-v2',version:cmsRelease.version,stage:'installing'};record.state='updating';await this.save(records);
+      let moved=false,published=false,unitChanged=false;
+      try{
+        const parent=await lstat(home);if(!parent.isDirectory()||parent.isSymbolicLink()||(parent.mode&0o022)||(this.options.requireRoot!==false&&parent.uid!==0))throw Error('unsafe_site_home');
+        await mkdir(data,{mode:0o700});await (this.options.ownership??chown)(data,site.uid!,site.gid!);
+        await mkdir(stage,{mode:0o750});await (this.options.ownership??chown)(stage,site.uid!,site.gid!);
+        await (this.options.cmsWorker??runCmsWorker)(site,stage,data,input);
+        record.application.stage='publishing';await this.save(records);
+        const rootInfo=await lstat(publicRoot);if(!rootInfo.isDirectory()||rootInfo.isSymbolicLink()||(await readdir(publicRoot)).length)throw Error('app_target_not_empty');
+        await rename(publicRoot,backup);moved=true;await rename(stage,publicRoot);published=true;
+        // Only refresh the exact managed unit checked above; retain manual changes.
+        if(await readFile(unit,'utf8')!==previousUnit)throw Error('cms_runtime_config_changed');
+        await this.writeConfig(unit,nodeUnitConfig({...site,application:record.application},this.options.base));unitChanged=true;await this.command('systemctl',['daemon-reload']);
+        record.application.stage='verifying';await this.save(records);await this.command('systemctl',['enable','--now',nodeUnitName(site.id)]);
+        if(this.options.cmsHealth)await this.options.cmsHealth(site);
+        else{
+          let healthy=false;for(let i=0;i<20;i++){try{
+            const body=await this.command('curl',['--fail','--silent','--show-error','--max-time','3','--max-filesize','16384','--noproxy','*','http://127.0.0.1:'+nodeSitePort(site.id)+'/api/health']);
+            const result=JSON.parse(body);
+            const status=JSON.parse(await this.command('curl',['--fail','--silent','--show-error','--max-time','3','--max-filesize','16384','--noproxy','*','http://127.0.0.1:'+nodeSitePort(site.id)+'/api/install/status']));
+            if(result.ok===true&&result.product==='DevOne CMS'&&result.version===cmsRelease.version&&status.installed===true&&status.siteUrl===site.domain&&(await this.command('systemctl',['is-active',nodeUnitName(site.id)])).trim()==='active'){healthy=true;break;}
+          }catch{}await new Promise(r=>setTimeout(r,250));}
+          if(!healthy)throw Error('cms_health_failed');
+          const page=await this.command('curl',['--fail','--silent','--show-error','--max-time','10','--max-filesize','262144','--noproxy','*','--resolve',site.domain+':'+(site.tls?'443':'80')+':127.0.0.1',(site.tls?'https':'http')+'://'+site.domain+'/']);if(!page.includes('/assets/'))throw Error('cms_health_failed');
+        }
+        record.application.stage='complete';record.state='ready';record.revision=(record.revision??1)+1;await this.save(records);await rmdir(backup).catch(()=>{});
+        return {id:input.id,siteId:site.id,domain:site.domain,appId:'devone-cms-v2',version:cmsRelease.version,preview:true};
+      }catch{
+        if(unitChanged){await this.command('systemctl',['disable','--now',nodeUnitName(site.id)]).catch(()=>{});try{await this.writeConfig(unit,previousUnit);await this.command('systemctl',['daemon-reload']);}catch{}}
+        if(moved){try{if(published)await rename(publicRoot,stage);await rename(backup,publicRoot);}catch{}}
+        record.state='needs_inspection';await this.save(records);throw Error('cms_install_requires_inspection');
       }
     },siteId));
     if(siteId)this.fileQueues.set(siteId,operation);

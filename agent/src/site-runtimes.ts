@@ -1,6 +1,6 @@
 // Runtime-backed hosting templates. These are actual PHP-FPM / systemd adapters,
 // not starter site content. Never incorporate arbitrary shell commands or paths.
-export type RuntimeSite={id:string;user:string;siteType?:string;runtimeVersion?:string};
+export type RuntimeSite={id:string;user:string;siteType?:string;runtimeVersion?:string;application?:{appId:string}};
 export const runtimeTypes=["php","node","python","container"] as const;
 export function nodeSitePort(id:string):number{
  if(!/^site_[a-f0-9]{16}$/.test(id))throw Error("invalid_site");
@@ -62,7 +62,7 @@ export function nodeUnitConfig(site:RuntimeSite,base="/home/devone-sites"):strin
   "PrivateTmp=true",
   "ProtectSystem=strict",
   "ProtectHome=false",
-  "ReadWritePaths="+home,
+  "ReadWritePaths="+home+(site.application?.appId==="devone-cms-v2"?" "+base+"/"+site.id+"/data":""),
   "CapabilityBoundingSet=",
   "RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6",
   "LimitNOFILE=2048",

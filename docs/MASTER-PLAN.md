@@ -117,3 +117,5 @@ Implement and accept Phases 1–2 together, then Phases 3–4 together, then Pha
 Use disposable GitHub-hosted SQL integration tests to advance database evidence without requiring a spare VPS; see [SQL QA scope](ISOLATED-SQL-QA.md). Preserve separate host acceptance requirements. Passing an isolated suite does not close a phase or authorize resetting the user's only server.
 
 The managed [WordPress installer](WORDPRESS-INSTALLER.md) advances Batch B with Owner approval, verified artifacts, isolated setup and preserved failure evidence. Continue with DevOne CMS, deployment/recovery and the remaining original gates; isolated installation QA does not replace host acceptance.
+
+The [DevOne CMS local preview installer](DEVONE-CMS-INSTALLER.md) adds a pinned prebuilt Node/SQLite package, offline initialization, private state and isolated runtime QA. Preserve the distinction between packaging the alpha CMS foundation and completing CMS/host/stable acceptance.
