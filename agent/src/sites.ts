@@ -192,6 +192,8 @@ export class SiteManager {
       record.application={id:input.id,appId:'wordpress',version:wordpressRelease.version,databaseId:input.databaseId,stage:'database'};
       record.state='updating';await this.save(records);
       let moved=false,published=false;
+      let previousConfig:string|undefined,previousHash:string|undefined;
+      const configPath=join(this.options.nginx,`devone-${site.id}.conf`);
       try{
         const parent=await lstat(home);
         if(!parent.isDirectory()||parent.isSymbolicLink()||(parent.mode&0o022)||(this.options.requireRoot!==false&&parent.uid!==0))throw Error('unsafe_site_home');
@@ -201,6 +203,17 @@ export class SiteManager {
         record.application.stage='installing';await this.save(records);
         await (this.options.wordpressWorker??runWordPressWorker)(site,stage,input);
         record.application.stage='publishing';await this.save(records);
+        // Existing sites may use an older managed PHP template. Upgrade only
+        // this unchanged, root-owned vhost before publishing WordPress files.
+        const config=await open(configPath,constants.O_RDONLY|constants.O_NOFOLLOW);
+        try{
+          const info=await config.stat();if(!info.isFile()||info.nlink!==1||info.size>65536||(this.options.requireRoot!==false&&info.uid!==0))throw Error('unsafe_site_config');
+          const current=await config.readFile('utf8');if(!record.configHash||this.digest(current)!==record.configHash)throw Error('site_config_changed');
+          previousConfig=current;previousHash=record.configHash;
+        }finally{await config.close();}
+        const desired=this.configuration(record);
+        await this.writeConfig(configPath,desired);await this.command('nginx',['-t']);await this.command('systemctl',['reload','nginx']);
+        record.configHash=this.digest(desired);await this.save(records);
         const rootInfo=await lstat(publicRoot);
         if(!rootInfo.isDirectory()||rootInfo.isSymbolicLink()||(await readdir(publicRoot)).length)throw Error('app_target_not_empty');
         await rename(publicRoot,backup);moved=true;
@@ -218,6 +231,7 @@ export class SiteManager {
         // Restore only our empty document root. Keep database and staged files for
         // inspection; never DROP SQL resources or recursively delete site data.
         if(moved){try{if(published)await rename(publicRoot,stage);await rename(backup,publicRoot);}catch{}}
+        if(previousConfig!==undefined){try{await this.writeConfig(configPath,previousConfig);await this.command('nginx',['-t']);await this.command('systemctl',['reload','nginx']);record.configHash=previousHash;}catch{}}
         record.state='needs_inspection';await this.save(records);throw Error('wordpress_install_requires_inspection');
       }
     },siteId));

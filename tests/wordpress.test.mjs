@@ -46,7 +46,7 @@ test('WordPress jobs recheck Owner and never persist injected secrets',async()=>
  const db=new DatabaseSync(':memory:');db.exec("CREATE TABLE users(id TEXT PRIMARY KEY,role TEXT);INSERT INTO users VALUES('admin','admin')");let called=false;const q=new JobQueue(db,async()=>{called=true;},()=>{});
  try{const j=q.enqueue('admin','wordpress_request_key',{id:input.id,adminPassword:input.adminPassword},'wordpress.install');await q.idle();assert.equal(called,false);assert.equal(q.get(j.id).error,'authorization_revoked');assert.deepEqual(JSON.parse(j.input),{id:input.id});}finally{await q.stop();db.close();}
 });
-for(const scenario of ['success','worker-failure','health-failure'])test('WordPress staging and rollback: '+scenario,async()=>{
+for(const scenario of ['success','worker-failure','health-failure','config-changed'])test('WordPress staging and rollback: '+scenario,async()=>{
  const root=await mkdtemp(join(tmpdir(),'devone-wp-site-')),identities=new Map();let database=0,prepared=0;
  const options={base:join(root,'sites'),registry:join(root,'registry'),nginx:join(root,'nginx'),phpPoolDir:join(root,'pools'),panelDomain:'panel.example.com',requireRoot:false,ownership:async()=>{},command:async(c,a)=>{
   if(c==='useradd')identities.set(a.at(-1),a[a.indexOf('--home-dir')+1]);
@@ -54,14 +54,21 @@ for(const scenario of ['success','worker-failure','health-failure'])test('WordPr
   if(c==='systemctl')return 'active';return '';
  },worker:async(site,r)=>new SiteFiles(join(options.base,site.id,'public')).list(''),wordpressWorker:async(site,stage)=>{assert.deepEqual(await readdir(join(options.base,site.id,'public')),[]);await writeFile(join(stage,'index.php'),'installed');if(scenario==='worker-failure')throw Error('sensitive');},wordpressHealth:async()=>{if(scenario==='health-failure')throw Error('sensitive');}};
  await mkdir(options.nginx);await mkdir(options.phpPoolDir);const manager=new SiteManager(options),deps={prepare:async()=>{prepared++;},database:async()=>{database++;}};
+ let target=input,changedPath;
+ if(scenario==='config-changed'){
+  const existing=await manager.create({domain:input.domain,webServer:'nginx',siteType:'php',runtimeVersion:'8.3'});
+  changedPath=join(options.nginx,'devone-'+existing.id+'.conf');await writeFile(changedPath,(await readFile(changedPath,'utf8'))+'# manual change\n');
+  target={...input,domain:undefined,siteId:existing.id,expectedRevision:1};
+ }
  try{
   if(scenario==='success'){
    const result=await manager.installWordPress(input,deps);const [site]=await manager.list();assert.equal(site.state,'ready');assert.equal(site.application.stage,'complete');assert.equal(result.version,wordpressRelease.version);assert.equal(await readFile(join(options.base,site.id,'public/index.php'),'utf8'),'installed');
    await assert.rejects(manager.installWordPress(input,deps),/already_recorded/);
    await assert.rejects(manager.installWordPress({...input,id:'app_ffffffffffffffff',domain:undefined,siteId:site.id,expectedRevision:site.revision},deps),/incompatible/);
   }else{
-   await assert.rejects(manager.installWordPress(input,deps),{message:'wordpress_install_requires_inspection'});const [site]=await manager.list();assert.equal(site.state,'needs_inspection');assert.deepEqual(await readdir(join(options.base,site.id,'public')),[]);assert.equal(await readFile(join(options.base,site.id,'.wordpress-'+input.id,'index.php'),'utf8'),'installed');
+   await assert.rejects(manager.installWordPress(target,deps),{message:'wordpress_install_requires_inspection'});const [site]=await manager.list();assert.equal(site.state,'needs_inspection');assert.deepEqual(await readdir(join(options.base,site.id,'public')),[]);assert.equal(await readFile(join(options.base,site.id,'.wordpress-'+input.id,'index.php'),'utf8'),'installed');
   }
+  if(changedPath)assert.ok((await readFile(changedPath,'utf8')).endsWith('# manual change\n'));
   assert.equal(database,1);assert.equal(prepared,1);
  }finally{await rm(root,{recursive:true,force:true});}
 });

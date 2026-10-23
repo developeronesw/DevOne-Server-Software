@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import {request as httpRequest} from 'node:http';
 import {readFile,writeFile,mkdir,stat,readdir} from 'node:fs/promises';
-import {randomBytes} from 'node:crypto';
+import {randomBytes,createHash} from 'node:crypto';
 import {SiteManager} from './agent/dist/sites.js';
 import {DatabaseManager} from './agent/dist/databases.js';
 export async function runWordPressChecks(check,command){
@@ -70,8 +70,14 @@ export async function runWordPressChecks(check,command){
  });
  await check('wordpress.existing-empty-site-install',async()=>{
   const existing=await manager.create({domain:'existing.example.test',webServer:'nginx',siteType:'php',runtimeVersion:'8.3'});
+  // Emulate a managed PHP site created before the WordPress protections shipped.
+  const configPath='/etc/nginx/conf.d/devone-'+existing.id+'.conf';
+  const old=(await readFile(configPath,'utf8')).split('\n').filter(line=>!line.includes('wp-config')&&!line.includes('wp-content/uploads')).join('\n');
+  await writeFile(configPath,old);const records=JSON.parse(await readFile('/var/lib/devone-agent/sites.json','utf8'));records.find(s=>s.id===existing.id).configHash=createHash('sha256').update(old).digest('hex');await writeFile('/var/lib/devone-agent/sites.json',JSON.stringify(records));
   const b=request();delete b.domain;b.siteId=existing.id;b.expectedRevision=1;
   const result=await manager.installWordPress(b,deps);assert.equal(result.siteId,existing.id);
+  assert.equal((await web('/wp-config.php',{headers:{Host:existing.domain}})).status,403);
+  assert.equal((await web('/wp-content/uploads/qa.php',{headers:{Host:existing.domain}})).status,403);
  });
  await check('wordpress.failed-health-restores-empty-root',async()=>{
   const b=request('failed.example.test');const broken=new SiteManager({base:'/home/devone-sites',registry:'/var/lib/devone-agent',nginx:'/etc/nginx/conf.d',panelDomain:'panel.example.test',command:commandAdapter,wordpressHealth:async()=>{throw Error('injected_health_failure');}});
