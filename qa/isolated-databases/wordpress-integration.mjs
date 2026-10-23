@@ -74,6 +74,8 @@ export async function runWordPressChecks(check,command){
   const configPath='/etc/nginx/conf.d/devone-'+existing.id+'.conf';
   const old=(await readFile(configPath,'utf8')).split('\n').filter(line=>!line.includes('wp-config')&&!line.includes('wp-content/uploads')).join('\n');
   await writeFile(configPath,old);const records=JSON.parse(await readFile('/var/lib/devone-agent/sites.json','utf8'));records.find(s=>s.id===existing.id).configHash=createHash('sha256').update(old).digest('hex');await writeFile('/var/lib/devone-agent/sites.json',JSON.stringify(records));
+  await command('/usr/sbin/nginx',['-t']);await commandAdapter('systemctl',['reload','nginx']);
+  assert.equal((await web('/wp-content/uploads/qa.php',{headers:{Host:existing.domain}})).status,404);
   const b=request();delete b.domain;b.siteId=existing.id;b.expectedRevision=1;
   const result=await manager.installWordPress(b,deps);assert.equal(result.siteId,existing.id);
   assert.equal((await web('/wp-config.php',{headers:{Host:existing.domain}})).status,403);
