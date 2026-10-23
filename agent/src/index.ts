@@ -1,3 +1,5 @@
+import {wordpressInput} from "./wordpress-release.js";
+import {prepareWordPress} from "./wordpress.js";
 import {DatabaseManager} from "./databases.js";
 import {resourceSnapshot} from "./resources.js";
 import {Diagnostics,diagnosticCatalog} from "./diagnostics.js";
@@ -28,6 +30,13 @@ const server = createServer(async (request, response) => {
     response.end(JSON.stringify({ error: "unauthorized" })); return;
   }
   const send = (code: number, value: unknown) => { response.writeHead(code, { "content-type": "application/json" }); response.end(JSON.stringify(value)); };
+  if(request.method==='POST'&&request.url==='/v1/apps/wordpress/install'){
+    try{
+      request.setEncoding('utf8');let body='';for await(const chunk of request){body+=chunk;if(Buffer.byteLength(body)>4096){send(413,{error:'body_too_large'});return;}}
+      const input=wordpressInput(JSON.parse(body));
+      send(200,await sites.installWordPress(input,{prepare:prepareWordPress,database:(site,b)=>databases.createForLockedSite({id:b.databaseId,siteId:site.id,engine:'mariadb',password:b.databasePassword},site.id)}));
+    }catch(e){const code=e instanceof Error?e.message:'';const safe=['invalid_wordpress_request','invalid_wordpress_target','wordpress_already_recorded','wordpress_prerequisites_unavailable','wordpress_artifact_unavailable','wordpress_install_requires_inspection','app_target_not_empty','app_target_incompatible','site_revision_conflict','php83_runtime_not_running','software_install_requires_inspection','site_provisioning_requires_inspection','domain_in_use','site_limit'].includes(code)?code:'wordpress_install_requires_inspection';send(safe.startsWith('invalid_')?400:safe.endsWith('requires_inspection')?503:409,{error:safe});}return;
+  }
   if(request.method==="GET"&&request.url==="/v1/databases"){
     try{send(200,{databases:await databases.list()});}catch{send(503,{error:"databases_unavailable"});}return;
   }

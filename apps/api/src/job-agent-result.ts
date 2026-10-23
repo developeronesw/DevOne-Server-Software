@@ -6,6 +6,7 @@ import {isSafeInstallFailureReason} from "./software-reasons.js";
 export async function assertAgentMutationResult(response:Response,operation:string):Promise<void>{
  if(response.ok)return;
  const payload=await response.json().catch(()=>({})) as {error?:unknown;reason?:unknown};
+ if(operation==="wordpress.install"&&["wordpress_install_requires_inspection","wordpress_prerequisites_unavailable","wordpress_artifact_unavailable","wordpress_already_recorded","app_target_not_empty","app_target_incompatible","site_revision_conflict"].includes(payload.error as string))throw Error(payload.error as string);
  if(operation==="software.install"&&response.status===503&&
     payload.error==="software_install_requires_inspection"){
   throw Error("software_install_"+(isSafeInstallFailureReason(payload.reason)?payload.reason:"unclassified"));

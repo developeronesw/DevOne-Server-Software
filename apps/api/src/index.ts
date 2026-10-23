@@ -1,3 +1,4 @@
+import {registerWordPress,wordpressJobPayload} from "./wordpress.js";
 import {registerDatabases,databaseSecret} from "./databases.js";
 import {registerDiagnostics} from "./diagnostics.js";
 import {registerAppInstalls} from "./app-installs.js";
@@ -227,11 +228,11 @@ app.post("/api/services/action", async (request, reply) => {
 const vault = new Vault(db, process.env.DEVONE_MASTER_KEY_FILE ?? "/etc/devone/secrets.key");
 const jobs = new JobQueue(db, async (input, operation) => {
   if (!agentToken) throw new Error("agent_not_configured");
-  const payload=operation==="database.create"?{...input,password:vault.get(databaseSecret((input as {id:string}).id))}:input;
+  const payload=operation==="wordpress.install"?wordpressJobPayload(db,vault,(input as {id:string}).id):operation==="database.create"?{...input,password:vault.get(databaseSecret((input as {id:string}).id))}:input;
   if(operation==="database.create"&&!(payload as {password?:string}).password)throw Error("database_credentials_missing");
   let response: Response;
   try {
-    response = await fetch(`${agentUrl}${operation === "database.create" ? "/v1/databases/create" : operation === "app.install" ? "/v1/apps/install" : operation === "site.create" ? "/v1/sites" : operation === "site.action" ? "/v1/sites/action" : operation === "site.tls" ? "/v1/sites/tls" : operation === "software.install" ? "/v1/software/install" : "/v1/services/action"}`, { method: "POST", headers: { Authorization: `Bearer ${agentToken}`, "Content-Type": "application/json" }, body: JSON.stringify(payload), signal: AbortSignal.timeout(operation === "database.create" ? 60000 : operation === "software.install" ? 320000 : operation === "site.tls" ? 240000 : operation === "app.install" || operation.startsWith("site.") ? 330000 : 35000) });
+    response = await fetch(`${agentUrl}${operation === "wordpress.install" ? "/v1/apps/wordpress/install" : operation === "database.create" ? "/v1/databases/create" : operation === "app.install" ? "/v1/apps/install" : operation === "site.create" ? "/v1/sites" : operation === "site.action" ? "/v1/sites/action" : operation === "site.tls" ? "/v1/sites/tls" : operation === "software.install" ? "/v1/software/install" : "/v1/services/action"}`, { method: "POST", headers: { Authorization: `Bearer ${agentToken}`, "Content-Type": "application/json" }, body: JSON.stringify(payload), signal: AbortSignal.timeout(operation === "wordpress.install" ? 960000 : operation === "database.create" ? 60000 : operation === "software.install" ? 320000 : operation === "site.tls" ? 240000 : operation === "app.install" || operation.startsWith("site.") ? 330000 : 35000) });
   } catch { throw new OutcomeUnknown("agent_outcome_unknown"); }
   await assertAgentMutationResult(response,operation);
 }, audit);
@@ -286,6 +287,7 @@ app.delete<{ Params: { name: string } }>("/api/secrets/:name", async (request, r
 });
 registerDatabases(app,{db,vault,jobs,agentUrl,agentToken,requestUser,sameOrigin,audit,stepUp:verifyOwnerStepUp});
 registerDiagnostics(app,{requestUser,sameOrigin,agentUrl,agentToken,audit});
+registerWordPress(app,{db,vault,jobs,agentUrl,agentToken,requestUser,sameOrigin,audit,stepUp:verifyOwnerStepUp});
 registerAppInstalls(app,{jobs,requestUser,sameOrigin});
 registerSiteRoutes(app, { requestUser, sameOrigin, agentUrl, agentToken, jobs, audit });
 registerControlRoutes(app, {db,vault,agentUrl,agentToken,requestUser,sameOrigin,audit});

@@ -9,7 +9,7 @@ export function registerAppInstalls(app:FastifyInstance,deps:{jobs:JobQueue;requ
  app.get("/api/apps",async(request,reply)=>{
   const user=deps.requestUser(request);if(!user)return reply.code(401).send({error:"unauthorized"});
   if(!["owner","admin"].includes(user.role))return reply.code(403).send({error:"forbidden"});
-  return {apps:installableApps,notice:"Built-in starter apps. Existing websites must be empty and use the matching runtime. CMS installers are pending."};
+  return {apps:[...installableApps,...(user.role==="owner"?[{id:"wordpress",name:"WordPress",siteType:"php",version:"7.1.3"}]:[])],notice:"Starter apps and an Owner-approved WordPress installer. Existing websites must be empty and use the matching runtime."};
  });
  app.post("/api/apps/install",async(request,reply)=>{
   const user=deps.requestUser(request);if(!user)return reply.code(401).send({error:"unauthorized"});

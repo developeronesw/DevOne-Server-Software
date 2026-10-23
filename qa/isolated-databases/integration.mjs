@@ -6,6 +6,7 @@ import {mkdtemp,readFile,writeFile,stat,readdir,mkdir,chown} from 'node:fs/promi
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import assert from 'node:assert/strict';
+import {runWordPressChecks} from './wordpress-integration.mjs';
 import {DatabaseManager} from './databases.mjs';
 const exec=promisify(execFile);
 const report={scope:'isolated-real-sql',productionReady:false,checks:[]};
@@ -74,6 +75,7 @@ try{
    assert.equal((await new DatabaseManager({registry,sites:async()=>[]}).list()).find(r=>r.id===a.id).state,'ready');
   });
  }
+ await runWordPressChecks(check,command);
 }catch{process.exitCode=1;console.error('Isolated SQL QA failed; consult named check results.');}
 finally{
  await writeFile('/qa/result.json',JSON.stringify(report,null,2)+'\n',{mode:0o600});

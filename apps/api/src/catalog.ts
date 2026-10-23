@@ -1,6 +1,6 @@
 // Curated source-first DevOne software catalog.
 // Items are discoverable catalog entries, NOT installed application instances.
-// Mutating installs must wait for signed manifests, isolated runtimes and rollback evidence.
+// Only WordPress has a dedicated managed installer; remaining catalog entries are planning references.
 export type CatalogEntry={
  id:string;name:string;category:"cms"|"framework"|"platform"|"runtime";
  description:string;sourceUrl:string;docsUrl:string;runtime:string[];
@@ -31,5 +31,5 @@ export const softwareCatalog:ReadonlyArray<CatalogEntry>=[
  {id:"php",name:"PHP",category:"runtime",description:"PHP application runtime required by WordPress and Laravel.",sourceUrl:"https://github.com/php/php-src",docsUrl:"https://www.php.net/manual/en/",runtime:["PHP"],deployment:"php-database",releaseChannel:"stable"}
 ];
 export function listCatalog(){
- return {items:softwareCatalog,checkedAt:"2026-10-14",installMode:"planning-only",installAvailable:false,notice:"Versions are last verified references, not live release checks. Deployment/installation is not implemented. Review upstream releases and prerequisites."};
+ return {items:softwareCatalog,checkedAt:"2026-10-14",installMode:"planning-only",installAvailable:false,notice:"Versions are last verified references, not live release checks. WordPress installation is available in Install an app for Owners. Other catalog products remain planning-only. Review upstream releases and prerequisites."};
 }
