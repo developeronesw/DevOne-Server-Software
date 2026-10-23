@@ -215,7 +215,7 @@ export function ControlWorkspace({view,role,onNavigate}:{view:ControlView;role:s
       <label className="ops-ai-consent"><input type="checkbox" checked={includeSecurity} onChange={e=>setIncludeSecurity(e.target.checked)}/> Include latest sanitized Security Center findings in the question sent to this AI provider (optional).</label>
       <button className="primary-button" disabled={!providerReady||busy||question.trim().length<5} onClick={()=>void diagnose()}>{busy?"Analyzing…":"Analyze with "+(selected?.label??"AI")}</button>
       </section>
-      <AiActions provider={selectedProvider} ready={providerReady}/><section className="surface-card glass ops-ai-output"><h2>Diagnostic response</h2>{answer?<div className="ops-response" aria-live="polite">{answer}</div>:<p className="ops-empty">Provider responses appear here as advice. Verify any recommendation before making changes to your server.</p>}</section>
+      <AiActions key={selectedProvider} provider={selectedProvider} ready={providerReady}/><section className="surface-card glass ops-ai-output"><h2>Diagnostic response</h2>{answer?<div className="ops-response" aria-live="polite">{answer}</div>:<p className="ops-empty">Provider responses appear here as advice. Verify any recommendation before making changes to your server.</p>}</section>
     </div>}
   </div>;
 }

@@ -1,3 +1,4 @@
+import {DashboardAiChat} from "./AiActions";
 import { SitesWorkspace } from "./SitesWorkspace";
 import { SetupWizard } from "./SetupWizard";
 import { ControlWorkspace, type ControlView } from "./ControlWorkspace";
@@ -247,6 +248,7 @@ function App() {
           <div className="welcome-server"><span className="illustration-icon"><Glyph name="layers" /></span><div><strong>{m.hostname ?? "DevOne Server"}</strong><span className={"server-badge "+(agentOnline?"":"unavailable")}><span className={"live-dot "+(agentOnline?"":"offline")}/>{agentOnline?"Online":"Unavailable"}</span></div></div>
         </section>
         <div className="health-pills"><span className={"health-chip "+(agentOnline?"":"warning")}><Glyph name="shield" /> Agent {agentOnline?"connected":"unavailable"}</span><span className="health-chip"><Glyph name="layers" /> {activeServices} / {services.length} active services</span><span className="health-chip"><Glyph name="globe" /> {sites.length} websites / workspaces</span><span className="health-chip"><Glyph name="clock" /> Updated every 15 seconds</span></div>
+        {canManage&&<DashboardAiChat onSetup={()=>setView("ai")}/>}
         <DashboardInsights onAi={()=>setView("ai")} onSecurity={()=>setView("security")} onApps={()=>setView("apps")}/>{status.user.role==="owner"&&<div className="update-home-link glass"><div><strong>DevOne Software Updates</strong><span>Install verified dashboard releases without SSH.</span></div><button className="primary-button" onClick={()=>setView("updates")}>Check for Updates →</button></div>}
         <section className="resource-grid" aria-label="Live server resources">{resourceCards.map(card=><article className="resource-card glass" key={card.label}><div className="resource-head"><span className={"metric-icon "+card.tone}><Glyph name={card.icon}/></span><span>{card.label}</span></div><strong>{card.value}</strong><small>{card.detail}</small>{card.label==="Memory used"&&memoryPercent!==null?<div className="meter-track"><span style={{width:memoryPercent+"%"}}/></div>:<div className="metric-underline" />}</article>)}</section>
         <section className="dashboard-columns">

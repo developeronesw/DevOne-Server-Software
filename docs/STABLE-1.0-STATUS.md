@@ -40,3 +40,5 @@ The roadmap still requires full cumulative legacy capability parity, equivalent 
 ## Three-batch continuation
 
 The delivery order is now Phases 1–2 together, Phases 3–4 together, then Phase 5. See [delivery batches](DELIVERY-BATCHES.md) for scope, product goals and acceptance gates. Batch A has started with a Server Workbench: current resource observations and Owner-only fixed diagnostic/log recipes. This does not close its broader runtime, recovery, second-server and live acceptance gaps. No phase is newly certified passed.
+
+The Dashboard now has a conversational AI interface with follow-up context, explicit per-action approval/denial, revocation of denied proposals and durable job-status display. This is an improvement to the existing AI action boundary; full administrative operation coverage and multi-step execution remain unfinished.
