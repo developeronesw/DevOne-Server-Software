@@ -35,7 +35,7 @@ The dashboard/API does not run as root. Privileged host operations are performed
 See `docs/MASTER-PLAN.md` for acceptance gates. Service management is the first
 Phase 2 port; the remaining roadmap is not claimed complete.
 
-The first release is intentionally focused on a reliable fresh Ubuntu installation, core API/Agent boundaries, authentication, health reporting, logging, and the dashboard shell.
+The current developer preview includes the foundation, managed hosting and initial software/AI operations. The first stable release still requires the full roadmap and release acceptance. See [current progress and stable blockers](docs/STABLE-1.0-STATUS.md). Completed changes ship through `main` and the standard installer/updater.
 
 ## Development
 

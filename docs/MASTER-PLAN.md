@@ -97,6 +97,12 @@ Performance improvement requires comparable measurements against the legacy rele
 A phase is complete only after automated checks, build, security checks, required installation/runtime tests, acceptance tests, documentation review and Git verification all pass.
 
 ## Production flow
-development -> phase branch -> main -> release candidate -> QA -> versioned tag -> explicit production approval -> production update
+development -> automated checks -> main -> release candidate -> QA -> versioned tag -> explicit production approval -> production update
 
 Production must not blindly git pull or continuously track main.
+
+## Main branch and repeatable delivery policy
+
+All completed, validated changes must be integrated into `main`. Temporary branches may support implementation and review but are not the delivered result. Each fix must ship in the repository's standard fresh-install and in-place-update paths, with prerequisites and migrations included where needed. Server-only patches and instructions to reapply code changes on each new VPS are not acceptable delivery. Preserve per-server settings, credentials and user data. Keep exact-commit validation and release gates; merging to main does not automatically deploy a server or certify a stable release.
+
+See [current progress and 1.0 blockers](STABLE-1.0-STATUS.md). This status distinguishes working implementation, user-reported host results, and outstanding acceptance evidence.

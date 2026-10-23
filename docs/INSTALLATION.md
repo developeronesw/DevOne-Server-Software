@@ -41,7 +41,7 @@ After dependencies, `installer/install.sh` provisions the restricted `devone` se
 
 SQLite is bundled into the Node.js runtime; DevOne does **not** need a separately installed MySQL or SQLite server for its control-plane data.
 
-**Optional** database servers, Docker, PHP and other application runtimes are deliberately not installed by default. They belong in the future managed Software Center. This prevents unnecessary services from occupying memory and ports.
+**Optional** database servers, Docker, PHP and other application runtimes are deliberately not installed by default. PHP 8.3-FPM, Redis and Docker are available through the managed Software Center; other engines need their own adapters. This prevents unnecessary services from occupying memory and ports.
 
 ## Verify the installed server
 
@@ -103,3 +103,8 @@ The updater refuses an unclean worktree, snapshots the live SQLite database and 
 **Incident fixed:** building with \`umask 077\` created root-only compiled JavaScript (for example \`apps/api/dist/control.js\`), preventing the \`devone\` service from starting. Both fresh installation and updates now set a safe build umask and explicitly validate runtime file access before starting services. The API bundle is root-owned and readable by the \`devone\` group only; frontend assets remain readable by NGINX. The backup directory stays restricted.
 
 GitHub CI catches syntax and permission-policy regressions, but cannot replace real-host verification. Use this updater only with a reviewed commit and a maintenance window. Do not store backups in public web roots.
+
+
+## Main branch delivery
+
+Completed fixes and features ship in `main`, including the starter app installer and reviewed AI actions from PR #23. They are included when installing or updating to a reviewed main-derived commit containing that change. No per-server source patches are needed. The dashboard updater waits for both GitHub checks on its target before allowing an update; a merge itself does not deploy a server. See [current progress](STABLE-1.0-STATUS.md) for feature limits and stable release requirements.
