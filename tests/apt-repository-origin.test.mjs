@@ -32,6 +32,7 @@ const aptRepo=[
 function check({name="redis-server",packagePolicy=ubuntu(name),repoPolicy=aptRepo}={}){
  const body=[
  "set -Eeuo pipefail",
+ "fail(){ printf >&2 \"DEVONE_INSTALL_ERROR:%s\\n\" \"$1\"; exit 1; }",
  "package="+JSON.stringify(name),
  "apt-cache(){",
  'if [[ "$#" == 2 ]]; then cat <<'+"'PACKAGE_POLICY'",
