@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import {isSafeInstallFailureReason} from "./software-reasons.js";
 import type { DatabaseSync } from "node:sqlite";
 
 export type ServiceInput = { service: string; action: string };
@@ -86,7 +87,7 @@ export class JobQueue {
         state = e instanceof OutcomeUnknown ? "interrupted" : "failed";
         const reason=e instanceof Error?e.message:"agent_operation_failed";
         const known=new Set(["software_install_requires_inspection","authorization_revoked","runtime_entry_missing","runtime_not_healthy","python312_runtime_not_available","docker_runtime_not_running","node_entry_missing","site_runtime_not_available","php83_runtime_not_running","node22_runtime_not_available","site_port_unavailable","unsupported_runtime_version"]);
-        error=state==="interrupted"?"agent_outcome_unknown":known.has(reason)?reason:"agent_operation_failed";
+        error=state==="interrupted"?"agent_outcome_unknown":(known.has(reason)||(reason.startsWith("software_install_")&&isSafeInstallFailureReason(reason.slice("software_install_".length))))?reason:"agent_operation_failed";
       }
       this.transaction(() => {
         this.db.prepare("UPDATE jobs SET state=?,error=?,finished_at=? WHERE id=?").run(state, error, new Date().toISOString(), job.id);
