@@ -20,6 +20,31 @@ async function readApi<T>(url:string):Promise<T>{
 type RuntimeCapabilities={mode:"managed-install";installAvailable:true;options:{package:string;label:string;installAvailable:true}[];notice:string};
 type RuntimeState={package:string;installed:boolean;version:string|null;serviceActive:boolean};
 type InstallJob={id:string;state:string;error:string|null;operation:string};
+const softwareProblemHelp:Record<string,string>={
+ software_install_agent_permissions:"DevOne Agent must run with the required host privileges.",
+ software_install_unsupported_ubuntu:"This installer requires Ubuntu 24.04.",
+ software_install_unsupported_architecture:"The current host architecture is unsupported.",
+ software_install_install_lock_busy:"A separate DevOne installation is running; review Activity & Jobs before retrying.",
+ software_install_nginx_inactive:"NGINX is not running. Restore its service before another package operation.",
+ software_install_nginx_configuration_invalid:"NGINX configuration validation failed; correct the website configuration.",
+ software_install_devone_service_inactive:"The DevOne API or Agent is not active.",
+ software_install_disk_inventory_failed:"DevOne could not read the available disk space.",
+ software_install_disk_space_low:"Less than 512 MiB of free disk is available.",
+ software_install_apt_policy_unavailable:"Ubuntu APT package metadata could not be read.",
+ software_install_apt_candidate_unavailable:"There is no valid Ubuntu APT candidate for this package.",
+ software_install_candidate_sources_unavailable:"The candidate has no usable repository source in APT metadata.",
+ software_install_repository_metadata_unavailable:"Ubuntu APT release metadata could not be read.",
+ software_install_repository_origin_unverified:"The candidate could not be linked to Ubuntu's verified repository-release metadata.",
+ software_install_apt_simulation_failed:"APT dependency simulation failed. Inspect apt and dpkg logs without repeating the installation.",
+ software_install_protected_package_change:"APT wanted to remove or change a protected host component. Installation was blocked.",
+ software_install_apt_transaction_failed:"APT installation returned an error. Inspect /var/log/apt/term.log and package status.",
+ software_install_nginx_postcheck_failed:"NGINX validation failed after package installation. Inspect host before retrying.",
+ software_install_devone_postcheck_failed:"A DevOne service went offline during installation. Inspect host before retrying.",
+ software_install_package_service_inactive:"The package may be installed, but its systemd service is not active.",
+ software_install_redis_socket_check_failed:"Redis socket verification could not be completed.",
+ software_install_redis_exposed:"Redis appears exposed publicly on port 6379. Restrict its bind/firewall settings.",
+ software_install_unclassified:"An unexpected installer error occurred; inspect the Agent journal before retrying."
+};
 function RuntimeManager({role}:{role:string}){
  const [capabilities,setCapabilities]=useState<RuntimeCapabilities|null>(null);
  const [packages,setPackages]=useState<RuntimeState[]>([]);
@@ -94,10 +119,10 @@ function RuntimeManager({role}:{role:string}){
    </button>
   </div>}
   {job&&<p role="status" className={job.state==="succeeded"?"inline-notice":job.state==="failed"||job.state==="interrupted"?"ops-warning":"ops-subtext"}>
-   Installation job {job.state}. {job.state==="interrupted"?"Outcome uncertain; inspect package status before retrying.":job.state==="failed"?(job.error==="software_install_requires_inspection"?"The Agent reported an installation problem. Check package and service state plus Agent journal before retrying.":"Review Activity & Jobs and server logs."):""}
+   Installation job {job.state}. {job.state==="interrupted"?"Outcome uncertain; inspect package status before retrying.":job.state==="failed"?((job.error?.startsWith("software_install_")??false)?(softwareProblemHelp[job.error??""]??"Software installation failed; inspect DevOne Agent and APT logs.")+" (Reason: "+job.error+")":"Review Activity & Jobs and server logs."):""}
   </p>}
   {error&&<p role="alert" className="inline-error">{error}</p>}
-  <p className="ops-note">Only these two Ubuntu runtimes are managed here. Installed services can be started, stopped or restarted under Services. This does not install WordPress, DevOne CMS, or other catalog applications. Package removal and automatic dependency rollback are not available yet.</p>
+  <p className="ops-note">Only the listed Ubuntu runtimes are managed here. Installed services can be started, stopped or restarted under Services. This does not install WordPress, DevOne CMS, or other catalog applications. Package removal and automatic dependency rollback are not available yet.</p>
  </section>;
 }
 export function AppCatalog({role}:{role:string}){
