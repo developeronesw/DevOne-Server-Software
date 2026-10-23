@@ -7,7 +7,13 @@ import {SiteManager} from './agent/dist/sites.js';
 import {DatabaseManager} from './agent/dist/databases.js';
 export async function runWordPressChecks(check,command){
  await mkdir('/run/php',{recursive:true});
- await command('/usr/sbin/php-fpm8.3',['--daemonize']);await command('/usr/sbin/nginx',[]);
+ // Docker's CPU quota does not change the host CPU count seen by nginx auto.
+ const nginxConfig=await readFile('/etc/nginx/nginx.conf','utf8');await writeFile('/etc/nginx/nginx.conf',nginxConfig.replace(/worker_processes\s+auto;/,'worker_processes 2;'));
+ console.log('WordPress bootstrap: PHP-FPM');
+ try{await command('/usr/sbin/php-fpm8.3',['--daemonize']);}catch(e){console.error('QA PHP-FPM bootstrap failed',e.stderr);throw Error('qa_php_bootstrap_failed');}
+ console.log('WordPress bootstrap: NGINX');
+ try{await command('/usr/sbin/nginx',[]);}catch(e){console.error('QA NGINX bootstrap failed',e.stderr);throw Error('qa_nginx_bootstrap_failed');}
+ console.log('WordPress bootstrap: ready');
  const commandAdapter=async(c,a)=>{
   if(c==='systemctl'){
    if(a[1]!=='php8.3-fpm'&&a[1]!=='nginx')throw Error('unexpected_service');
