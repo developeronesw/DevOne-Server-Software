@@ -1,3 +1,4 @@
+import {registerDiagnostics} from "./diagnostics.js";
 import {registerAppInstalls} from "./app-installs.js";
 import { registerSiteRoutes } from "./sites.js";
 import { registerControlRoutes } from "./control.js";
@@ -280,6 +281,7 @@ app.delete<{ Params: { name: string } }>("/api/secrets/:name", async (request, r
     return { ok: true };
   } catch { db.exec("ROLLBACK"); return reply.code(503).send({ error: "vault_unavailable" }); }
 });
+registerDiagnostics(app,{requestUser,sameOrigin,agentUrl,agentToken,audit});
 registerAppInstalls(app,{jobs,requestUser,sameOrigin});
 registerSiteRoutes(app, { requestUser, sameOrigin, agentUrl, agentToken, jobs, audit });
 registerControlRoutes(app, {db,vault,agentUrl,agentToken,requestUser,sameOrigin,audit});

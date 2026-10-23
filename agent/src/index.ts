@@ -1,3 +1,5 @@
+import {resourceSnapshot} from "./resources.js";
+import {Diagnostics,diagnosticCatalog} from "./diagnostics.js";
 import { SiteManager } from "./sites.js";
 import {DisposableHostQa} from "./disposable-qa.js";
 import { UpdatesManager } from "./updates.js";
@@ -15,6 +17,7 @@ const port = Number(process.env.DEVONE_AGENT_PORT ?? 8790);
 const token = process.env.DEVONE_AGENT_TOKEN ?? "";
 
 const updates = new UpdatesManager();
+const diagnostics=new Diagnostics();
 const sites = new SiteManager({registry:'/var/lib/devone-agent',base:'/home/devone-sites',nginx:'/etc/nginx/conf.d',panelDomain:new URL(process.env.DEVONE_PANEL_URL ?? 'http://localhost').hostname});
 const disposableQa=new DisposableHostQa(sites);
 const server = createServer(async (request, response) => {
@@ -23,6 +26,20 @@ const server = createServer(async (request, response) => {
     response.end(JSON.stringify({ error: "unauthorized" })); return;
   }
   const send = (code: number, value: unknown) => { response.writeHead(code, { "content-type": "application/json" }); response.end(JSON.stringify(value)); };
+  if(request.method==="GET"&&request.url==="/v1/resources"){
+    try{send(200,await resourceSnapshot());}catch{send(503,{error:"resources_unavailable"});}return;
+  }
+  if(request.method==="GET"&&request.url==="/v1/diagnostics/tools"){
+    send(200,{tools:diagnosticCatalog(),readOnly:true,notice:"Owner-only fixed diagnostics. Log masking is best-effort; review output before sharing."});return;
+  }
+  if(request.method==="POST"&&request.url==="/v1/diagnostics/run"){
+    try{
+      request.setEncoding("utf8");let body="";
+      for await(const chunk of request){body+=chunk;if(Buffer.byteLength(body)>128){send(413,{error:"body_too_large"});return;}}
+      send(200,await diagnostics.execute(JSON.parse(body)));
+    }catch(e){const code=e instanceof Error?e.message:"diagnostics_unavailable";send(code==="invalid_diagnostic"?400:code==="diagnostics_busy"?409:503,{error:["invalid_diagnostic","diagnostics_busy"].includes(code)?code:"diagnostics_unavailable"});}
+    return;
+  }
   if (request.method === "GET" && request.url === "/v1/updates/status") {
     try { send(200,await updates.status()); } catch { send(503,{error:"update_status_unavailable"}); }
     return;

@@ -1,3 +1,4 @@
+import {ServerWorkbench} from "./ServerWorkbench";
 import {AiActions} from "./AiActions";
 import { useEffect, useState } from "react";
 import { AppCatalog, SecurityCenter } from "./ManagementModules";
@@ -159,6 +160,7 @@ export function ControlWorkspace({view,role,onNavigate}:{view:ControlView;role:s
       {discovery?<><div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Engine</th><th>Service state</th><th>Client</th></tr></thead><tbody>{discovery.databases.map(item=><tr key={item.name}><td><strong>{item.name}</strong><small className="ops-subtext">{item.version??"No client detected"}</small></td><td><span className={"state-chip "+(item.serviceState==="active"?"good":"neutral")}>{item.serviceState}</span></td><td>{item.clientInstalled?"Installed":"Not detected"}</td></tr>)}</tbody></table></div><p className="ops-note">Service start/stop/restart is available through Services. Database creation, credentials, SQL administration and restore are not enabled until Agent authorization and isolation tests pass.</p></>:<p className="ops-empty">Checking your database engines…</p>}
     </section>}
     {view==="monitoring"&&<>
+      {role==="owner"&&<ServerWorkbench/>}
       <div className="ops-chart-grid"><article className="surface-card glass"><MetricChart history={history} keyName="memory_percent" label="Memory utilization"/></article><article className="surface-card glass"><MetricChart history={history} keyName="load1" label="1-minute system load"/></article></div>
       <article className="surface-card glass ops-panel-gap"><div className="section-heading"><div><h2>Live metrics history</h2><p>One sample per minute · Last 24 hours retained</p></div><span className="state-chip good">{history.length} samples shown</span></div><div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Timestamp</th><th>Memory</th><th>Load 1m</th><th>Load 5m</th><th>CPU cores</th></tr></thead><tbody>{history.slice(-12).reverse().map((x,i)=><tr key={x.checked_at+i}><td>{new Date(x.checked_at).toLocaleString()}</td><td>{x.memory_percent.toFixed(1)}%</td><td>{x.load1.toFixed(2)}</td><td>{x.load5.toFixed(2)}</td><td>{x.cpu_cores}</td></tr>)}</tbody></table>{history.length===0&&<p className="ops-empty">Waiting for the first metrics sample.</p>}</div></article>
     </>}

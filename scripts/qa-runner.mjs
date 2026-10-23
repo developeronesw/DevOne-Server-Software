@@ -31,15 +31,15 @@ export function assess(results, pending) {
   return { automatedChecks: results.every(result => result.status === 'pass') ? 'pass' : 'fail', productionReady: results.every(result => result.status === 'pass') && pending.length === 0 };
 }
 const pending = [
-  { id: 'website-provisioning', status: 'partially_implemented', detail: 'Static NGINX/files-only creation and file workspace exist; site lifecycle and Certbot adapters exist; complete hosting/runtime parity and real VPS verification remain pending.' },
+  { id: 'website-provisioning', status: 'partially_implemented', detail: 'Managed static/files/PHP/Node hosting, lifecycle, Certbot, starter apps, and scoped Python/container adapters exist; full product deployment/runtime parity and real VPS acceptance remain pending.' },
   { id: 'browser-workflows', status: 'not_verified', detail: 'Rendered dashboard navigation, forms and accessibility in a browser.' },
   { id: 'ubuntu-install-recovery', status: 'not_verified', detail: 'Fresh VPS install, TLS, systemd hardening, reboot recovery and upgrade/rollback.' },
   { id: 'backup-restore', status: 'not_verified', detail: 'Restore database and encryption key together on a disposable VPS.' },
   { id: 'host-isolation', status: 'not_verified', detail: 'Real site UID/GID isolation and service mutation on a disposable VPS.' },
   { id: 'performance-load', status: 'not_verified', detail: 'Latency, concurrency and memory measurements on target VPS hardware.' },
   { id: 'security-center-host-acceptance', status: 'not_verified', detail: 'CrowdSec detection, real AppSec/WAF enforcement, proxy client-IP trust, false positives and rollback on a disposable VPS.' },
-  { id: 'software-center-host-acceptance', status: 'partially_implemented', detail: 'Read-only catalog and opt-in PHP-FPM/Redis CLI pilot exist; audited UI installs, runtime isolation and package recovery remain unverified.' },
-  { id: 'remaining-legacy-modules', status: 'not_implemented', detail: 'Database hosting, containers, DNS, TLS, runtime management and remaining legacy modules.' }
+  { id: 'software-center-host-acceptance', status: 'partially_implemented', detail: 'Managed PHP-FPM/Redis/Docker UI installation, durable audit/jobs, starter app installation and Owner diagnostics exist; broader software/version management, runtime acceptance and package recovery remain incomplete.' },
+  { id: 'remaining-legacy-modules', status: 'not_implemented', detail: 'Database administration, general container management, DNS/Cloudflare, broader runtime/version management, deployment/recovery and other legacy capabilities remain incomplete; existing TLS and scoped hosting adapters still need full acceptance.' }
 ];
 export async function main(args = process.argv.slice(2)) {
   if (args.some(arg => arg !== '--release')) throw new Error('Usage: pnpm qa [--release]');

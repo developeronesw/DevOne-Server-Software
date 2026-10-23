@@ -35,3 +35,8 @@ No full phase is newly certified complete by this status. Earlier host success i
 `pnpm qa` verifies isolated development regressions. `pnpm qa:release` must remain blocked while acceptance gaps remain. The current legacy inventory contains 102 observed route literals: 81 pending, 21 partial, none accepted as verified. This is an acceptance inventory, not a count of missing features or a percentage of product completion; some mappings are behind the implementation and require review plus evidence.
 
 The roadmap still requires full cumulative legacy capability parity, equivalent security and UI behavior, and measured performance before publishing the finished replacement. Successful installation of PHP-FPM and Redis closes the reported installation problem, not the entire Software Center or infrastructure phase.
+
+
+## Three-batch continuation
+
+The delivery order is now Phases 1–2 together, Phases 3–4 together, then Phase 5. See [delivery batches](DELIVERY-BATCHES.md) for scope, product goals and acceptance gates. Batch A has started with a Server Workbench: current resource observations and Owner-only fixed diagnostic/log recipes. This does not close its broader runtime, recovery, second-server and live acceptance gaps. No phase is newly certified passed.

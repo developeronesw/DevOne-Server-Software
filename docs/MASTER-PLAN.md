@@ -106,3 +106,8 @@ Production must not blindly git pull or continuously track main.
 All completed, validated changes must be integrated into `main`. Temporary branches may support implementation and review but are not the delivered result. Each fix must ship in the repository's standard fresh-install and in-place-update paths, with prerequisites and migrations included where needed. Server-only patches and instructions to reapply code changes on each new VPS are not acceptable delivery. Preserve per-server settings, credentials and user data. Keep exact-commit validation and release gates; merging to main does not automatically deploy a server or certify a stable release.
 
 See [current progress and 1.0 blockers](STABLE-1.0-STATUS.md). This status distinguishes working implementation, user-reported host results, and outstanding acceptance evidence.
+
+
+## Execution batches
+
+Implement and accept Phases 1–2 together, then Phases 3–4 together, then Phase 5, as detailed in [delivery batches](DELIVERY-BATCHES.md). All original phase features and completion gates remain in scope. Work may be integrated into main incrementally; a merged increment does not by itself close a phase.
