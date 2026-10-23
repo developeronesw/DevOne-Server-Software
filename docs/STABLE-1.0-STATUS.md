@@ -50,3 +50,7 @@ Phases 3–4 have started with managed SQL engine installation and application d
 ## Live QA closeout infrastructure
 
 An external QA/reset controller and a dedicated-host runner now wrap the existing live hosting profile with independent evidence, reset receipts, baseline probes and interrupted-run recovery. A phase 1–4 requirement manifest keeps unsupported/missing tests blocked. See LIVE-ACCEPTANCE-CYCLE.md. No live test or provider reset has been executed from this session. A disposable target, trusted external provider reset hook and connection remain required; remaining feature implementations and test profiles still block phase completion and the stable gate.
+
+## No-spare-VPS SQL QA increment
+
+GitHub-hosted CI now includes disposable Ubuntu SQL integration tests using the production Agent database runner: MariaDB/PostgreSQL provisioning, actual application credentials, isolation, wrong-password denial, privilege restrictions, duplicate/partial-failure behavior and service restart persistence. See [isolated SQL QA](ISOLATED-SQL-QA.md). CI evidence is separate from host acceptance, and `validate` depends on the SQL job. No user VPS is accessed or reset. Full host installation/upgrade/reboot/restore acceptance and the original phase gates remain open.

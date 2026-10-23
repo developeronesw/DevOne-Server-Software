@@ -6,7 +6,30 @@ on:
   pull_request:
 
 jobs:
+  isolated-databases:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.15.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @devone/agent build
+      - run: bash scripts/qa-isolated-databases.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: devone-isolated-sql-evidence
+          path: qa-reports/isolated-databases.json
+          if-no-files-found: error
+          retention-days: 30
+
   validate:
+    needs: [isolated-databases]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4

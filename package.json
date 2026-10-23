@@ -13,6 +13,7 @@
     "lint": "pnpm -r lint",
     "dev": "pnpm --filter @devone/dashboard dev",
     "qa": "node scripts/qa-runner.mjs",
+    "qa:isolated-db": "pnpm --filter @devone/agent build && bash scripts/qa-isolated-databases.sh",
     "qa:release": "node scripts/qa-runner.mjs --release"
   },
   "pnpm": {

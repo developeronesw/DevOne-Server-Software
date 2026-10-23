@@ -111,3 +111,7 @@ See [current progress and 1.0 blockers](STABLE-1.0-STATUS.md). This status disti
 ## Execution batches
 
 Implement and accept Phases 1–2 together, then Phases 3–4 together, then Phase 5, as detailed in [delivery batches](DELIVERY-BATCHES.md). All original phase features and completion gates remain in scope. Work may be integrated into main incrementally; a merged increment does not by itself close a phase.
+
+## Isolated acceptance infrastructure
+
+Use disposable GitHub-hosted SQL integration tests to advance database evidence without requiring a spare VPS; see [SQL QA scope](ISOLATED-SQL-QA.md). Preserve separate host acceptance requirements. Passing an isolated suite does not close a phase or authorize resetting the user's only server.

@@ -1,0 +1,11 @@
+# SQL acceptance without a spare VPS
+
+`pnpm qa:isolated-db` builds the production Agent database module and tests it against Ubuntu 24.04 MariaDB 10.11 and PostgreSQL 16 in a disposable Docker image. GitHub-hosted CI runs this automatically on main pushes and pull requests. No server credentials or VPS are required. Local execution requires Docker; absence is BLOCKED (nonzero), never a pass.
+
+Each engine receives eight real checks: provisioning/login, private credential-free registry and temporary-auth cleanup, table writes/reads, wrong-password denial, cross-account database denial and administrative privilege restriction, duplicate request data preservation, partial SQL failure retention/no replay, and service restart with persisted application data and Agent records. The production DatabaseManager uses its real SQL runner. Ready site records are fixtures: this does not test site creation, the API/Vault/queue, UI or AI approvals.
+
+The container has no external network, published ports, host data mounts or Docker socket. CPU, memory, process and runtime limits bound execution. Only three allowlisted build files enter the image. Cleanup removes the exact created container and unique image on pass/fail; it never prunes Docker or resets the host. GitHub discards the runner after the job, including on runner interruption. Local hard termination/power loss may leave the uniquely named QA container/image; inspect those exact resources before removing them. Local use requires enough free Docker disk space for Ubuntu and SQL packages.
+
+Sanitized named results are saved to `qa-reports/isolated-databases.json` and retained in the CI artifact `devone-isolated-sql-evidence` for 30 days. Build/start failures and missing/incomplete evidence fail CI. The existing `validate` check depends on this job, so the updater's exact-commit validate requirement includes real SQL QA.
+
+This adds isolated database evidence, not full phase acceptance. It does not prove clean installation/upgrades, systemd/host reboot, backups/restores, TLS renewal, package recovery, browser workflows, load performance or production safety. The dedicated-host reset cycle remains blocked without a disposable target and external reset hook. Never run a whole-server reset against the user's only VPS. No phase or stable-release gate is closed by this suite alone.
