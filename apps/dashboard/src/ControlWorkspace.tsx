@@ -1,3 +1,4 @@
+import {AiActions} from "./AiActions";
 import { useEffect, useState } from "react";
 import { AppCatalog, SecurityCenter } from "./ManagementModules";
 
@@ -198,7 +199,7 @@ export function ControlWorkspace({view,role,onNavigate}:{view:ControlView;role:s
       <div className="ops-provider-status"><span className={"state-chip "+(providerReady?"good":"neutral")}>{selected?.keyStored?"Credential in vault":"API key not saved"}</span>{selectedProvider==="openclaw"&&<span className={"state-chip "+(selected?.endpointConfigured?"good":"neutral")}>{selected?.endpointConfigured?"Gateway configured":"Gateway not configured"}</span>}</div>
       {selectedProvider!=="openclaw"&&<><label className="ops-ai-label" htmlFor="ai-model">Model identifier</label><input id="ai-model" value={modelInput} onChange={e=>setModelInput(e.target.value)} placeholder={selected?.model??"Choose your provider model"}/><p className="ops-subtext">Leave blank to use the default model: <strong>{selected?.model??"Loading…"}</strong>. The selected model must be available to your provider account.</p></>}
       {selectedProvider==="openclaw"&&<p className="ops-warning"><strong>OpenClaw gateway security:</strong> Connect only a dedicated diagnostics agent with all host, shell, file, browser and other tools disabled on the gateway. A normal OpenClaw agent could perform actions even if DevOne requests only text. Configure its fixed HTTPS gateway URL and pinned agent model on the VPS; never expose the gateway token here.</p>}
-      <p className="ops-note">DevOne sends your question and a limited server-health snapshot to the selected provider. It does not intentionally send credentials, customer records, system logs or IP addresses. No DevOne host mutations are exposed to AI.</p>
+      <p className="ops-note">DevOne sends your question and a limited server-health snapshot to the selected provider. It does not intentionally send credentials, customer records, system logs or IP addresses. Diagnostics are advisory. Use AI Actions below to prepare and review a dashboard operation.</p>
       {role==="owner"&&<div className="ops-ai-setup"><h3>{selected?.keyStored?"Update connection key":"Connect "+(selected?.label??"your provider")}</h3>
         <p>Enter the API key/token here. It is sent directly to your DevOne backend and stored encrypted; existing saved values are never displayed.</p>
         <label htmlFor="ai-api-key" className="ops-ai-label">{selectedProvider==="openclaw"?"Dedicated gateway bearer token":"Provider API key"}</label>
@@ -212,7 +213,7 @@ export function ControlWorkspace({view,role,onNavigate}:{view:ControlView;role:s
       <label className="ops-ai-consent"><input type="checkbox" checked={includeSecurity} onChange={e=>setIncludeSecurity(e.target.checked)}/> Include latest sanitized Security Center findings in the question sent to this AI provider (optional).</label>
       <button className="primary-button" disabled={!providerReady||busy||question.trim().length<5} onClick={()=>void diagnose()}>{busy?"Analyzing…":"Analyze with "+(selected?.label??"AI")}</button>
       </section>
-      <section className="surface-card glass ops-ai-output"><h2>Diagnostic response</h2>{answer?<div className="ops-response" aria-live="polite">{answer}</div>:<p className="ops-empty">Provider responses appear here as advice. Verify any recommendation before making changes to your server.</p>}</section>
+      <AiActions provider={selectedProvider} ready={providerReady}/><section className="surface-card glass ops-ai-output"><h2>Diagnostic response</h2>{answer?<div className="ops-response" aria-live="polite">{answer}</div>:<p className="ops-empty">Provider responses appear here as advice. Verify any recommendation before making changes to your server.</p>}</section>
     </div>}
   </div>;
 }

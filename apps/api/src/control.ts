@@ -1,3 +1,4 @@
+import {registerAiActions} from "./ai-actions.js";
 import type { FastifyInstance } from "fastify";
 import type { DatabaseSync } from "node:sqlite";
 import { backup } from "node:sqlite";
@@ -70,6 +71,13 @@ async function providerReply(id:ProviderId,model:string,key:string,prompt:string
 
 export function registerControlRoutes(app:FastifyInstance,deps:Deps) {
   const {db,vault,agentUrl,agentToken,requestUser,sameOrigin,audit} = deps;
+  registerAiActions(app,{requestUser,sameOrigin,audit,plan:async(provider,question,instruction)=>{
+    const selected=providers.find(p=>p.id===provider);
+    if(!selected||!validModel(selected.model))throw Error("invalid_ai_provider");
+    const key=vault.get(selected.secret);if(!key)throw Error("ai_provider_not_configured");
+    return providerReply(selected.id,selected.model,key,question,instruction);
+  }});
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS metric_samples(
       id INTEGER PRIMARY KEY AUTOINCREMENT,
