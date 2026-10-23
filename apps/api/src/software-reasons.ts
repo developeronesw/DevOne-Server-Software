@@ -7,7 +7,7 @@ export const safeInstallFailureReasons=[
  "disk_inventory_failed","disk_space_low","apt_policy_unavailable","apt_candidate_unavailable",
  "candidate_sources_unavailable","repository_metadata_unavailable","repository_origin_unverified",
  "apt_simulation_failed","protected_package_change","apt_transaction_failed","nginx_postcheck_failed",
- "devone_postcheck_failed","package_service_inactive","redis_socket_check_failed","redis_exposed","unclassified"
+ "devone_postcheck_failed","package_service_inactive","redis_socket_check_failed","redis_exposed","database_socket_check_failed","database_exposed","unclassified"
 ] as const;
 export function isSafeInstallFailureReason(value:unknown):value is typeof safeInstallFailureReasons[number]{
  return typeof value==="string"&&safeInstallFailureReasons.some(x=>x===value);

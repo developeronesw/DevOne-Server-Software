@@ -2,7 +2,7 @@ import {execFile} from "node:child_process";
 import {promisify} from "node:util";
 
 const exec=promisify(execFile);
-export const runtimePackages=["php8.3-fpm","redis-server","docker.io"] as const;
+export const runtimePackages=["php8.3-fpm","redis-server","docker.io","mariadb-server","postgresql"] as const;
 export type RuntimePackage=(typeof runtimePackages)[number];
 export type RuntimePreflight={package:RuntimePackage;status:"ready"|"blocked";installAvailable:false;reason:string};
 export type RuntimeState={package:RuntimePackage;installed:boolean;version:string|null;serviceActive:boolean};
@@ -14,7 +14,7 @@ export const installFailureReasons=[
  "disk_inventory_failed","disk_space_low","apt_policy_unavailable","apt_candidate_unavailable",
  "candidate_sources_unavailable","repository_metadata_unavailable","repository_origin_unverified",
  "apt_simulation_failed","protected_package_change","apt_transaction_failed","nginx_postcheck_failed",
- "devone_postcheck_failed","package_service_inactive","redis_socket_check_failed","redis_exposed"
+ "devone_postcheck_failed","package_service_inactive","redis_socket_check_failed","redis_exposed","database_socket_check_failed","database_exposed"
 ] as const;
 export type InstallFailureReason=(typeof installFailureReasons)[number]|"unclassified";
 export class SoftwareInstallFailure extends Error{
@@ -50,7 +50,7 @@ export function softwareCapabilities(){
  return {
   mode:"managed-install",installAvailable:true,
   options:runtimePackages.map(name=>({
-   package:name,label:name==="php8.3-fpm"?"PHP 8.3 FPM":name==="docker.io"?"Docker Engine":"Redis Server",installAvailable:true
+   package:name,label:name==="php8.3-fpm"?"PHP 8.3 FPM":name==="docker.io"?"Docker Engine":name==="mariadb-server"?"MariaDB Server":name==="postgresql"?"PostgreSQL":"Redis Server",installAvailable:true
   })),
   notice:"Owner-approved, audited installs of Ubuntu packages only. CMS/framework catalog entries are not deployable yet."
  };
@@ -67,7 +67,7 @@ export async function softwareStatus(run:Runner=exec):Promise<{packages:RuntimeS
   }catch{}
   if(installed){
    try{
-    const {stdout}=await run("/usr/bin/systemctl",["is-active",(name==="docker.io"?"docker":name)+".service"],{timeout:4500,maxBuffer:4096});
+    const {stdout}=await run("/usr/bin/systemctl",["is-active",(name==="docker.io"?"docker":name==="mariadb-server"?"mariadb":name)+".service"],{timeout:4500,maxBuffer:4096});
     serviceActive=stdout.trim()==="active";
    }catch{}
   }

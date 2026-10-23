@@ -22,6 +22,8 @@ type RuntimeCapabilities={mode:"managed-install";installAvailable:true;options:{
 type RuntimeState={package:string;installed:boolean;version:string|null;serviceActive:boolean};
 type InstallJob={id:string;state:string;error:string|null;operation:string};
 const softwareProblemHelp:Record<string,string>={
+ software_install_database_exposed:"The database is listening outside loopback. Review its network configuration before use.",
+ software_install_database_socket_check_failed:"Database listener state could not be verified.",
  software_install_agent_permissions:"DevOne Agent must run with the required host privileges.",
  software_install_unsupported_ubuntu:"This installer requires Ubuntu 24.04.",
  software_install_unsupported_architecture:"The current host architecture is unsupported.",

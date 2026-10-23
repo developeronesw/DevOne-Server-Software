@@ -12,6 +12,7 @@ export async function assertAgentMutationResult(response:Response,operation:stri
  }
  if(operation==="app.install"&&payload.error==="app_install_requires_inspection")throw Error("app_install_requires_inspection");
  if(operation==="app.install"&&["app_target_not_empty","app_target_incompatible","site_revision_conflict"].includes(payload.error as string))throw Error(payload.error as string);
+ if(operation==="database.create"&&["database_provisioning_requires_inspection","database_engine_unavailable","database_credentials_missing","database_site_not_ready","database_already_recorded","database_limit"].includes(payload.error as string))throw Error(payload.error as string);
  if(response.status>=500)throw new OutcomeUnknown("agent_outcome_unknown");
  const safe=new Set(["runtime_entry_missing","runtime_not_healthy","node_entry_missing","site_runtime_not_available","php83_runtime_not_running","node22_runtime_not_available","site_port_unavailable","unsupported_runtime_version","python312_runtime_not_available","docker_runtime_not_running"]);
  if((operation==="site.action"||operation==="site.create")&&safe.has(payload.error as string))throw Error(payload.error as string);

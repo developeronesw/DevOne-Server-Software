@@ -34,3 +34,7 @@ These are DevOne design goals, not claims that competitors lack them:
 - **Useful automation with visible proof:** scheduled health checks and AI actions distinguish requested, queued, running, failed and verified outcomes.
 
 No feature is labeled unique, secure, fast, production-ready or complete solely because its UI exists or unit tests pass. Preserve the bright professional design, bounded background work, explicit uncertainty and the motto: performance, perfection, pristine design, then publish.
+
+## Batch B implementation started
+
+The first increment adds managed MariaDB/PostgreSQL engine packages and Owner-approved, site-associated database/account provisioning. Credentials are generated and encrypted before queue execution; app login is checked before ready status. See MANAGED-DATABASES.md for scope, supported profiles, retained failures and outstanding acceptance. The remaining Batch B checklist is unchanged.

@@ -1,3 +1,4 @@
+import {DatabaseManager} from "./databases.js";
 import {resourceSnapshot} from "./resources.js";
 import {Diagnostics,diagnosticCatalog} from "./diagnostics.js";
 import { SiteManager } from "./sites.js";
@@ -20,12 +21,23 @@ const updates = new UpdatesManager();
 const diagnostics=new Diagnostics();
 const sites = new SiteManager({registry:'/var/lib/devone-agent',base:'/home/devone-sites',nginx:'/etc/nginx/conf.d',panelDomain:new URL(process.env.DEVONE_PANEL_URL ?? 'http://localhost').hostname});
 const disposableQa=new DisposableHostQa(sites);
+const databases=new DatabaseManager({registry:'/var/lib/devone-agent/databases',sites:()=>sites.list(),withSite:(id,work)=>sites.withReadySite(id,work)});
 const server = createServer(async (request, response) => {
   if (!token || request.headers.authorization !== `Bearer ${token}`) {
     response.writeHead(401, { "content-type": "application/json" });
     response.end(JSON.stringify({ error: "unauthorized" })); return;
   }
   const send = (code: number, value: unknown) => { response.writeHead(code, { "content-type": "application/json" }); response.end(JSON.stringify(value)); };
+  if(request.method==="GET"&&request.url==="/v1/databases"){
+    try{send(200,{databases:await databases.list()});}catch{send(503,{error:"databases_unavailable"});}return;
+  }
+  if(request.method==="POST"&&request.url==="/v1/databases/create"){
+    try{
+      request.setEncoding("utf8");let body="";
+      for await(const chunk of request){body+=chunk;if(Buffer.byteLength(body)>512){send(413,{error:"body_too_large"});return;}}
+      send(200,{database:await databases.create(JSON.parse(body))});
+    }catch(e){const code=e instanceof Error?e.message:"database_provisioning_requires_inspection";const safe=["invalid_database","database_already_recorded","database_limit","database_engine_unavailable","database_site_not_ready","database_provisioning_requires_inspection"].includes(code)?code:"database_provisioning_requires_inspection";send(safe==="invalid_database"?400:safe==="database_provisioning_requires_inspection"?503:409,{error:safe});}return;
+  }
   if(request.method==="GET"&&request.url==="/v1/resources"){
     try{send(200,await resourceSnapshot());}catch{send(503,{error:"resources_unavailable"});}return;
   }

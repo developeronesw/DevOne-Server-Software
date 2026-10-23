@@ -5,12 +5,12 @@
 set -Eeuo pipefail
 umask 077
 fail() { local code="$1"; shift; printf >&2 "DEVONE_INSTALL_ERROR:%s\n" "$code"; printf >&2 "%s\n" "$*"; exit 1; }
-usage() { echo "Usage: $0 [--check|--install|--managed-install] [php8.3-fpm|redis-server|docker.io]" >&2; exit 2; }
+usage() { echo "Usage: $0 [--check|--install|--managed-install] [php8.3-fpm|redis-server|docker.io|mariadb-server|postgresql]" >&2; exit 2; }
 [[ $# -le 2 ]] || usage
 mode="${1:---check}"
 package="${2:-php8.3-fpm}"
 [[ "$mode" == "--check" || "$mode" == "--install" || "$mode" == "--managed-install" ]] || usage
-case "$package" in php8.3-fpm|redis-server|docker.io) ;; *) usage ;; esac
+case "$package" in php8.3-fpm|redis-server|docker.io|mariadb-server|postgresql) ;; *) usage ;; esac
 [[ "$EUID" -eq 0 ]] || fail "agent_permissions" "Installation requires the privileged DevOne Agent."
 . /etc/os-release
 [[ "${ID:-}" == "ubuntu" && "${VERSION_ID:-}" == "24.04" ]] || fail "unsupported_ubuntu" "Managed packages require Ubuntu 24.04."
@@ -99,12 +99,23 @@ nginx -t >/dev/null 2>&1 || fail "nginx_postcheck_failed" "NGINX validation fail
 for unit in devone-api devone-agent; do
   systemctl is-active --quiet "$unit" || fail "devone_postcheck_failed" "Required DevOne service went down during installation."
 done
-systemctl is-active --quiet "${package/docker.io/docker}" || fail "package_service_inactive" "Installed package service is not active."
+service="$package"
+[[ "$package" != "docker.io" ]] || service=docker
+[[ "$package" != "mariadb-server" ]] || service=mariadb
+systemctl is-active --quiet "$service" || fail "package_service_inactive" "Installed package service is not active."
 if [[ "$package" == "redis-server" ]]; then
   redis_listeners="$(ss -ltnH)" || fail "redis_socket_check_failed" "Unable to validate Redis listening sockets."
   # Here-string parsing avoids another potential SIGPIPE from grep -q + pipefail.
   if awk '$4 ~ /^(0[.]0[.]0[.]0|\*|\[::\]|::):6379$/ { exposed=1 } END { exit(!exposed) }' <<< "$redis_listeners"; then
     fail "redis_exposed" "Redis is listening on a public interface; restrict access."
+  fi
+fi
+if [[ "$package" == "mariadb-server" || "$package" == "postgresql" ]]; then
+  database_port=3306
+  [[ "$package" != "postgresql" ]] || database_port=5432
+  database_listeners="$(ss -ltnH)" || fail "database_socket_check_failed" "Unable to inspect database listening sockets."
+  if awk -v port="$database_port" '$4 ~ ":"port"$" && $4 !~ /^127[.]/ && $4 !~ /^\[::1\]:/ && $4 !~ /^::1:/ { exposed=1 } END {exit(!exposed)}' <<< "$database_listeners"; then
+    fail "database_exposed" "Database is listening outside loopback. Review its network configuration before use."
   fi
 fi
 echo "Managed package installed and service active. Site integration and package-level rollback are separate capabilities."

@@ -6,9 +6,10 @@ export type ServiceInput = { service: string; action: string };
 export type SiteInput = { domain: string; webServer: "nginx" | "none"; siteType?: "static" | "files" | "php" | "node" | "python" | "container"; runtimeVersion?:string };
 export type SiteActionInput = {siteId:string;action:string;expectedRevision:number;domain?:string;aliases?:string[];confirmDomain?:string};
 export type SiteTlsInput = {siteId:string;action:string;expectedRevision:number;email?:string;agreeTerms?:boolean};
-export type SoftwareInstallInput={package:"php8.3-fpm"|"redis-server"|"docker.io";confirmed:true};
+export type SoftwareInstallInput={package:"php8.3-fpm"|"redis-server"|"docker.io"|"mariadb-server"|"postgresql";confirmed:true};
 export type AppInstallInput={appId:string;siteId?:string;domain?:string;expectedRevision?:number};
-export type JobInput = AppInstallInput | ServiceInput | SiteInput | SiteActionInput | SiteTlsInput | SoftwareInstallInput;
+export type DatabaseCreateInput={id:string;siteId:string;engine:"mariadb"|"postgresql"};
+export type JobInput = DatabaseCreateInput | AppInstallInput | ServiceInput | SiteInput | SiteActionInput | SiteTlsInput | SoftwareInstallInput;
 export type JobState = "queued" | "running" | "succeeded" | "failed" | "interrupted";
 export type Job = { id: string; requested_by: string; operation: string; input: string; state: JobState; error: string | null; created_at: string; started_at: string | null; finished_at: string | null };
 export class OutcomeUnknown extends Error {}
@@ -33,11 +34,13 @@ export class JobQueue {
   }
   enqueue(actor: string, key: string, input: JobInput, operation = "service.action"): Job {
     if (!/^[a-zA-Z0-9_-]{16,128}$/.test(key)) throw new Error("invalid_request_key");
-    if (!["service.action", "site.create", "site.action", "site.tls", "app.install", "software.install"].includes(operation)) throw new Error("invalid_operation");
-    if(operation==="software.install" && (!input || !["php8.3-fpm","redis-server","docker.io"].includes((input as SoftwareInstallInput).package) || (input as SoftwareInstallInput).confirmed!==true)) throw Error("invalid_software_install");
+    if (!["service.action", "site.create", "site.action", "site.tls", "database.create", "app.install", "software.install"].includes(operation)) throw new Error("invalid_operation");
+    if(operation==="software.install" && (!input || !["php8.3-fpm","redis-server","docker.io","mariadb-server","postgresql"].includes((input as SoftwareInstallInput).package) || (input as SoftwareInstallInput).confirmed!==true)) throw Error("invalid_software_install");
     if(operation==="app.install" && !["static-starter","php-starter","node-starter"].includes((input as AppInstallInput).appId))throw Error("unsupported_app");
+    if(operation==="database.create" && (!/^db_[a-f0-9]{16}$/.test((input as DatabaseCreateInput).id)||!/^site_[a-f0-9]{16}$/.test((input as DatabaseCreateInput).siteId)||!["mariadb","postgresql"].includes((input as DatabaseCreateInput).engine)))throw Error("invalid_database_request");
     const serialized = operation === "service.action"
       ? JSON.stringify({ service: (input as ServiceInput).service, action: (input as ServiceInput).action })
+      : operation === "database.create" ? JSON.stringify({id:(input as DatabaseCreateInput).id,siteId:(input as DatabaseCreateInput).siteId,engine:(input as DatabaseCreateInput).engine})
       : operation === "app.install" ? JSON.stringify({appId:(input as AppInstallInput).appId,siteId:(input as AppInstallInput).siteId,domain:(input as AppInstallInput).domain,expectedRevision:(input as AppInstallInput).expectedRevision})
       : operation === "software.install" ? JSON.stringify({package:(input as SoftwareInstallInput).package,confirmed:(input as SoftwareInstallInput).confirmed})
       : operation === "site.create" ? JSON.stringify({ domain: (input as SiteInput).domain, webServer: (input as SiteInput).webServer, siteType:(input as SiteInput).siteType, runtimeVersion:(input as SiteInput).runtimeVersion })
@@ -84,12 +87,12 @@ export class JobQueue {
       });
       let state: JobState = "succeeded", error: string | null = null;
       try {
-        if (!role || !["owner", "admin"].includes(role.role) || (job.operation === "software.install" && role.role !== "owner")) throw new Error("authorization_revoked");
+        if (!role || !["owner", "admin"].includes(role.role) || (["software.install","database.create"].includes(job.operation) && role.role !== "owner")) throw new Error("authorization_revoked");
         await this.execute(JSON.parse(job.input), job.operation);
       } catch (e) {
         state = e instanceof OutcomeUnknown ? "interrupted" : "failed";
         const reason=e instanceof Error?e.message:"agent_operation_failed";
-        const known=new Set(["app_install_requires_inspection","app_target_not_empty","app_target_incompatible","site_revision_conflict","software_install_requires_inspection","authorization_revoked","runtime_entry_missing","runtime_not_healthy","python312_runtime_not_available","docker_runtime_not_running","node_entry_missing","site_runtime_not_available","php83_runtime_not_running","node22_runtime_not_available","site_port_unavailable","unsupported_runtime_version"]);
+        const known=new Set(["database_provisioning_requires_inspection","database_engine_unavailable","database_credentials_missing","database_site_not_ready","database_already_recorded","database_limit","app_install_requires_inspection","app_target_not_empty","app_target_incompatible","site_revision_conflict","software_install_requires_inspection","authorization_revoked","runtime_entry_missing","runtime_not_healthy","python312_runtime_not_available","docker_runtime_not_running","node_entry_missing","site_runtime_not_available","php83_runtime_not_running","node22_runtime_not_available","site_port_unavailable","unsupported_runtime_version"]);
         error=state==="interrupted"?"agent_outcome_unknown":(known.has(reason)||(reason.startsWith("software_install_")&&isSafeInstallFailureReason(reason.slice("software_install_".length))))?reason:"agent_operation_failed";
       }
       this.transaction(() => {

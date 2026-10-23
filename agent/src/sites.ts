@@ -125,6 +125,13 @@ export class SiteManager {
     }
     return {available:true,hosts,webServer:body.webServer,advisory:true};
   }
+  withReadySite<T>(siteId:string,work:()=>Promise<T>):Promise<T>{
+    if(!/^site_[a-f0-9]{16}$/.test(siteId))return Promise.reject(Error("invalid_site"));
+    return this.serial(async()=>{
+      if(!(await this.registry()).some(s=>s.id===siteId&&s.state==="ready"))throw Error("database_site_not_ready");
+      return work();
+    },siteId);
+  }
   installApp(input: unknown) {
     const body=input as {appId?:unknown;siteId?:unknown;domain?:unknown;expectedRevision?:unknown}|null;
     if(!body||typeof body!=="object"||Array.isArray(body)||Object.keys(body).some(k=>!["appId","siteId","domain","expectedRevision"].includes(k)))return Promise.reject(Error("invalid_app_install"));

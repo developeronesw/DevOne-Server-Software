@@ -20,8 +20,10 @@
     },
     {
       "legacy": "/api/databases",
-      "equivalent": [],
-      "status": "pending",
+      "equivalent": [
+        "/api/databases"
+      ],
+      "status": "partial",
       "acceptanceEvidence": []
     },
     {

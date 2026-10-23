@@ -9,7 +9,7 @@ type Deps={
  sameOrigin:(request:any)=>boolean;
  audit:(id:string|null,event:string,details?:unknown)=>void;
 };
-const packages=["php8.3-fpm","redis-server","docker.io"] as const;
+const packages=["php8.3-fpm","redis-server","docker.io","mariadb-server","postgresql"] as const;
 const validPackage=(p:unknown):p is (typeof packages)[number]=>packages.includes(p as any);
 export function registerSoftwareRoutes(app:FastifyInstance,deps:Deps){
  const attempts=new Map<string,{count:number;reset:number}>();

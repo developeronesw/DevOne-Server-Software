@@ -74,7 +74,7 @@ export class DisposableHostQa {
   // PHP, Redis and Docker packages are NEVER removed or replaced by this test.
   try{
    const inventory=await softwareStatus();
-   const missing=inventory.packages.filter(p=>!p.installed||!p.serviceActive).map(p=>p.package);
+   const missing=inventory.packages.filter(p=>["php8.3-fpm","redis-server","docker.io"].includes(p.package)&&(!p.installed||!p.serviceActive)).map(p=>p.package);
    status.results.push({name:"software.host_inventory",status:missing.length?"blocked":"pass",
     detail:missing.length?"Missing/inactive host packages: "+missing.join(", "):"PHP-FPM, Redis and Docker are installed and active; no host packages modified."});
    if(missing.includes("docker.io"))return;

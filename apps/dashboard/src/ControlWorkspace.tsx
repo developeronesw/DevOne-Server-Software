@@ -1,3 +1,4 @@
+import {DatabaseWorkspace} from "./DatabaseWorkspace";
 import {ServerWorkbench} from "./ServerWorkbench";
 import {AiActions} from "./AiActions";
 import { useEffect, useState } from "react";
@@ -14,7 +15,7 @@ type DisposableQA={id?:string;state:"not_run"|"running"|"passed"|"failed";starte
 type AiProvider = {id:"gemini"|"openai"|"deepseek"|"openclaw";label:string;secretName:string;model:string;configured:boolean;keyStored:boolean;endpointConfigured:boolean;securityNote:string};
 const headings:Record<ControlView,{eyebrow:string;title:string;description:string}>={
   apps:{eyebrow:"APPLICATIONS",title:"Software & app runtimes",description:"Discover installed development runtimes and the host's software foundation."},
-  databases:{eyebrow:"DATABASES",title:"Database engines",description:"Inspect installed database clients and services. Database creation and user management require the next controlled Agent phase."},
+  databases:{eyebrow:"DATABASES",title:"Database engines",description:"Provision dedicated application databases and inspect installed engines."},
   backups:{eyebrow:"RECOVERY",title:"Control-plane backups",description:"Create and download consistent SQLite snapshots of DevOne's control database."},
   monitoring:{eyebrow:"OBSERVABILITY",title:"Server monitoring",description:"Real server metrics and recent history from your connected agent."},
   qa:{eyebrow:"QUALITY ASSURANCE",title:"Automatic QA Center",description:"Non-destructive live checks, scheduled every six hours, with retained results."},
@@ -156,8 +157,9 @@ export function ControlWorkspace({view,role,onNavigate}:{view:ControlView;role:s
     {error&&<p role="alert" className="inline-error">{error}</p>}
     {notice&&<p role="status" className="inline-notice">{notice}</p>}
     {view==="apps"&&<AppCatalog role={role}/>}
+    {view==="databases"&&role==="owner"&&<DatabaseWorkspace onApps={()=>onNavigate("apps")}/>}
     {view==="databases"&&<section className="surface-card glass"><div className="section-heading"><div><h2>Installed database engines</h2><p>Read-only discovery · Source: authenticated DevOne Agent</p></div></div>
-      {discovery?<><div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Engine</th><th>Service state</th><th>Client</th></tr></thead><tbody>{discovery.databases.map(item=><tr key={item.name}><td><strong>{item.name}</strong><small className="ops-subtext">{item.version??"No client detected"}</small></td><td><span className={"state-chip "+(item.serviceState==="active"?"good":"neutral")}>{item.serviceState}</span></td><td>{item.clientInstalled?"Installed":"Not detected"}</td></tr>)}</tbody></table></div><p className="ops-note">Service start/stop/restart is available through Services. Database creation, credentials, SQL administration and restore are not enabled until Agent authorization and isolation tests pass.</p></>:<p className="ops-empty">Checking your database engines…</p>}
+      {discovery?<><div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Engine</th><th>Service state</th><th>Client</th></tr></thead><tbody>{discovery.databases.map(item=><tr key={item.name}><td><strong>{item.name}</strong><small className="ops-subtext">{item.version??"No client detected"}</small></td><td><span className={"state-chip "+(item.serviceState==="active"?"good":"neutral")}>{item.serviceState}</span></td><td>{item.clientInstalled?"Installed":"Not detected"}</td></tr>)}</tbody></table></div><p className="ops-note">Service start/stop/restart is available through Services. Owners can provision managed application databases above. SQL administration, deletion, credential rotation and restore remain unfinished.</p></>:<p className="ops-empty">Checking your database engines…</p>}
     </section>}
     {view==="monitoring"&&<>
       {role==="owner"&&<ServerWorkbench/>}
