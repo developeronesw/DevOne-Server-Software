@@ -8,6 +8,29 @@ export type RuntimePreflight={package:RuntimePackage;status:"ready"|"blocked";in
 export type RuntimeState={package:RuntimePackage;installed:boolean;version:string|null;serviceActive:boolean};
 type Runner=(binary:string,args:string[],options:{timeout:number;maxBuffer:number})=>Promise<{stdout:string;stderr:string}>;
 const SCRIPT="/opt/devone/current/scripts/software-runtime-pilot.sh";
+export const installFailureReasons=[
+ "agent_permissions","unsupported_ubuntu","unsupported_architecture","install_lock_busy",
+ "nginx_inactive","nginx_configuration_invalid","devone_service_inactive",
+ "disk_inventory_failed","disk_space_low","apt_policy_unavailable","apt_candidate_unavailable",
+ "candidate_sources_unavailable","repository_metadata_unavailable","repository_origin_unverified",
+ "apt_simulation_failed","protected_package_change","apt_transaction_failed","nginx_postcheck_failed",
+ "devone_postcheck_failed","package_service_inactive","redis_socket_check_failed","redis_exposed"
+] as const;
+export type InstallFailureReason=(typeof installFailureReasons)[number]|"unclassified";
+export class SoftwareInstallFailure extends Error{
+ constructor(public readonly reason:InstallFailureReason){
+  super("software_install_requires_inspection");
+  this.name="SoftwareInstallFailure";
+ }
+}
+export function parseInstallFailure(stderr:unknown):InstallFailureReason{
+ if(typeof stderr!=="string")return "unclassified";
+ const match=stderr.match(/(?:^|\n)DEVONE_INSTALL_ERROR:([a-z0-9_]+)(?:\r?\n|$)/);
+ if(!match)return "unclassified";
+ return installFailureReasons.includes(match[1] as typeof installFailureReasons[number])
+  ? match[1] as InstallFailureReason:"unclassified";
+}
+
 let installing=false;
 export function parseRuntimePreflight(input:unknown):RuntimePackage{
  if(!input||typeof input!=="object"||Array.isArray(input))throw Error("invalid_software_preflight");
@@ -75,14 +98,15 @@ export async function softwareInstall(input:unknown,run:Runner=exec):Promise<Run
   if(!info.installed||!info.serviceActive)throw Error("software_install_requires_inspection");
   return info;
  }catch(error){
-  const cause=error as Error&{code?:string|number;signal?:string};
-  // Structured, non-secret diagnostic breadcrumbs for journalctl. Raw APT
-  // stdout/stderr may contain sensitive host details and are never sent to UI.
+  const cause=error as Error&{code?:string|number;signal?:string;stderr?:string};
+  const reason=phase==="verify_package_and_service"?"package_service_inactive":parseInstallFailure(cause?.stderr);
+  // Log only allowlisted diagnostics. Never expose raw APT stderr, output, or
+  // command arguments in browser responses or audit records.
   console.error("devone_software_install_requires_inspection",{
-   package:name,phase,
+   package:name,phase,reason,
    exitCode:typeof cause?.code==="number"?cause.code:null,
    timedOut:cause?.signal==="SIGTERM"
   });
-  throw Error("software_install_requires_inspection");
+  throw new SoftwareInstallFailure(reason);
  }finally{installing=false;}
 }
