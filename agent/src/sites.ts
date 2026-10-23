@@ -1,3 +1,4 @@
+import { starter, starterSource } from './app-starters.js';
 import { constants } from 'node:fs';
 import { open, mkdir, lstat, rename, chown, rmdir, readFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
@@ -123,6 +124,39 @@ export class SiteManager {
       if (names.some(name=>hosts.some(host=>name === host || name.startsWith('~') || name.charCodeAt(0) === 36 || (name.startsWith('*.') && host.endsWith(name.slice(1))) || (name.startsWith('.') && (host === name.slice(1) || host.endsWith(name))) || (name.endsWith('.*') && host.startsWith(name.slice(0,-1)))))) throw new Error('domain_in_use');
     }
     return {available:true,hosts,webServer:body.webServer,advisory:true};
+  }
+  installApp(input: unknown) {
+    const body=input as {appId?:unknown;siteId?:unknown;domain?:unknown;expectedRevision?:unknown}|null;
+    if(!body||typeof body!=="object"||Array.isArray(body)||Object.keys(body).some(k=>!["appId","siteId","domain","expectedRevision"].includes(k)))return Promise.reject(Error("invalid_app_install"));
+    let app:ReturnType<typeof starter>;
+    try{app=starter(body.appId);}catch(e){return Promise.reject(e);}
+    if(body.siteId!==undefined && (typeof body.siteId!=="string"||!/^site_[a-f0-9]{16}$/.test(body.siteId)||!Number.isSafeInteger(body.expectedRevision)||body.domain!==undefined))return Promise.reject(Error("invalid_app_target"));
+    if(body.siteId===undefined && (body.expectedRevision!==undefined||typeof body.domain!=="string"))return Promise.reject(Error("invalid_app_target"));
+    // Queue behind already admitted file operations, and reserve the same queue for later ones.
+    const siteId=typeof body.siteId==="string"?body.siteId:null;
+    const previous=siteId?this.fileQueues.get(siteId):undefined;
+    const operation=(previous??Promise.resolve()).catch(()=>{}).then(()=>this.serial(async()=>{
+      const site=siteId?(await this.registry()).find(s=>s.id===siteId):await this.provision({domain:body.domain,webServer:"nginx",siteType:app.siteType,runtimeVersion:"runtimeVersion" in app?app.runtimeVersion:undefined});
+      if(!site||site.state!=="ready"||site.webServer!=="nginx"||(site.siteType??"static")!==app.siteType)throw Error("app_target_incompatible");
+      this.runningSite=site.id;
+      if(siteId&&(site.revision??1)!==body.expectedRevision)throw Error("site_revision_conflict");
+      const entries=await this.invokeWorker(site,{operation:"list",path:""});
+      if(!Array.isArray(entries)||entries.length)throw Error("app_target_not_empty");
+      const records=await this.registry(),record=records.find(s=>s.id===site.id)!;
+      record.state="updating";await this.save(records);
+      try{
+        await this.invokeWorker(site,{operation:"create",path:app.entry,content:Buffer.from(starterSource(app.id)).toString("base64")});
+        if(app.siteType==="php")await this.command("systemctl",["is-active","php8.3-fpm"]);
+        record.state="ready";record.revision=(record.revision??1)+1;await this.save(records);
+        if(app.siteType==="node")await this.lifecycle({siteId:site.id,action:"start",expectedRevision:record.revision});
+        return {siteId:site.id,domain:site.domain,appId:app.id,version:app.version};
+      }catch{
+        record.state="needs_inspection";await this.save(records);
+        throw Error("app_install_requires_inspection");
+      }
+    },siteId));
+    if(siteId)this.fileQueues.set(siteId,operation);
+    return operation.finally(()=>{if(siteId&&this.fileQueues.get(siteId)===operation)this.fileQueues.delete(siteId);});
   }
   create(input: unknown) { return this.serial(()=>this.provision(input)); }
   private async provision(input: unknown) {

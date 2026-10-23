@@ -1,3 +1,4 @@
+import {AppInstaller} from "./AppInstaller";
 import {useEffect,useMemo,useState} from "react";
 import {SiteWafConsole} from "./SiteWafConsole";
 import {OwnerMfaSettings} from "./OwnerMfaSettings";
@@ -144,7 +145,7 @@ export function AppCatalog({role}:{role:string}){
  const runtimeNames=new Set(discovery?.runtimes.filter(x=>x.installed).map(x=>x.name.toLowerCase())??[]);
  return <div className="app-catalog">
    <div className="ops-catalog-intro glass"><div><span className="overline">DEVONE SOFTWARE CENTER</span><h2>Launch your next project.</h2><p>Install the supported Ubuntu host runtimes below. Other catalog applications require their individual deployment adapters.</p></div><span className="catalog-count">{catalog?.items.length??"—"} catalog entries</span></div>
-   {["owner","admin"].includes(role)&&<RuntimeManager role={role}/>}
+   {["owner","admin"].includes(role)&&<><AppInstaller/><RuntimeManager role={role}/></>}
    <div className="ops-catalog-filters"><input aria-label="Search software and frameworks" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search CMS, frameworks, runtimes…"/><select aria-label="Filter software by category" value={category} onChange={e=>setCategory(e.target.value)}><option value="all">All software</option><option value="cms">CMS platforms</option><option value="framework">Frameworks</option><option value="runtime">Runtimes</option><option value="platform">Platforms</option></select></div>
    {error&&<p role="alert" className="inline-error">{error}</p>}
    <div className="ops-catalog-grid">{items.map(item=><article key={item.id} className={"catalog-card glass "+(item.featured?"featured":"")}><div className="catalog-card-heading"><div className="catalog-icon">{item.name.slice(0,1)}</div><span className="catalog-type">{item.category}</span></div><h3>{item.name} {item.featured&&<span className="catalog-featured">Featured</span>}</h3><p>{item.description}</p><div className="catalog-meta">{item.latestKnownVersion&&<span>Reference: {item.latestKnownVersion}</span>}<span>{item.releaseChannel}</span></div><div className="catalog-card-actions"><button onClick={()=>{if(item.id==="php"&&["owner","admin"].includes(role)){document.getElementById("managed-runtimes")?.scrollIntoView({behavior:"smooth",block:"start"});}else setSelected(item.id);}}>{item.id==="php"&&["owner","admin"].includes(role)?"Manage PHP 8.3":"View requirements"} <span aria-hidden="true">→</span></button><a href={item.sourceUrl} target="_blank" rel="noopener noreferrer">Official source ↗</a></div></article>)}</div>
