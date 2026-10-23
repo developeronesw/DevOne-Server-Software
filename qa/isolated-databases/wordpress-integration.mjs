@@ -28,7 +28,7 @@ export async function runWordPressChecks(check,command){
  const first=request('wordpress.example.test');let site;
  const web=(path,options={})=>fetch('http://127.0.0.1'+path,{redirect:'manual',...options,headers:{Host:first.domain,...options.headers},signal:AbortSignal.timeout(15000)});
  await check('wordpress.new-site-install',async()=>{
-  const result=await manager.installWordPress(first,deps);site=(await manager.list()).find(s=>s.id===result.siteId);
+  let result;try{result=await manager.installWordPress(first,deps);}catch{const states=await manager.list();console.error('WordPress stage evidence',JSON.stringify(states.map(s=>({state:s.state,stage:s.application?.stage}))));throw Error('wordpress_install_failed');}site=(await manager.list()).find(s=>s.id===result.siteId);
   assert.equal(site.state,'ready');assert.equal(site.application.stage,'complete');
   const home=await web('/');assert.equal(home.status,200);assert.ok((await home.text()).includes('DevOne QA WordPress'));
  });
