@@ -1,0 +1,50 @@
+name: DevOne disposable host acceptance
+on:
+  workflow_dispatch:
+    inputs:
+      target_id:
+        description: Exact approved dedicated QA target ID (qa-...)
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: devone-disposable-${{ inputs.target_id }}
+  cancel-in-progress: false
+jobs:
+  disposable-host:
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, devone-qa-controller]
+    timeout-minutes: 90
+    env:
+      QA_CONFIG: ${{ vars.DEVONE_QA_CONFIG }}
+      QA_REPORT_DIR: ${{ vars.DEVONE_QA_REPORT_DIR }}
+      QA_TARGET: ${{ inputs.target_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare external run identity
+        id: identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$QA_CONFIG"
+          test -n "$QA_REPORT_DIR"
+          node -e 'const fs=require("node:fs");const c=JSON.parse(fs.readFileSync(process.env.QA_CONFIG));if(c.outputDir!==process.env.QA_REPORT_DIR||c.commit!==process.env.GITHUB_SHA)process.exit(1)'
+          echo "run_id=$(node -e 'console.log(require("node:crypto").randomUUID())')" >> "$GITHUB_OUTPUT"
+      - name: Run test and external reset cycle
+        env:
+          QA_RUN_ID: ${{ steps.identity.outputs.run_id }}
+        run: node scripts/qa-host-cycle.mjs --execute "$QA_CONFIG" "$QA_TARGET" "$QA_RUN_ID"
+      - name: Recover any journaled reset still pending
+        if: ${{ always() && steps.identity.outputs.run_id != '' }}
+        env:
+          QA_RUN_ID: ${{ steps.identity.outputs.run_id }}
+        run: node scripts/qa-host-cycle.mjs --recover "$QA_CONFIG" "$QA_TARGET" "$QA_REPORT_DIR/$QA_RUN_ID.json"
+      - name: Preserve sanitized evidence outside the VPS
+        if: ${{ always() && steps.identity.outputs.run_id != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: devone-live-${{ steps.identity.outputs.run_id }}
+          path: ${{ vars.DEVONE_QA_REPORT_DIR }}/${{ steps.identity.outputs.run_id }}.json
+          if-no-files-found: error
+          retention-days: 90

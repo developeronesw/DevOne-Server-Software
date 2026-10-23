@@ -1,6 +1,6 @@
 # DevOne Server: progress toward 1.0 stable
 
-Updated: October 22, 2026 (America/New_York).
+Updated: October 23, 2026 (America/New_York).
 Current package version: `1.0.0-alpha.3` — developer preview, not stable.
 
 ## Delivery agreement
@@ -46,3 +46,7 @@ The Dashboard now has a conversational AI interface with follow-up context, expl
 ## Batch B database provisioning increment
 
 Phases 3–4 have started with managed SQL engine installation and application database provisioning. Software Center now includes MariaDB/PostgreSQL. The Owner can create a database/account for a ready site through a durable job, with generated encrypted credentials and an application login verification; credential reveal requires separate Owner password/MFA approval. Partial provisioning is retained for inspection. See [managed databases](MANAGED-DATABASES.md). Live engine/isolation acceptance, database management/deletion/rotation, backup/restore, phpMyAdmin, CMS installers, deployment controls and the rest of Batch B remain open. No phase is newly certified complete.
+
+## Live QA closeout infrastructure
+
+An external QA/reset controller and a dedicated-host runner now wrap the existing live hosting profile with independent evidence, reset receipts, baseline probes and interrupted-run recovery. A phase 1–4 requirement manifest keeps unsupported/missing tests blocked. See LIVE-ACCEPTANCE-CYCLE.md. No live test or provider reset has been executed from this session. A disposable target, trusted external provider reset hook and connection remain required; remaining feature implementations and test profiles still block phase completion and the stable gate.

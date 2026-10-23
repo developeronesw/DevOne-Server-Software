@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "dedicatedTestServer": true,
+  "targetId": "qa-devone-acceptance",
+  "sshTarget": "qa-admin@qa-vps.example.invalid",
+  "machineId": "00000000000000000000000000000000",
+  "commit": "0000000000000000000000000000000000000000",
+  "baselineId": "replace-with-approved-clean-baseline",
+  "baselineFingerprint": "0000000000000000000000000000000000000000000000000000000000000000",
+  "resetHook": "/usr/local/lib/devone-qa/reset-approved-test-vps",
+  "outputDir": "/var/lib/devone-qa/reports",
+  "testTimeoutMs": 1200000
+}
