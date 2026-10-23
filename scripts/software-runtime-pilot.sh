@@ -35,14 +35,48 @@ free_kb="$(df -Pk / | awk 'NR==2{print $4}')"
 policy="$(apt-cache policy "$package")" || { echo "APT package policy could not be read." >&2; exit 1; }
 candidate="$(awk '$1=="Candidate:"{value=$2;found=1} END {if(found)print value;else exit 1}' <<< "$policy")" || { echo "APT candidate could not be identified." >&2; exit 1; }
 [[ "$candidate" =~ ^[0-9A-Za-z.+~:-]+$ && "$candidate" != "(none)" ]] || { echo "No valid candidate in current APT metadata." >&2; exit 1; }
-# Candidate must have the Ubuntu Noble release origin, never an arbitrary PPA.
-# Awk reads a here-string; no producer is killed by an early pipe close.
-awk -v version="$candidate" '
-  $1 == "***" { active=($2 == version); next }
-  $1 ~ /^[0-9][^[:space:]]*$/ && $2 ~ /^[0-9]+$/ { active=($1 == version); next }
-  active && $1 == "release" && /(^|,)o=Ubuntu(,|$)/ && /(^|,)n=noble(-updates|-security)?(,|$)/ && /(^|,)l=Ubuntu(,|$)/ { ok=1 }
-  END { exit(ok ? 0 : 1) }
-' <<< "$policy" || { echo "Candidate is not proven to originate from Ubuntu Noble metadata." >&2; exit 1; }
+# Validate the selected candidate against Ubuntu's signed repository metadata.
+# apt-cache policy <package> usually prints *only* package versions and source
+# URLs (as on Lightsail). Release o=Ubuntu/a=noble-updates metadata is reported
+# by the separate no-argument apt-cache policy command. Requiring "release" in
+# the package-specific output blocked valid Redis and PHP-FPM packages.
+# Match candidate version -> exact repository URI/suite/arch -> Ubuntu release.
+candidate_sources="$(awk -v version="$candidate" '
+  $1=="***" { active=($2==version); next }
+  $1 ~ /^[0-9][^[:space:]]*$/ && $2 ~ /^[0-9]+$/ {active=($1==version); next}
+  active && $1 ~ /^[0-9]+$/ && $2 ~ /^https?:\/\// && $5=="Packages" {
+    print $2 " " $3 " " $4
+  }
+' <<< "$policy")"
+[[ -n "$candidate_sources" ]] || {
+  echo "DEVONE_INSTALL_ERROR:candidate_sources_unavailable" >&2
+  echo "The selected package version has no verified repository source." >&2
+  exit 1
+}
+repository_policy="$(apt-cache policy)" || {
+  echo "DEVONE_INSTALL_ERROR:repository_metadata_unavailable" >&2
+  echo "APT release metadata could not be read." >&2
+  exit 1
+}
+awk -v sources="$candidate_sources" '
+  BEGIN {
+    count=split(sources,records,"\n")
+    for(i=1;i<=count;i++) if(records[i]!="") acceptable[records[i]]=1
+  }
+  $1 ~ /^[0-9]+$/ && $2 ~ /^https?:\/\// && $5=="Packages" {
+    active=($2 " " $3 " " $4 in acceptable)
+    next
+  }
+  active && $1=="release" &&
+    /(^|,)o=Ubuntu(,|$)/ &&
+    /(^|,)n=noble(-updates|-security)?(,|$)/ &&
+    /(^|,)l=Ubuntu(,|$)/ {matched=1}
+  END {exit(matched?0:1)}
+' <<< "$repository_policy" || {
+  echo "DEVONE_INSTALL_ERROR:repository_origin_unverified" >&2
+  echo "APT candidate cannot be linked to signed Ubuntu Noble release metadata." >&2
+  exit 1
+}
 simulation="$(mktemp /tmp/devone-software-apt.XXXXXXXX)"
 trap 'rm -f "$simulation"' EXIT
 apt-get -s --no-install-recommends install "$package=$candidate" > "$simulation" || { echo "APT simulation failed; no install attempted." >&2; exit 1; }
