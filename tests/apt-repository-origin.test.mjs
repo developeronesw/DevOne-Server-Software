@@ -88,7 +88,8 @@ test("candidate URL and suite must match actual repository metadata",()=>{
 });
 test("script does not use unreliable package-policy release parsing or early-exiting pipeline",()=>{
  assert.doesNotMatch(sh,/apt-cache policy "\$package" *\| *awk/);
- assert.doesNotMatch(code,/active && \$1=="release"/);
+ assert.match(code,/active && \$1=="release"/);
+ assert.match(code,/<<< "\$repository_policy"/);
  assert.match(code,/repository_policy="\$\(apt-cache policy\)"/);
  const r=spawnSync("bash",["-n",new URL("../scripts/software-runtime-pilot.sh",import.meta.url).pathname],{encoding:"utf8"});
  assert.equal(r.status,0,r.stderr);
