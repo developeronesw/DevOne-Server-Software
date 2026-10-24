@@ -18,7 +18,7 @@ if(a[0]==='create'){console.log('fixture-container-id');}
 if(a[0]==='start'&&process.env.QA_CASE==='failed-test')process.exit(1);
 if(a[0]==='cp'){
  if(process.env.QA_CASE==='missing-evidence')process.exit(1);
- fs.writeFileSync(a[2],JSON.stringify({scope:'isolated-real-sql',productionReady:false,checks:Array.from({length:34},(_,i)=>({id:String(i),status:process.env.QA_CASE==='failed-test'?'fail':'pass'}))}));
+ fs.writeFileSync(a[2],JSON.stringify({scope:'isolated-real-sql',productionReady:false,checks:Array.from({length:36},(_,i)=>({id:String(i),status:process.env.QA_CASE==='failed-test'?'fail':'pass'}))}));
 }
 `,{mode:0o700});
   let failed=false;try{await exec('/bin/bash',['scripts/qa-isolated-databases.sh'],{cwd:dir,env:{...process.env,PATH:join(dir,'bin')+':'+process.env.PATH,QA_LOG:join(dir,'calls'),QA_CASE:scenario},timeout:20000});}catch{failed=true;}

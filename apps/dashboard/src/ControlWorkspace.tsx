@@ -1,3 +1,4 @@
+import {ApplicationQa} from "./ApplicationQa";
 import {DatabaseWorkspace} from "./DatabaseWorkspace";
 import {ServerWorkbench} from "./ServerWorkbench";
 import {AiActions} from "./AiActions";
@@ -170,6 +171,7 @@ export function ControlWorkspace({view,role,onNavigate}:{view:ControlView;role:s
       <article className="surface-card glass"><div className="section-heading"><div><h2>Live system verification</h2><p>Read-only integrity, encryption, API/Agent and service checks</p></div><button className="primary-button" disabled={busy||qaRunning} onClick={()=>void runQa()}>{busy||qaRunning?"Checking…":"Run QA now"}</button></div>
         <div className="ops-qa-status"><div><small>Last result</small><strong>{qa.length?(qa[0].passed?"PASS":"CHECKS FAILED"):"Awaiting first run"}</strong></div><div><small>Schedule</small><strong>Every 6 hours</strong></div><div><small>Release readiness</small><strong>Not yet certified</strong></div></div>
         <p className="ops-note">The separate GitHub CI regression suite runs automatically on PRs/commits. A green live probe does not verify application CRUD, restores or production safety.</p></article>
+      {role==="owner"&&<ApplicationQa/>}
       {role==="owner"&&<article className="surface-card glass ops-panel-gap" aria-label="Disposable hosting and software QA">
         <div className="section-heading"><div><span className="overline">OWNER-APPROVED HOST ACCEPTANCE</span><h2>Disposable website and software QA</h2>
           <p>Creates real isolated static, file, PHP, Node, Python and Docker test sites; checks actual responses and deletes only those test sites. Packages are installed inside a temporary Docker container, never removed from the host.</p>

@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {request as httpRequest} from 'node:http';
 import {readFile,writeFile,mkdir,stat,readdir} from 'node:fs/promises';
 import {randomBytes,createHash} from 'node:crypto';
+import {ApplicationQa} from './agent/dist/application-qa.js';
 import {waitForQaWebsite} from './agent/dist/disposable-qa.js';
 import {SiteManager} from './agent/dist/sites.js';
 import {DatabaseManager} from './agent/dist/databases.js';
@@ -69,6 +70,11 @@ export async function runWordPressChecks(check,command){
   let result;try{result=await manager.installWordPress(first,deps);}catch{const states=await manager.list();console.error('WordPress stage evidence',JSON.stringify(states.map(s=>({state:s.state,stage:s.application?.stage}))));throw Error('wordpress_install_failed');}site=(await manager.list()).find(s=>s.id===result.siteId);
   assert.equal(site.state,'ready');assert.equal(site.application.stage,'complete');
   const home=await web('/');assert.equal(home.status,200);assert.ok((await home.text()).includes('DevOne QA WordPress'));
+ });
+ await check('wordpress.read-only-acceptance',async()=>{
+  const report=await new ApplicationQa(manager).check({siteId:site.id});
+  assert.equal(report.scope,'installed-application-read-only');assert.equal(report.productionReady,false);assert.equal(report.state,'blocked');
+  assert.ok(report.checks.every(c=>c.status==='pass'||c.name==='transport.https'&&c.status==='blocked'),JSON.stringify(report.checks));
  });
  await check('wordpress.real-administrator-login',async()=>{
   const result=await web('/wp-login.php',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded',Cookie:'wordpress_test_cookie=WP%20Cookie%20check'},body:new URLSearchParams({log:'devone_admin',pwd:first.adminPassword,'wp-submit':'Log In',testcookie:'1',redirect_to:'http://'+first.domain+'/wp-admin/'})});
