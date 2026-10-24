@@ -78,7 +78,7 @@ test('authentication, setup, origin, metrics, logout and rate-limit boundaries',
     assert.ok(catalog.items.length>=18);
     assert.equal(catalog.items[0].id,'devone-cms-v2');
     assert.equal(catalog.items[1].id,'wordpress');
-    assert.equal(catalog.installAvailable,false);
+    assert.equal(catalog.installAvailable,true);
     assert.equal((await fetch(url+'/api/qa/disposable')).status,401);
     assert.equal((await fetch(url+'/api/qa/applications')).status,401);
     assert.equal((await post('/api/qa/applications/check',{})).status,401);

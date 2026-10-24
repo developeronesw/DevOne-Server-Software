@@ -4,8 +4,10 @@ import { securityParsers } from '../agent/dist/security.js';
 import { listCatalog } from '../apps/api/dist/catalog.js';
 test('catalog prioritizes DevOne CMS v2 and WordPress without claiming installed deployments',()=>{
  const catalog=listCatalog();
- assert.equal(catalog.installAvailable,false);
+ assert.equal(catalog.installAvailable,true);
  assert.equal(catalog.items[0].id,'devone-cms-v2');
+ assert.deepEqual(catalog.items.filter(x=>x.managedInstaller).map(x=>x.managedInstaller),['devone-cms-v2','wordpress']);
+ assert.equal(catalog.installMode,'managed-and-planning');
  assert.match(catalog.items[0].sourceUrl,/^https:\/\/github.com\/developeronesw\/DevOneCMS-v2$/);
  assert.equal(catalog.items[1].id,'wordpress');
  assert.equal(catalog.items[1].latestKnownVersion,'7.1.3');

@@ -8,7 +8,7 @@ async function api<T>(url:string,body?:unknown):Promise<T>{
  const r=await fetch(url,{credentials:"same-origin",cache:"no-store",...(body?{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}:{})});
  const data=await r.json();if(!r.ok)throw Error(data.error??"Request failed");return data;
 }
-export function AppInstaller(){
+export function AppInstaller({selectionRequest,onBusyChange}:{selectionRequest?:{appId:"wordpress"|"devone-cms-v2";requestId:number};onBusyChange?:(busy:boolean)=>void}={}){
  const [apps,setApps]=useState<App[]>([]),[sites,setSites]=useState<Site[]>([]),[appId,setAppId]=useState("static-starter"),[target,setTarget]=useState("new"),[domain,setDomain]=useState(""),[error,setError]=useState(""),[busy,setBusy]=useState(false),[job,setJob]=useState<Job|null>(null);
  async function refresh(){const [a,s]=await Promise.all([api<{apps:App[]}>("/api/apps"),api<{sites:Site[]}>("/api/sites")]);setApps(a.apps);setSites(s.sites);}
  useEffect(()=>{void refresh().catch(e=>setError(e.message));},[]);
@@ -19,6 +19,10 @@ export function AppInstaller(){
  },[job]);
  const selected=apps.find(a=>a.id===appId),site=sites.find(s=>s.id===target);
  const running=busy||Boolean(job&&["queued","running"].includes(job.state));
+ useEffect(()=>{onBusyChange?.(running);},[running,onBusyChange]);
+ useEffect(()=>{
+  if(selectionRequest&&!running){setAppId(selectionRequest.appId);setTarget("new");setJob(null);setError("");}
+ },[selectionRequest]);
  async function install(){
   setBusy(true);setError("");
   try{const data=await api<{job:Job}>("/api/apps/install",{appId,confirmed:true,requestKey:crypto.randomUUID(),...(target==="new"?{domain:domain.trim().toLowerCase()}:{siteId:site?.id,expectedRevision:site?.revision??1})});setJob(data.job);}

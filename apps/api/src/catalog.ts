@@ -31,5 +31,5 @@ export const softwareCatalog:ReadonlyArray<CatalogEntry>=[
  {id:"php",name:"PHP",category:"runtime",description:"PHP application runtime required by WordPress and Laravel.",sourceUrl:"https://github.com/php/php-src",docsUrl:"https://www.php.net/manual/en/",runtime:["PHP"],deployment:"php-database",releaseChannel:"stable"}
 ];
 export function listCatalog(){
- return {items:softwareCatalog,checkedAt:"2026-10-14",installMode:"planning-only",installAvailable:false,notice:"Versions are last verified references, not live release checks. WordPress and the DevOne CMS local preview are available in Install an app for Owners. Other catalog products remain planning-only. Review upstream releases and prerequisites."};
+ return {items:softwareCatalog.map(item=>({...item,managedInstaller:["wordpress","devone-cms-v2"].includes(item.id)?item.id:null})),checkedAt:"2026-10-14",installMode:"managed-and-planning",installAvailable:true,notice:"Versions are last verified references, not live release checks. WordPress and the DevOne CMS local preview are available in Install an app for Owners. Other catalog products remain planning-only. Review upstream releases and prerequisites."};
 }
