@@ -1,3 +1,4 @@
+import {validAdminPassword,validAdminUsername} from './install-account.js';
 import {dropSiteIdentity} from './site-identity.js';
 import {cmsRelease} from './cms-release.js';
 import {lstat,readFile,writeFile,rm} from 'node:fs/promises';
@@ -9,8 +10,8 @@ async function main(){
  const stage=process.env.DEVONE_CMS_STAGE,data=process.env.DEVONE_CMS_DATA;
  if(!stage||! /^\/home\/devone-sites\/(site_[a-f0-9]{16})\/\.cms-app_[a-f0-9]{16}$/.test(stage)||data!==stage.slice(0,stage.lastIndexOf('/'))+'/data')throw Error();
  let raw='';for await(const chunk of process.stdin){raw+=chunk;if(Buffer.byteLength(raw)>4096)throw Error();}
- const b=JSON.parse(raw) as {title:string;email:string;password:string;url:string};
- if(Object.keys(b).some(k=>!['title','email','password','url'].includes(k))||! /^[a-f0-9]{64}$/.test(b.password))throw Error();
+ const b=JSON.parse(raw) as {title:string;email:string;password:string;url:string;username:string};
+ if(Object.keys(b).some(k=>!['title','email','password','url','username'].includes(k))||!validAdminPassword(b.password)||!validAdminUsername(b.username))throw Error();
  const archive=fileURLToPath(new URL('../../distributions/devone-cms-local/'+cmsRelease.file,import.meta.url));
  const stat=await lstat(archive);if(!stat.isFile()||stat.isSymbolicLink()||stat.size!==cmsRelease.bytes)throw Error();
  if(createHash('sha256').update(await readFile(archive)).digest('hex')!==cmsRelease.sha256)throw Error();

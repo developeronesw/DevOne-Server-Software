@@ -1,3 +1,4 @@
+import {validInstallAccount,sameInstallPassword} from './install-account.js';
 import type {FastifyInstance} from 'fastify';
 import type {DatabaseSync} from 'node:sqlite';
 import type {JobQueue} from './jobs.js';
@@ -41,17 +42,19 @@ export function registerCms(app:FastifyInstance,deps:Deps){
  app.post('/api/apps/devone-cms/install',async(r,reply)=>{
   const u=owner(r,reply,true);if(!u)return;
   const b=r.body as Record<string,unknown>|null;
-  if(!b||Array.isArray(b)||Object.keys(b).some(k=>!['siteId','domain','expectedRevision','title','email','confirmed','requestKey','password','mfaCode'].includes(k))||b.confirmed!==true||typeof b.requestKey!=='string'||!/^[a-zA-Z0-9_-]{16,128}$/.test(b.requestKey)||typeof b.title!=='string'||b.title.trim()!==b.title||b.title.length<2||b.title.length>120||/[\x00-\x1f\x7f<>]/.test(b.title)||typeof b.email!=='string'||b.email.length>254||! /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?\.[a-zA-Z]{2,63}$/.test(b.email))return reply.code(400).send({error:'invalid_cms_request'});
+  if(!b||Array.isArray(b)||Object.keys(b).some(k=>!['siteId','domain','expectedRevision','title','email','confirmed','requestKey','password','mfaCode','adminUsername','adminPassword','adminPasswordConfirm','deployment'].includes(k))||b.confirmed!==true||typeof b.requestKey!=='string'||!/^[a-zA-Z0-9_-]{16,128}$/.test(b.requestKey)||typeof b.title!=='string'||b.title.trim()!==b.title||b.title.length<2||b.title.length>120||/[\x00-\x1f\x7f<>]/.test(b.title)||typeof b.email!=='string'||b.email.length>254||! /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?\.[a-zA-Z]{2,63}$/.test(b.email))return reply.code(400).send({error:'invalid_cms_request'});
   if(b.siteId!==undefined?(typeof b.siteId!=='string'||!/^site_[a-f0-9]{16}$/.test(b.siteId)||!Number.isSafeInteger(b.expectedRevision)||Number(b.expectedRevision)<1||b.domain!==undefined):(b.expectedRevision!==undefined||typeof b.domain!=='string'||b.domain.length>253||!b.domain.split('.').every(p=>/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(p))||! /\.[a-z]{2,63}$/.test(b.domain)))return reply.code(400).send({error:'invalid_cms_target'});
+  if(b.deployment!=='local')return reply.code(400).send({error:'cms_local_deployment_required'});
+  if(!validInstallAccount(b))return reply.code(400).send({error:'invalid_administrator_account'});
   if(!verify(u,b,reply))return;
-  const metadata=JSON.stringify({title:b.title,email:b.email,...(b.siteId?{siteId:b.siteId,expectedRevision:b.expectedRevision}:{domain:b.domain})});
+  const metadata=JSON.stringify({title:b.title,email:b.email,adminUsername:b.adminUsername,deployment:'local',...(b.siteId?{siteId:b.siteId,expectedRevision:b.expectedRevision}:{domain:b.domain})});
   let row=db.prepare('SELECT * FROM cms_requests WHERE actor=? AND request_key=?').get(u.id,b.requestKey) as Reservation|undefined;
-  if(row&&row.metadata!==metadata)return reply.code(409).send({error:'request_key_conflict'});
+  if(row&&(row.metadata!==metadata||!sameInstallPassword(vault.get(cmsSecret(row.id)),b.adminPassword as string)))return reply.code(409).send({error:'request_key_conflict'});
   try{
    if(!row){
     const id='app_'+randomBytes(8).toString('hex');
     db.exec('BEGIN IMMEDIATE');try{
-     vault.put(cmsSecret(id),randomBytes(32).toString('hex'),u.id);
+     vault.put(cmsSecret(id),b.adminPassword as string,u.id);
      db.prepare('INSERT INTO cms_requests VALUES(?,?,?,?)').run(id,u.id,b.requestKey,metadata);db.exec('COMMIT');
     }catch(e){db.exec('ROLLBACK');throw e;}
     row={id,actor:u.id,request_key:b.requestKey,metadata};
@@ -75,7 +78,9 @@ export function registerCms(app:FastifyInstance,deps:Deps){
    if(!site.tls)return reply.code(409).send({error:'cms_https_required'});
    const password=vault.get(cmsSecret(r.params.id));if(!password)throw Error();
    deps.audit(u.id,'cms.credentials_revealed',{id:r.params.id,siteId:site.id});
-   return {username:'devone_admin',password,loginUrl:'https://'+site.domain+'/'};
+   const reservation=db.prepare('SELECT metadata FROM cms_requests WHERE id=?').get(r.params.id) as {metadata:string}|undefined;
+   if(!reservation)throw Error();
+   return {username:JSON.parse(reservation.metadata).adminUsername??'devone_admin',password,loginUrl:'https://'+site.domain+'/'};
   }catch{return reply.code(503).send({error:'cms_credentials_unavailable'});}
  });
 }

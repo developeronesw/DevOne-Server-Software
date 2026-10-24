@@ -24,21 +24,29 @@ test('CMS API protects approvals, durable identity, vault credentials and HTTPS 
  const queue=new JobQueue(db,async()=>{},()=>{}),vault=new Vault(db,key);let site;const audits=[];
  const server=createServer((req,res)=>{res.setHeader('Content-Type','application/json');res.end(JSON.stringify({sites:site?[site]:[]}));});server.listen(0,'127.0.0.1');await once(server,'listening');
  const app=Fastify();registerCms(app,{db,vault,jobs:queue,agentUrl:'http://127.0.0.1:'+server.address().port,agentToken:'fixture',requestUser:r=>r.headers.role?{id:r.headers.actor??'owner',role:r.headers.role}:null,sameOrigin:r=>r.headers.origin==='https://panel.example.com',stepUp:(id,p,m)=>p==='correct'&&m==='123456'?'ok':'password_invalid',audit(...args){audits.push(args);}});
- const headers={role:'owner',origin:'https://panel.example.com'},body={domain:input.domain,title:input.title,email:input.email,requestKey:'cms_request_1234',password:'correct',mfaCode:'123456',confirmed:true};
+ const headers={role:'owner',origin:'https://panel.example.com'},body={domain:input.domain,title:input.title,email:input.email,adminUsername:'chosen_admin',adminPassword:'Chosen!Password-2026🔐',adminPasswordConfirm:'Chosen!Password-2026🔐',deployment:'local',requestKey:'cms_request_1234',password:'correct',mfaCode:'123456',confirmed:true};
  const post=(b,h=headers,url='/api/apps/devone-cms/install')=>app.inject({method:'POST',url,headers:h,payload:b});
  try{
   for(const [b,h,status] of [[body,{},401],[body,{...headers,role:'admin'},403],[body,{role:'owner'},403],[{...body,confirmed:false},headers,400],[{...body,artifact:'evil'},headers,400],[{...body,password:'wrong'},headers,403]])assert.equal((await post(b,h)).statusCode,status);
+  for(const invalid of [{...body,adminUsername:''},{...body,adminPassword:'short',adminPasswordConfirm:'short'},{...body,adminPasswordConfirm:'different'}])assert.equal((await post(invalid)).statusCode,400);
+  assert.equal((await post({...body,deployment:'cloudflare'})).statusCode,400);
   const result=await post(body);assert.equal(result.statusCode,202);const data=result.json();await queue.idle();
   assert.equal((await post(body)).json().installationId,data.installationId);
   assert.equal((await post({...body,title:'Changed'})).statusCode,409);
-  const payload=cmsJobPayload(db,vault,data.installationId);assert.match(payload.adminPassword,/^[a-f0-9]{64}$/);
+  assert.equal((await post({...body,adminPassword:'Another!Password-2026',adminPasswordConfirm:'Another!Password-2026'})).statusCode,409);
+  const payload=cmsJobPayload(db,vault,data.installationId);assert.equal(payload.adminPassword,body.adminPassword);assert.equal(payload.adminUsername,'chosen_admin');
   const job=queue.get(data.job.id);assert.deepEqual(JSON.parse(job.input),{id:data.installationId});assert.ok(!JSON.stringify(db.prepare('SELECT * FROM cms_requests').all()).includes(payload.adminPassword));
   assert.ok(!JSON.stringify(db.prepare('SELECT * FROM secrets').all()).includes(payload.adminPassword));
   const url='/api/apps/devone-cms/'+data.installationId+'/credentials',approval={password:'correct',mfaCode:'123456',confirmed:true};
   assert.equal((await post(approval,{...headers,actor:"owner2"},url)).statusCode,409);
   site={id:'site_0123456789abcdef',domain:input.domain,state:'ready',tls:false,application:{id:data.installationId,appId:'devone-cms-v2',stage:'complete'}};
   assert.equal((await post(approval,{...headers,actor:"owner2"},url)).json().error,'cms_https_required');
-  site.tls=true;const reveal=await post(approval,{...headers,actor:"owner2"},url);assert.equal(reveal.statusCode,200);assert.equal(reveal.json().password,vault.get(cmsSecret(data.installationId)));assert.equal(reveal.headers['cache-control'],'no-store');assert.equal(audits[0][1],'cms.credentials_revealed');
+  site.tls=true;const reveal=await post(approval,{...headers,actor:"owner2"},url);assert.equal(reveal.statusCode,200);assert.equal(reveal.json().username,body.adminUsername);assert.equal(reveal.json().password,vault.get(cmsSecret(data.installationId)));assert.equal(reveal.headers['cache-control'],'no-store');assert.equal(audits[0][1],'cms.credentials_revealed');
+  const previous=db.prepare('SELECT metadata FROM cms_requests WHERE id=?').get(data.installationId).metadata;
+  const legacy=JSON.parse(previous);delete legacy.adminUsername;delete legacy.deployment;
+  db.prepare('UPDATE cms_requests SET metadata=? WHERE id=?').run(JSON.stringify(legacy),data.installationId);
+  assert.equal((await post(approval,{...headers,actor:'owner2'},url)).json().username,'devone_admin');
+  assert.equal(vault.get(cmsSecret(data.installationId)),body.adminPassword);
   assert.equal((await app.inject({url:'/api/apps/devone-cms',headers})).json().installations.length,1);
  }finally{await app.close();await queue.stop();db.close();server.closeAllConnections();await new Promise(r=>server.close(r));await rm(root,{recursive:true,force:true});}
 });

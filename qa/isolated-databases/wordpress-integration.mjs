@@ -56,7 +56,7 @@ export async function runWordPressChecks(check,command){
   }
  });
  const databases=new DatabaseManager({registry:'/var/lib/devone-agent/databases',sites:()=>manager.list(),withSite:(id,work)=>manager.withReadySite(id,work)});
- const request=domain=>({id:'app_'+randomBytes(8).toString('hex'),databaseId:'db_'+randomBytes(8).toString('hex'),databasePassword:randomBytes(32).toString('hex'),adminPassword:randomBytes(32).toString('hex'),title:'DevOne QA WordPress',email:'qa@example.test',domain});
+ const request=domain=>({id:'app_'+randomBytes(8).toString('hex'),databaseId:'db_'+randomBytes(8).toString('hex'),databasePassword:randomBytes(32).toString('hex'),adminPassword:'Chosen!WP-Password-2026🔐',adminUsername:'wp_owner',title:'DevOne QA WordPress',email:'qa@example.test',domain});
  const deps={prepare:async()=>{},database:(site,b)=>databases.createForLockedSite({id:b.databaseId,siteId:site.id,engine:'mariadb',password:b.databasePassword},site.id)};
  const first=request('wordpress.example.test');let site;
  // Native fetch ignores an explicit Host header in supported Node releases.
@@ -77,7 +77,7 @@ export async function runWordPressChecks(check,command){
   assert.ok(report.checks.every(c=>c.status==='pass'||c.name==='transport.https'&&c.status==='blocked'),JSON.stringify(report.checks));
  });
  await check('wordpress.real-administrator-login',async()=>{
-  const result=await web('/wp-login.php',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded',Cookie:'wordpress_test_cookie=WP%20Cookie%20check'},body:new URLSearchParams({log:'devone_admin',pwd:first.adminPassword,'wp-submit':'Log In',testcookie:'1',redirect_to:'http://'+first.domain+'/wp-admin/'})});
+  const result=await web('/wp-login.php',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded',Cookie:'wordpress_test_cookie=WP%20Cookie%20check'},body:new URLSearchParams({log:first.adminUsername,pwd:first.adminPassword,'wp-submit':'Log In',testcookie:'1',redirect_to:'http://'+first.domain+'/wp-admin/'})});
   assert.equal(result.status,302);assert.ok(result.headers.get('location').includes('/wp-admin/'));
   const cookie=result.headers.getSetCookie().map(c=>c.split(';')[0]).join('; ');assert.ok(cookie.includes('wordpress_logged_in_'));
   const admin=await web('/wp-admin/',{headers:{Cookie:cookie}});assert.equal(admin.status,200);assert.ok((await admin.text()).includes('wpadminbar'));
