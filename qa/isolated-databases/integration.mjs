@@ -19,7 +19,7 @@ const sql=(file,args,input)=>new Promise((resolve,reject)=>{
  p.stdin.on('error',()=>{});p.stdin.end(input);
 });
 const root=(engine,query)=>engine==='mariadb'?sql('/usr/bin/mariadb',['--no-defaults','--user=root','--protocol=socket','--batch','--skip-column-names'],query):sql('/usr/sbin/runuser',['-u','postgres','--','/usr/bin/psql','-X','-w','--set=ON_ERROR_STOP=1','--dbname=postgres','--no-align','--tuples-only'],query);
-async function check(id,work){try{await work();report.checks.push({id,status:'pass'});console.log('PASS '+id);}catch{report.checks.push({id,status:'fail'});throw Error(id);}}
+async function check(id,work){try{await work();report.checks.push({id,status:'pass'});console.log('PASS '+id);}catch(error){console.log('FAIL '+id+' '+String(error?.code??error?.message??'unknown').slice(0,240));report.checks.push({id,status:'fail'});throw Error(id);}}
 let maria;
 async function startMaria(){
  maria=spawn('/usr/sbin/mariadbd',['--user=mysql','--bind-address=127.0.0.1','--socket=/run/mysqld/mysqld.sock'],{stdio:'ignore'});

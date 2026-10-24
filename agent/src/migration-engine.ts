@@ -7,7 +7,7 @@ import {softwareInstall} from './software.js';
 import {DatabaseSync,backup} from 'node:sqlite';
 import {spawn} from 'node:child_process';
 import {constants} from 'node:fs';
-import {mkdir,lstat,readFile,writeFile,rename,rm,readdir,chown,chmod,lchown,cp,copyFile,symlink,realpath,statfs,open,utimes,lutimes} from 'node:fs/promises';
+import {mkdir,lstat,readFile,writeFile,rename,rm,readdir,chown,chmod,lchown,cp,copyFile,symlink,realpath,statfs,open,utimes,lutimes,rmdir} from 'node:fs/promises';
 import {join,dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createHash,createPrivateKey,X509Certificate,randomUUID} from 'node:crypto';
@@ -226,7 +226,7 @@ export class MigrationEngine{
   try{
    await this.progress('restoring-sites-and-private-data');
    for(const source of metadata.sites){journal.pendingSite=source.id;await atomicMigrationJson(join(work,'apply.json'),journal);const site=await this.sites.migrationCreate(source);journal.sites.push(source.id);journal.pendingSite='';await atomicMigrationJson(join(work,'apply.json'),journal);
-    const path=join(this.config.base,site.id);await cp(join(work,'stage','payload','sites',site.id),path,{recursive:true,force:false,errorOnExist:true,verbatimSymlinks:true,filter:async(src,dst)=>{if(dst===path||dst===join(path,'public'))return true;return true;}});
+    const path=join(this.config.base,site.id),stagedHome=join(work,'stage','payload','sites',site.id);await rmdir(join(path,'public'));for(const name of await readdir(stagedHome))await cp(join(stagedHome,name),join(path,name),{recursive:true,force:false,errorOnExist:true,verbatimSymlinks:true});
     await this.restoreModes(inventory,'payload/sites/'+site.id,path,site.uid!,site.gid!);await chown(path,0,site.gid!);await chmod(path,0o750);
     if(site.webServer==='nginx'){await this.run('/usr/bin/setfacl',['-m','u:www-data:rx',path]);await this.run('/usr/bin/setfacl',['-R','-m','u:www-data:rX',join(path,'public')]);await this.run('/usr/bin/setfacl',['-m','d:u:www-data:rx',join(path,'public')]);}
    }
