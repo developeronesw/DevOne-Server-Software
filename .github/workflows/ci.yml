@@ -19,6 +19,7 @@ jobs:
           node-version: 22
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @devone/agent build
+      - run: pnpm --filter @devone/api build
       - run: bash scripts/qa-isolated-databases.sh
       - uses: actions/upload-artifact@v4
         if: always()

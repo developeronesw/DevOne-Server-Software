@@ -1,3 +1,4 @@
+import {registerMigrations} from './migrations.js';
 import {registerCms,cmsJobPayload} from "./cms.js";
 import {registerRecoveryBackups} from "./recovery-backups.js";
 import {registerWordPress,wordpressJobPayload} from "./wordpress.js";
@@ -295,6 +296,7 @@ registerWordPress(app,{db,vault,jobs,agentUrl,agentToken,requestUser,sameOrigin,
 registerAppInstalls(app,{jobs,requestUser,sameOrigin});
 registerSiteRoutes(app, { requestUser, sameOrigin, agentUrl, agentToken, jobs, audit });
 registerControlRoutes(app, {db,vault,agentUrl,agentToken,requestUser,sameOrigin,audit});
+registerMigrations(app,{db,agentUrl,agentToken,panelUrl,requestUser,sameOrigin,audit,stepUp:verifyOwnerStepUp});
 registerRecoveryBackups(app,{db,keyPath:process.env.DEVONE_MASTER_KEY_FILE??"/etc/devone/secrets.key",folder:process.env.DEVONE_BACKUP_DIR??"/var/lib/devone/backups",panelUrl,requestUser,sameOrigin,audit,stepUp:verifyOwnerStepUp});
 registerApplicationQa(app,{agentUrl,agentToken,requestUser,sameOrigin,audit});
 registerDisposableQaRoutes(app,{agentUrl,agentToken,requestUser,sameOrigin,audit});

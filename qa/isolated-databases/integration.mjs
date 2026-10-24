@@ -1,3 +1,5 @@
+import {runServerMigrationChecks} from './migration-server-integration.mjs';
+import {runMigrationChecks} from './migration-integration.mjs';
 import {runCmsChecks} from './cms-integration.mjs';
 // Runs as root ONLY inside the disposable, network-isolated QA image.
 import {execFile,spawn} from 'node:child_process';
@@ -17,7 +19,7 @@ const sql=(file,args,input)=>new Promise((resolve,reject)=>{
  p.stdin.on('error',()=>{});p.stdin.end(input);
 });
 const root=(engine,query)=>engine==='mariadb'?sql('/usr/bin/mariadb',['--no-defaults','--user=root','--protocol=socket','--batch','--skip-column-names'],query):sql('/usr/sbin/runuser',['-u','postgres','--','/usr/bin/psql','-X','-w','--set=ON_ERROR_STOP=1','--dbname=postgres','--no-align','--tuples-only'],query);
-async function check(id,work){try{await work();report.checks.push({id,status:'pass'});console.log('PASS '+id);}catch{report.checks.push({id,status:'fail'});throw Error(id);}}
+async function check(id,work){try{await work();report.checks.push({id,status:'pass'});console.log('PASS '+id);}catch(error){console.log('FAIL '+id+' '+String(error?.code??error?.message??'unknown').slice(0,240));report.checks.push({id,status:'fail'});throw Error(id);}}
 let maria;
 async function startMaria(){
  maria=spawn('/usr/sbin/mariadbd',['--user=mysql','--bind-address=127.0.0.1','--socket=/run/mysqld/mysqld.sock'],{stdio:'ignore'});
@@ -32,6 +34,8 @@ try{
  const {stdout:uid}=await command('/usr/bin/id',['-u','mysql']);const {stdout:gid}=await command('/usr/bin/id',['-g','mysql']);
  await chown('/run/mysqld',Number(uid.trim()),Number(gid.trim()));
  await startMaria();await command('/usr/bin/pg_ctlcluster',['16','main','start']);
+ await runServerMigrationChecks(check);
+ await runMigrationChecks(check,root);
  for(const engine of ['mariadb','postgresql']){
   const registry=await mkdtemp(join(tmpdir(),'devone-sql-'));
   const manager=new DatabaseManager({registry,sites:async()=>[{id:'site_0123456789abcdef',state:'ready'}]});
