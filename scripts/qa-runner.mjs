@@ -34,7 +34,7 @@ const pending = [
   { id: 'website-provisioning', status: 'partially_implemented', detail: 'Managed static/files/PHP/Node hosting, lifecycle, Certbot, starter apps, and scoped Python/container adapters exist; full product deployment/runtime parity and real VPS acceptance remain pending.' },
   { id: 'browser-workflows', status: 'not_verified', detail: 'Rendered dashboard navigation, forms and accessibility in a browser.' },
   { id: 'ubuntu-install-recovery', status: 'not_verified', detail: 'Fresh VPS install, TLS, systemd hardening, reboot recovery and upgrade/rollback.' },
-  { id: 'backup-restore', status: 'not_verified', detail: 'Restore database and encryption key together on a disposable VPS.' },
+  { id: 'backup-restore', status: 'not_verified', detail: 'Encrypted control database/key bundles and isolated restore drills exist; complete site/application/Agent/host recovery and disposable-VM activation remain unverified.' },
   { id: 'host-isolation', status: 'not_verified', detail: 'Real site UID/GID isolation and service mutation on a disposable VPS.' },
   { id: 'performance-load', status: 'not_verified', detail: 'Latency, concurrency and memory measurements on target VPS hardware.' },
   { id: 'security-center-host-acceptance', status: 'not_verified', detail: 'CrowdSec detection, real AppSec/WAF enforcement, proxy client-IP trust, false positives and rollback on a disposable VPS.' },

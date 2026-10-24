@@ -1,4 +1,5 @@
 import {ApplicationQa} from "./ApplicationQa";
+import {RecoveryBackups} from "./RecoveryBackups";
 import {DatabaseWorkspace} from "./DatabaseWorkspace";
 import {ServerWorkbench} from "./ServerWorkbench";
 import {AiActions} from "./AiActions";
@@ -17,7 +18,7 @@ type AiProvider = {id:"gemini"|"openai"|"deepseek"|"openclaw";label:string;secre
 const headings:Record<ControlView,{eyebrow:string;title:string;description:string}>={
   apps:{eyebrow:"APPLICATIONS",title:"Software & app runtimes",description:"Discover installed development runtimes and the host's software foundation."},
   databases:{eyebrow:"DATABASES",title:"Database engines",description:"Provision dedicated application databases and inspect installed engines."},
-  backups:{eyebrow:"RECOVERY",title:"Control-plane backups",description:"Create and download consistent SQLite snapshots of DevOne's control database."},
+  backups:{eyebrow:"RECOVERY",title:"Backups & recovery",description:"Protect panel records and saved secrets, then test an isolated restored copy."},
   monitoring:{eyebrow:"OBSERVABILITY",title:"Server monitoring",description:"Real server metrics and recent history from your connected agent."},
   qa:{eyebrow:"QUALITY ASSURANCE",title:"Automatic QA Center",description:"Non-destructive live checks, scheduled every six hours, with retained results."},
   ai:{eyebrow:"INTELLIGENCE",title:"DevOne AI",description:"Choose Gemini, OpenAI, DeepSeek, or a separately secured OpenClaw diagnostic agent."},
@@ -124,7 +125,7 @@ export function ControlWorkspace({view,role,onNavigate}:{view:ControlView;role:s
   async function createBackup(){
     if(!window.confirm("Create a snapshot of the DevOne control database only? Hosted website files, system configuration and the separate vault master key are NOT included."))return;
     setBusy(true);setError("");setNotice("");
-    try{await sendJson("/api/backups",{confirmed:true});setNotice("Encrypted control-database snapshot created.");await refresh();}
+    try{await sendJson("/api/backups",{confirmed:true});setNotice("Control-database snapshot created. The snapshot file itself is not encrypted.");await refresh();}
     catch(e){setError(e instanceof Error?e.message:"Backup failed.");}
     finally{setBusy(false);}
   }
@@ -192,6 +193,7 @@ export function ControlWorkspace({view,role,onNavigate}:{view:ControlView;role:s
       <article className="surface-card glass ops-panel-gap"><h2>Recent QA runs</h2><div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Time</th><th>Result</th><th>Passed checks</th></tr></thead><tbody>{qa.slice(0,12).map(x=><tr key={x.id}><td>{new Date(x.checkedAt).toLocaleString()}</td><td><span className={"state-chip "+(x.passed?"good":"bad")}>{x.passed?"Pass":"Fail"}</span></td><td>{x.results.filter(y=>y.status==="pass").length}/{x.results.length}</td></tr>)}</tbody></table></div></article>
     </>}
     {view==="backups"&&<>
+      {role==="owner"&&<RecoveryBackups/>}
       {role==="owner"?<><article className="surface-card glass"><div className="section-heading"><div><h2>Control database snapshots</h2><p>SQLite online backup API · Consistent snapshots without stopping the server</p></div><button className="primary-button" disabled={busy} onClick={()=>void createBackup()}>{busy?"Creating…":"Create snapshot"}</button></div><p className="ops-warning">{backupWarning||"Backups exclude hosted sites, system configurations and the vault encryption key. Do not treat them as full-server recovery images."}</p></article>
       <article className="surface-card glass ops-panel-gap"><div className="section-heading"><h2>Available snapshots</h2><small className="ops-subtext">Owner-only downloads</small></div><div className="ops-table-wrap"><table className="ops-table"><thead><tr><th>Created</th><th>Size</th><th>Action</th></tr></thead><tbody>{backups.map(b=><tr key={b.id}><td>{new Date(b.createdAt).toLocaleString()}</td><td>{(b.bytes/1048576).toFixed(2)} MiB</td><td><a className="ops-download" href={"/api/backups/"+b.id+"/download"}>Download snapshot ↓</a></td></tr>)}</tbody></table>{!backups.length&&<p className="ops-empty">No snapshots yet.</p>}</div></article></>:<article className="surface-card glass"><h2>Owner permission required</h2><p>Backups are restricted to the Owner account.</p></article>}
     </>}

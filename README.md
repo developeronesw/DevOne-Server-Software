@@ -128,3 +128,5 @@ restart recovery and master-key backup requirements.
 ## Automated QA
 
 Run `pnpm qa` for the automated regression checks and saved JSON evidence. Run `pnpm qa:release` for the stricter release gate, which remains blocked while unfinished features and VPS verification are pending. See [QA Center](docs/QA-CENTER.md).
+
+Encrypted control-data recovery bundles and isolated restore drills are documented in [CONTROL-RECOVERY.md](docs/CONTROL-RECOVERY.md). They include the panel database and vault key; website/application/host recovery remains separate.
