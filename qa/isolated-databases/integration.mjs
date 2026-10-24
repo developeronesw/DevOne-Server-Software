@@ -1,3 +1,5 @@
+import {runServerMigrationChecks} from './migration-server-integration.mjs';
+import {runMigrationChecks} from './migration-integration.mjs';
 import {runCmsChecks} from './cms-integration.mjs';
 // Runs as root ONLY inside the disposable, network-isolated QA image.
 import {execFile,spawn} from 'node:child_process';
@@ -32,6 +34,8 @@ try{
  const {stdout:uid}=await command('/usr/bin/id',['-u','mysql']);const {stdout:gid}=await command('/usr/bin/id',['-g','mysql']);
  await chown('/run/mysqld',Number(uid.trim()),Number(gid.trim()));
  await startMaria();await command('/usr/bin/pg_ctlcluster',['16','main','start']);
+ await runServerMigrationChecks(check);
+ await runMigrationChecks(check,root);
  for(const engine of ['mariadb','postgresql']){
   const registry=await mkdtemp(join(tmpdir(),'devone-sql-'));
   const manager=new DatabaseManager({registry,sites:async()=>[{id:'site_0123456789abcdef',state:'ready'}]});

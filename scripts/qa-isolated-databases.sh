@@ -24,11 +24,12 @@ cleanup() {
 }
 trap cleanup EXIT
 # Allowlist compiled Agent modules and the two trusted WordPress helpers.
-mkdir -p "$context/agent/dist" "$context/scripts" "$context/distributions/devone-cms-local"
+mkdir -p "$context/agent/dist" "$context/apps/api/dist" "$context/scripts" "$context/distributions/devone-cms-local"
 cp agent/dist/*.js "$context/agent/dist/"
+cp apps/api/dist/recovery.js apps/api/dist/vault.js apps/api/dist/mfa.js "$context/apps/api/dist/"
 cp distributions/devone-cms-local/*.tar.gz "$context/distributions/devone-cms-local/"
-cp scripts/cms-extract.py scripts/wordpress-extract.py scripts/wordpress-install.php "$context/scripts/"
-cp qa/isolated-databases/cms-integration.mjs qa/isolated-databases/wordpress-integration.mjs "$context/"
+cp scripts/migration-archive.py scripts/cms-extract.py scripts/wordpress-extract.py scripts/wordpress-install.php "$context/scripts/"
+cp qa/isolated-databases/migration-server-integration.mjs qa/isolated-databases/migration-integration.mjs qa/isolated-databases/cms-integration.mjs qa/isolated-databases/wordpress-integration.mjs "$context/"
 printf '{"type":"module"}\n' > "$context/package.json"
 cp qa/isolated-databases/Dockerfile qa/isolated-databases/integration.mjs "$context/"
 cp agent/dist/databases.js "$context/"
@@ -43,7 +44,7 @@ if [[ "$status" -eq 0 ]]; then
   node --input-type=module - "$report" <<'JS'
 import {readFileSync} from 'node:fs';
 const r=JSON.parse(readFileSync(process.argv[2],'utf8'));
-if(r.scope!=='isolated-real-sql'||r.productionReady!==false||r.checks.length!==36||r.checks.some(c=>c.status!=='pass'))process.exit(1);
+if(r.scope!=='isolated-real-sql'||r.productionReady!==false||r.checks.length!==48||r.checks.some(c=>c.status!=='pass'))process.exit(1);
 JS
 fi
 exit "$status"

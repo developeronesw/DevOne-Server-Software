@@ -20,11 +20,11 @@ apt-get update -y
 log 'Installing web server, TLS, build, Git and security prerequisites...'
 apt-get install -y --no-install-recommends \
   ca-certificates curl gnupg git nginx certbot python3-certbot-nginx \
-  python3 build-essential util-linux openssl acl
+  python3 build-essential util-linux openssl acl procps
 
 # systemd and user-management tools are part of our supported Ubuntu server
 # baseline. Detect unexpectedly stripped images before changing DevOne state.
-for tool in systemctl useradd getent flock nginx certbot git curl python3 openssl setfacl; do
+for tool in systemctl useradd getent flock nginx certbot git curl python3 openssl setfacl pgrep; do
   command -v "$tool" >/dev/null 2>&1 || fail "Missing required host executable: $tool"
 done
 

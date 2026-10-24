@@ -17,3 +17,8 @@ COPY wordpress-integration.mjs ./wordpress-integration.mjs
 RUN php8.3 -l scripts/wordpress-install.php && python3 -m py_compile scripts/wordpress-extract.py && node --input-type=module -e "import {ensureWordPressArtifact} from './agent/dist/wordpress-artifact.js'; await ensureWordPressArtifact();"
 COPY cms-integration.mjs ./cms-integration.mjs
 COPY distributions ./distributions
+
+COPY migration-integration.mjs ./migration-integration.mjs
+
+COPY apps/api/dist ./apps/api/dist
+COPY migration-server-integration.mjs ./migration-server-integration.mjs

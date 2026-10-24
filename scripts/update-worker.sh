@@ -16,6 +16,7 @@ write_state() {
   chmod 600 "$tmp"
   mv -f "$tmp" "$STATE"
 }
+[[ ! -e /var/lib/devone-migration.guard && ! -d /var/lib/devone-agent/migrations/lock ]] || { write_state failed; exit 1; }
 write_state running
 fail_status(){
   local rc=$?

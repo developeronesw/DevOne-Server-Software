@@ -1,3 +1,7 @@
+import {Migrations} from './migrations.js';
+import {open} from 'node:fs/promises';
+import {constants} from 'node:fs';
+import type {IncomingMessage,ServerResponse} from 'node:http';
 import {wordpressInput} from "./wordpress-release.js";
 import {prepareWordPress} from "./wordpress.js";
 import {DatabaseManager} from "./databases.js";
@@ -26,12 +30,31 @@ const sites = new SiteManager({registry:'/var/lib/devone-agent',base:'/home/devo
 const disposableQa=new DisposableHostQa(sites);
 const applicationQa=new ApplicationQa(sites);
 const databases=new DatabaseManager({registry:'/var/lib/devone-agent/databases',sites:()=>sites.list(),withSite:(id,work)=>sites.withReadySite(id,work)});
-const server = createServer(async (request, response) => {
+let activeHostOperations=0;
+const migrations=new Migrations(undefined,()=>activeHostOperations);
+const server=createServer(async(request,response)=>{
+ const counted=Boolean(token&&request.headers.authorization===`Bearer ${token}`&&request.method==='POST'&&!request.url?.startsWith('/v1/migrations/'));
+ if(counted&&migrations.locked()){response.writeHead(409,{'content-type':'application/json'});response.end(JSON.stringify({error:'migration_maintenance'}));return;}
+ if(counted)activeHostOperations++;
+ try{await handle(request,response);}catch{if(!response.headersSent){response.writeHead(503,{'content-type':'application/json'});response.end(JSON.stringify({error:'agent_unavailable'}));}else response.destroy();}
+ finally{if(counted)activeHostOperations--;}
+});
+async function handle(request:IncomingMessage,response:ServerResponse){
   if (!token || request.headers.authorization !== `Bearer ${token}`) {
     response.writeHead(401, { "content-type": "application/json" });
     response.end(JSON.stringify({ error: "unauthorized" })); return;
   }
   const send = (code: number, value: unknown) => { response.writeHead(code, { "content-type": "application/json" }); response.end(JSON.stringify(value)); };
+  if(request.method==='GET'&&request.url==='/v1/migrations/status'){try{send(200,await migrations.state());}catch{send(503,{error:'migration_status_unavailable'});}return;}
+  if(request.method==='GET'&&request.url?.startsWith('/v1/migrations/exports/')){
+   try{const id=request.url.slice('/v1/migrations/exports/'.length),item=await migrations.download(id),file=await open(item.path,constants.O_RDONLY|constants.O_NOFOLLOW);response.writeHead(200,{'Content-Type':'application/octet-stream','Content-Length':item.bytes,'Cache-Control':'no-store'});const stream=file.createReadStream();stream.on('error',()=>response.destroy());response.on('close',()=>stream.destroy());stream.pipe(response);}catch{send(404,{error:'migration_export_unavailable'});}return;
+  }
+  if(request.method==='POST'&&request.url?.startsWith('/v1/migrations/')){
+   try{let raw='';request.setEncoding('utf8');for await(const part of request){raw+=part;if(Buffer.byteLength(raw)>6*1024*1024){send(413,{error:'body_too_large'});return;}}const body=JSON.parse(raw);
+    const result=request.url==='/v1/migrations/start'?await migrations.start(body):request.url==='/v1/migrations/upload/start'&&body&&Object.keys(body).length===1?await migrations.createUpload(body.bytes):request.url==='/v1/migrations/upload/chunk'?await migrations.uploadChunk(body):request.url==='/v1/migrations/delete'?await migrations.remove(body):null;
+    if(result===null){send(400,{error:'migration_request_invalid'});return;}send(200,result);
+   }catch(e){const code=e instanceof Error&&/^migration_[a-z_]+$/.test(e.message)?e.message:'migration_request_failed';send(code.includes('busy')||code.includes('conflict')?409:code.includes('invalid')?400:503,{error:code});}return;
+  }
   if(request.method==='GET'&&request.url==='/v1/qa/applications'){
     try{send(200,await applicationQa.list());}catch{send(503,{error:'application_qa_unavailable'});}return;
   }
@@ -231,7 +254,7 @@ const server = createServer(async (request, response) => {
   if (request.method !== "GET" || !["/v1/health", "/v1/metrics"].includes(request.url ?? "")) { send(404, { error: "not_found" }); return; }
   response.writeHead(200, { "content-type": "application/json" });
   response.end(JSON.stringify(request.url === "/v1/metrics" ? { ok: true, hostname: hostname(), cpuCount: cpus().length, load: loadavg(), memoryTotal: totalmem(), memoryFree: freemem(), uptime: uptime() } : { ok: true, service: "devone-agent", version }));
-});
+}
 
 server.listen(port, "127.0.0.1", () => {
   console.log(`DevOne Agent listening on 127.0.0.1:${port}`);

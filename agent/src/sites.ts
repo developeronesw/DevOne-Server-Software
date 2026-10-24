@@ -32,7 +32,7 @@ export function siteInput(input: unknown): { domain: string; webServer: 'nginx' 
   return { domain, webServer: body.webServer, siteType:siteType as 'static'|'files'|'php'|'node'|'python'|'container',
     ...((siteType==='php'||siteType==='node'||siteType==='python')?{runtimeVersion:version as '8.3'|'22'|'3.12'}:{}) };
 }
-function validRecord(site: Site) {
+export function validRecord(site: Site) {
   return (site.application===undefined||( /^app_[a-f0-9]{16}$/.test(site.application.id)&&['wordpress','devone-cms-v2'].includes(site.application.appId)&&/^\d+\.\d+\.\d+(?:-[a-z0-9.]+)?$/.test(site.application.version)&&(site.application.appId==='wordpress'?/^db_[a-f0-9]{16}$/.test(site.application.databaseId??''):site.application.databaseId===undefined)&&['database','installing','publishing','verifying','complete'].includes(site.application.stage))) && /^site_[a-f0-9]{16}$/.test(site.id) && site.user === `dvs_${site.id.slice(5)}` && validateDomain(site.domain) === site.domain && ['nginx','none'].includes(site.webServer) && (site.siteType === undefined || (site.siteType === 'static' && site.webServer === 'nginx') || (site.siteType === 'files' && site.webServer === 'none') || (['php','node','python','container'].includes(site.siteType) && site.webServer === 'nginx')) && (site.siteType === 'php' ? site.runtimeVersion === '8.3' : site.siteType === 'node' ? site.runtimeVersion === '22' : site.siteType === 'python' ? site.runtimeVersion === '3.12' : site.runtimeVersion === undefined) && ['provisioning','ready','disabled','updating','needs_inspection'].includes(site.state) && (site.aliases === undefined || Array.isArray(site.aliases) && site.aliases.length <= 20 && site.aliases.every(alias => validateDomain(alias) === alias)) && (site.revision === undefined || Number.isSafeInteger(site.revision) && site.revision >= 1) && (site.tls === undefined || typeof site.tls === 'boolean') && (site.certificateIssued === undefined || typeof site.certificateIssued === 'boolean') && (site.configHash === undefined || /^[a-f0-9]{64}$/.test(site.configHash)) && (site.waf === undefined || isValidWaf(site.waf)) && (site.appActive === undefined || typeof site.appActive === 'boolean') && (site.uid === undefined || Number.isInteger(site.uid) && site.uid >= 1000) && (site.gid === undefined || Number.isInteger(site.gid) && site.gid >= 1000);
 }
 export class SiteManager {
@@ -73,6 +73,52 @@ export class SiteManager {
     const sites = await this.registry();
     // In-progress provisioning is never replayed automatically after a restart.
     return Promise.all(sites.map(async site => ({ ...site, siteType: site.siteType ?? (site.webServer === 'nginx' ? 'static' : 'files'), appActive:['node','python'].includes(site.siteType??'')?await this.command('systemctl',['is-active',nodeUnitName(site.id)]).then(v=>v.trim()==='active').catch(()=>false):site.siteType==='container'?await this.containerRunning(site).catch(()=>false):undefined, state: ['provisioning','updating'].includes(site.state) && this.runningSite !== site.id ? 'needs_inspection' : site.state })));
+  }
+  // Used only by the root migration worker while the global maintenance lock is held.
+  async migrationInventory(){
+    await this.queue;await Promise.all([...this.fileQueues.values()].map(p=>p.catch(()=>{})));
+    const sites=await this.list();
+    for(const site of sites){
+      if(!['ready','disabled'].includes(site.state)||site.application&&site.application.stage!=='complete')throw Error('migration_site_incomplete');
+      if(site.webServer==='nginx'){
+        const config=await readFile(join(this.options.nginx,`devone-${site.id}.conf`),'utf8');
+        if(this.digest(config)!==site.configHash||config!==this.configuration(site))throw Error('migration_custom_configuration');
+      }
+      const expected=site.siteType==='php'?phpPoolConfig(site,this.options.base):site.siteType==='node'?nodeUnitConfig(site,this.options.base):site.siteType==='python'?pythonUnitConfig(site,this.options.base):null;
+      if(expected!==null&&await readFile(site.siteType==='php'?phpPoolPath(site.id,this.options.phpPoolDir):nodeUnitPath(site.id,this.options.nodeUnitDir),'utf8')!==expected)throw Error('migration_custom_configuration');
+    }
+    return sites;
+  }
+  migrationCreate(record:Site){
+    if(!validRecord(record)||!['ready','disabled'].includes(record.state))return Promise.reject(Error('invalid_migration_site'));
+    return this.serial(()=>this.provision(siteInput(record),record),record.id);
+  }
+  migrationActivate(record:Site,localOnly=false){
+    if(!validRecord(record))return Promise.reject(Error('invalid_migration_site'));
+    return this.serial(async()=>{
+      const records=await this.registry(),site=records.find(s=>s.id===record.id);
+      if(!site||site.state!=='disabled')throw Error('migration_target_changed');
+      Object.assign(site,{aliases:record.aliases??[],waf:record.waf,application:record.application,tls:record.tls,certificateIssued:record.certificateIssued,state:record.state,createdAt:record.createdAt});
+      if(site.siteType==='node'||site.siteType==='python')await this.writeConfig(nodeUnitPath(site.id,this.options.nodeUnitDir),site.siteType==='node'?nodeUnitConfig(site,this.options.base):pythonUnitConfig(site,this.options.base));
+      if(site.webServer==='nginx'){const base=this.configuration(site),config=localOnly?base.replaceAll(' listen 80;',' listen 127.0.0.1:80;').replaceAll(' listen [::]:80;','').replaceAll(' listen 443 ssl;',' listen 127.0.0.1:443 ssl;').replaceAll(' listen [::]:443 ssl;',''):base;await this.writeConfig(join(this.options.nginx,`devone-${site.id}.conf`),config);site.configHash=this.digest(config);}
+      await this.save(records);await this.command('nginx',['-t']);await this.command('systemctl',['reload','nginx']);
+      if(site.siteType==='php'){await this.command('php-fpm8.3',['-t']);await this.command('systemctl',['reload','php8.3-fpm']);}
+      if(['node','python','container'].includes(site.siteType??'')&&record.appActive){await this.command('systemctl',['daemon-reload']);const disabled=site.state==='disabled';if(disabled){site.state='ready';await this.save(records);}try{await this.lifecycle({siteId:site.id,action:'start',expectedRevision:site.revision??1});}finally{if(disabled){site.state='disabled';await this.save(records);}}}
+      return site;
+    },record.id);
+  }
+  migrationPublish(source:Site[]){
+    return this.serial(async()=>{
+      const records=await this.registry();
+      for(const original of source){
+        const site=records.find(s=>s.id===original.id);if(!site||!validRecord(original))throw Error('migration_target_changed');
+        if(site.webServer!=='nginx')continue;
+        const path=join(this.options.nginx,`devone-${site.id}.conf`);
+        if(this.digest(await readFile(path,'utf8'))!==site.configHash)throw Error('migration_target_changed');
+        const next=this.configuration(site);await this.writeConfig(path,next);site.configHash=this.digest(next);
+      }
+      await this.command('nginx',['-t']);await this.command('systemctl',['reload','nginx']);await this.save(records);
+    });
   }
   // Read-only runtime acceptance: report actual host artifacts and service state.
   // A Node site without server.mjs is configured but not yet deployed; it is not
@@ -294,7 +340,7 @@ export class SiteManager {
     return operation.finally(()=>{if(siteId&&this.fileQueues.get(siteId)===operation)this.fileQueues.delete(siteId);});
   }
   create(input: unknown) { return this.serial(()=>this.provision(input)); }
-  private async provision(input: unknown) {
+  private async provision(input: unknown,restore?:Site) {
     const {domain,webServer,siteType,runtimeVersion} = siteInput(input);
     const sites = await this.registry();
     if (domain === this.options.panelDomain || sites.some(site => [site.domain,...(site.aliases ?? [])].includes(domain))) throw new Error('domain_in_use');
@@ -321,15 +367,17 @@ export class SiteManager {
       const names = [...config.matchAll(/\bserver_name\s+([^;]+);/g)].flatMap(match => match[1].split(/\s+/).map(name => name.replace(/^['"]|['"]$/g,'')));
       if (names.some(name => name === domain || name.startsWith('~') || name.startsWith('$') || (name.startsWith('*.') && domain.endsWith(name.slice(1))) || (name.startsWith('.') && (domain === name.slice(1) || domain.endsWith(name))) || (name.endsWith('.*') && domain.startsWith(name.slice(0,-1))))) throw new Error('domain_in_use');
     }
-    let id = `site_${randomBytes(8).toString('hex')}`;
+    let id = restore?.id??`site_${randomBytes(8).toString('hex')}`;
+    if(restore&&sites.some(s=>s.id===id))throw Error('migration_target_changed');
     if(['node','python','container'].includes(siteType)){
       let retries=0;
       while(sites.some(other=>['node','python','container'].includes(other.siteType??'')&&nodeSitePort(other.id)===nodeSitePort(id))){
+        if(restore)throw Error('site_port_unavailable');
         if(++retries>20)throw Error('site_port_unavailable');
         id=`site_${randomBytes(8).toString('hex')}`;
       }
     }
-    const site: Site = {id,domain,user:`dvs_${id.slice(5)}`,webServer,siteType,...(runtimeVersion?{runtimeVersion}:{}),state:'provisioning',createdAt:new Date().toISOString(),aliases:[],revision:1};
+    const site: Site = {id,domain,user:`dvs_${id.slice(5)}`,webServer,siteType,...(runtimeVersion?{runtimeVersion}:{}),state:'provisioning',createdAt:restore?.createdAt??new Date().toISOString(),aliases:restore?.aliases??[],revision:1,...(restore?{waf:restore.waf,application:restore.application}:{})};
     this.runningSite = id;
     sites.push(site); await this.save(sites);
     let ownedConfig: string | undefined;
@@ -366,11 +414,11 @@ export class SiteManager {
         // Exclusive creation never replaces host-owned configurations.
         const config = await open(destination,constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW,0o644);
         ownedConfig = destination;
-        try { const content = this.configuration(site); await config.writeFile(content); await config.sync(); site.configHash = this.digest(content); } finally { await config.close(); }
+        try { const content = this.configuration(restore?{...site,state:'disabled'}:site); await config.writeFile(content); await config.sync(); site.configHash = this.digest(content); } finally { await config.close(); }
         await this.command('nginx',['-t']); await this.command('systemctl',['reload','nginx']);
       }
-      site.state = 'ready'; await this.save(sites); return site;
-    } catch {
+      site.state = restore?'disabled':'ready'; await this.save(sites); return site;
+    } catch (cause) {
       if(runtimeConfig){
         try{
           await rename(runtimeConfig,join(this.options.registry,`${id}.runtime-quarantine`));
@@ -383,7 +431,7 @@ export class SiteManager {
       }
       site.state = 'needs_inspection'; await this.save(sites);
       // Preserve partial resources for inspection; never delete unknown host data.
-      throw new Error('site_provisioning_requires_inspection');
+      throw new Error('site_provisioning_requires_inspection',{cause});
     }
   }
   private digest(content: string) { return createHash('sha256').update(content).digest('hex'); }
