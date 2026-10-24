@@ -1,7 +1,7 @@
 import {test} from "node:test";
 import assert from "node:assert/strict";
 import {createServer} from "node:http";
-import {DisposableHostQa,probeQaWebsite} from "../agent/dist/disposable-qa.js";
+import {DisposableHostQa,probeQaWebsite,waitForQaWebsite} from "../agent/dist/disposable-qa.js";
 import {pythonUnitConfig,dockerRunArgs,managedContainerImage,runtimeNginxLocation} from "../agent/dist/site-runtimes.js";
 const site={id:"site_0123456789abcdef",user:"dvs_0123456789abcdef",siteType:"python",runtimeVersion:"3.12"};
 test("Python 3.12 adapter starts isolated systemd app on private loopback port",()=>{
@@ -65,7 +65,8 @@ test("disposable QA creates, verifies, and deletes only site IDs it created",asy
  const probe=async(domain,marker)=>{
   const site=[...sites.values()].find(x=>x.domain===domain);
   assert.ok(site);
-  const found=site.fixture.match(/DEVONE_QA_[0-9a-f]+_(?:static|php|node|python|container)/)?.[0];
+  if(site.siteType==="php")assert.equal(site.fixture.includes(marker),false,"PHP source must not satisfy execution verification");
+  const found=site.fixture.replaceAll("'.'","").match(/DEVONE_QA_[0-9a-f]+_(?:static|php|node|python|container)/)?.[0];
   return {status:200,matched:found===marker};
  };
  try{
@@ -119,4 +120,26 @@ test("missing Docker blocks QA without claiming an uncreated site needs cleanup"
  assert.equal(report.state,"failed");
  const result=report.results.find(x=>x.name==="site.container");
  assert.equal(result.status,"blocked");assert.equal(result.cleaned,undefined);assert.equal(result.siteId,undefined);
+});
+
+test("readiness reconnects through stale workers and transient gateway errors, but rejects persistent wrong content",async()=>{
+ const counts=new Map(),sockets=new Set();
+ const server=createServer((req,res)=>{
+  const host=req.headers.host,n=(counts.get(host)??0)+1;counts.set(host,n);sockets.add(req.socket);
+  if(host==="qa-eventual.invalid"&&n===1){res.end("old default website");return;}
+  if(host==="qa-eventual.invalid"&&n===2){res.writeHead(502);res.end("starting");return;}
+  if(host==="qa-eventual.invalid")res.end("expected-marker");else res.end("wrong website");
+ });
+ await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));
+ try{
+  const probe=(d,m,t)=>probeQaWebsite(d,m,server.address().port,t);
+  const healthy=await waitForQaWebsite("qa-eventual.invalid","expected-marker",probe,1000,10);
+  assert.deepEqual(healthy,{status:200,matched:true,attempts:3});
+  const failed=await waitForQaWebsite("qa-wrong.invalid","expected-marker",probe,100,10);
+  assert.equal(failed.status,200);assert.equal(failed.matched,false);assert.ok(failed.attempts>1);
+  assert.equal(sockets.size,[...counts.values()].reduce((a,b)=>a+b,0),"each received readiness request must use a fresh connection");
+  let tries=0;
+  const offline=await waitForQaWebsite("qa-offline.invalid","expected-marker",async()=>{if(++tries===1)throw Error("ECONNREFUSED");return {status:200,matched:true};},1000,10);
+  assert.equal(offline.attempts,2);
+ }finally{await new Promise(resolve=>server.close(resolve));}
 });

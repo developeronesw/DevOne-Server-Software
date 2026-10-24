@@ -43,7 +43,7 @@ if [[ "$status" -eq 0 ]]; then
   node --input-type=module - "$report" <<'JS'
 import {readFileSync} from 'node:fs';
 const r=JSON.parse(readFileSync(process.argv[2],'utf8'));
-if(r.scope!=='isolated-real-sql'||r.productionReady!==false||r.checks.length!==32||r.checks.some(c=>c.status!=='pass'))process.exit(1);
+if(r.scope!=='isolated-real-sql'||r.productionReady!==false||r.checks.length!==34||r.checks.some(c=>c.status!=='pass'))process.exit(1);
 JS
 fi
 exit "$status"
