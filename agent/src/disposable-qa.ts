@@ -1,4 +1,5 @@
 import {randomBytes,randomUUID} from "node:crypto";
+import {request} from "node:http";
 import {execFile} from "node:child_process";
 import {promisify} from "node:util";
 import type {SiteManager} from "./sites.js";
@@ -17,10 +18,25 @@ const fixtures={
 } as const;
 const versions={php:"8.3",node:"22",python:"3.12"} as const;
 const types=["static","files","php","node","python","container"] as const;
+// Use node:http: built-in fetch can replace Host with the URL authority.
+// Connect only to loopback; never follow redirects or retain response bodies.
+export function probeQaWebsite(domain:string,marker:string,port=80):Promise<{status:number;matched:boolean}>{
+ return new Promise((resolve,reject)=>{
+  const req=request({hostname:"127.0.0.1",port,path:"/",method:"GET",headers:{Host:domain},agent:false},res=>{
+   const chunks:Buffer[]=[];let size=0;
+   res.on("data",(chunk:Buffer)=>{size+=chunk.length;if(size>65536)req.destroy(Error("qa_response_too_large"));else chunks.push(chunk);});
+   res.on("error",reject);
+   res.on("end",()=>resolve({status:res.statusCode??0,matched:Buffer.concat(chunks).toString("utf8").includes(marker)}));
+  });
+  const deadline=setTimeout(()=>req.destroy(Error("qa_http_timeout")),10000);
+  req.on("close",()=>clearTimeout(deadline));
+  req.on("error",reject);req.end();
+ });
+}
 export class DisposableHostQa {
  private current:DisposableStatus|null=null;
  private busy=false;
- constructor(private sites:SiteManager){}
+ constructor(private sites:SiteManager,private probe=probeQaWebsite){}
  status(){return this.current?{...this.current,results:this.current.results.map(x=>({...x}))}:{state:"not_run",results:[],warning:"Disposable QA has never run."};}
  start(){
   if(this.busy)throw Error("qa_disposable_busy");
@@ -36,7 +52,7 @@ export class DisposableHostQa {
   const stamp=randomBytes(8).toString("hex");
   for(const type of types){
    let created:{id:string;domain:string;revision?:number}|null=null;
-   let pass=false,detail="unverified",cleaned=false;
+   let pass=false,detail="unverified",cleaned=false,blocked=false;
    const marker="DEVONE_QA_"+stamp+"_"+type;
    try{
     const domain="qa-"+stamp+"-"+type+".invalid";
@@ -52,13 +68,14 @@ export class DisposableHostQa {
       if(type==="node"||type==="python"||type==="container"){
         await this.sites.action({siteId:created.id,action:"start",expectedRevision:created.revision??1});
       }
-      const response=await fetch("http://127.0.0.1/",{
-        headers:{Host:domain},signal:AbortSignal.timeout(10000),redirect:"manual"});
-      const body=await response.text();
-      pass=response.status===200&&body.includes(marker);
+      const response=await this.probe(domain,marker);
+      pass=response.status===200&&response.matched;
+      if(!pass)detail=`Unexpected website response: HTTP ${response.status}; QA marker ${response.matched?"present":"missing"}.`;
     }
-    detail=pass?"Created isolated site, wrote source, verified real response/content.":"Unexpected website response or file contents.";
+    if(pass)detail="Created isolated site, wrote source, verified real response/content.";
+    else if(detail==="unverified")detail="Unexpected file contents.";
    }catch(e){
+    blocked=!created&&e instanceof Error&&/^(php83_runtime_not_running|node22_runtime_not_available|python312_runtime_not_available|docker_runtime_not_running)$/.test(e.message);
     detail=e instanceof Error&&/^(php83_runtime_not_running|node22_runtime_not_available|python312_runtime_not_available|docker_runtime_not_running|site_provisioning_requires_inspection|runtime_entry_missing|runtime_not_healthy)$/.test(e.message)?e.message:"Website creation, execution, or HTTP check failed; inspect QA sites and host logs.";
    }finally{
     if(created){
@@ -67,7 +84,7 @@ export class DisposableHostQa {
         cleaned=true;
       }catch{detail+=" Cleanup failed; site preserved for manual recovery.";cleaned=false;}
     }
-    status.results.push({name:"site."+type,status:pass&&cleaned?"pass":"fail",detail,siteId:created?.id,cleaned});
+    status.results.push({name:"site."+type,status:blocked?"blocked":pass&&cleaned?"pass":"fail",detail,siteId:created?.id,...(created||!blocked?{cleaned}:{})});
    }
   }
   // Package installation is isolated INSIDE a disposable Docker container. Host
