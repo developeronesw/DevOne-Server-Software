@@ -5,6 +5,7 @@ import {registerDiagnostics} from "./diagnostics.js";
 import {registerAppInstalls} from "./app-installs.js";
 import { registerSiteRoutes } from "./sites.js";
 import { registerControlRoutes } from "./control.js";
+import {registerApplicationQa} from "./application-qa.js";
 import {registerDisposableQaRoutes} from "./disposable-qa.js";
 import { registerSecurityRoutes } from "./security.js";
 import {registerSoftwareRoutes} from "./software.js";
@@ -293,6 +294,7 @@ registerWordPress(app,{db,vault,jobs,agentUrl,agentToken,requestUser,sameOrigin,
 registerAppInstalls(app,{jobs,requestUser,sameOrigin});
 registerSiteRoutes(app, { requestUser, sameOrigin, agentUrl, agentToken, jobs, audit });
 registerControlRoutes(app, {db,vault,agentUrl,agentToken,requestUser,sameOrigin,audit});
+registerApplicationQa(app,{agentUrl,agentToken,requestUser,sameOrigin,audit});
 registerDisposableQaRoutes(app,{agentUrl,agentToken,requestUser,sameOrigin,audit});
 registerSecurityRoutes(app, {db,agentUrl,agentToken,requestUser,sameOrigin,audit});
 registerSoftwareRoutes(app,{agentUrl,agentToken,requestUser,sameOrigin,audit,jobs});

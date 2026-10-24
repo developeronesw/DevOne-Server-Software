@@ -80,6 +80,8 @@ test('authentication, setup, origin, metrics, logout and rate-limit boundaries',
     assert.equal(catalog.items[1].id,'wordpress');
     assert.equal(catalog.installAvailable,false);
     assert.equal((await fetch(url+'/api/qa/disposable')).status,401);
+    assert.equal((await fetch(url+'/api/qa/applications')).status,401);
+    assert.equal((await post('/api/qa/applications/check',{})).status,401);
     assert.equal((await post('/api/qa/disposable/start',{})).status,401);
     assert.equal((await fetch(url+'/api/software/capabilities')).status,401);
     assert.equal((await fetch(url+'/api/software/status')).status,401);
@@ -172,6 +174,8 @@ test('authentication, setup, origin, metrics, logout and rate-limit boundaries',
     assert.equal((await secureGet('/api/auth/mfa/status')).status,403);
     assert.equal((await secureGet('/api/security')).status,403);
     assert.equal((await secureGet('/api/qa/disposable')).status,403);
+    assert.equal((await secureGet('/api/qa/applications')).status,403);
+    assert.equal((await securePost('/api/qa/applications/check',{siteId:'site_0123456789abcdef'})).status,403);
     assert.equal((await securePost('/api/qa/disposable/start',{confirmed:true,password:credentials.password})).status,403);
     assert.equal((await secureGet('/api/software/capabilities')).status,403);
     assert.equal((await secureGet('/api/software/status')).status,403);

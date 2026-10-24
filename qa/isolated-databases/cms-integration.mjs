@@ -6,6 +6,7 @@ import {randomBytes} from 'node:crypto';
 import {request as httpRequest} from 'node:http';
 import {SiteManager} from './agent/dist/sites.js';
 import {nodeSitePort} from './agent/dist/site-runtimes.js';
+import {ApplicationQa} from './agent/dist/application-qa.js';
 import {cmsRelease} from './agent/dist/cms-release.js';
 export async function runCmsChecks(check,command){
  await command('/usr/sbin/nginx',[]);const processes=new Map();
@@ -36,6 +37,11 @@ export async function runCmsChecks(check,command){
  const secured=(path,method='GET',body,extra={})=>fetch('http://127.0.0.1:'+nodeSitePort(site.id)+path,{method,headers:{origin:'https://'+b.domain,'x-forwarded-proto':'https','content-type':'application/json',...extra},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(15000)});
  try{
   await check('cms.new-site-install-and-nginx',async()=>{const result=await manager.installCms(b);site=(await manager.list()).find(s=>s.id===result.siteId);assert.equal(site.state,'ready');assert.equal(site.application.stage,'complete');assert.equal(site.appActive,true);const health=await web('/api/health');assert.equal(health.status,200);assert.equal((await health.json()).version,cmsRelease.version);assert.ok((await(await web('/')).text()).includes('/assets/'));});
+  await check('cms.read-only-acceptance',async()=>{
+   const report=await new ApplicationQa(manager).check({siteId:site.id});
+   assert.equal(report.scope,'installed-application-read-only');assert.equal(report.productionReady,false);assert.equal(report.state,'blocked');
+   assert.ok(report.checks.every(c=>c.status==='pass'||c.name==='transport.https'&&c.status==='blocked'),JSON.stringify(report.checks));
+  });
   await check('cms.private-state-and-source-isolation',async()=>{const root='/home/devone-sites/'+site.id;for(const name of ['devone.sqlite','devone.secret']){const s=await stat(root+'/data/'+name);assert.equal(s.uid,site.uid);assert.equal(s.mode&0o777,0o600);assert.equal((await web('/data/'+name)).status,404);}assert.equal((await web('/runtime.mjs')).status,404);assert.equal((await stat(root+'/public/server.mjs')).uid,site.uid);assert.ok((await readFile('/etc/systemd/system/devone-'+site.id+'.service','utf8')).includes(root+'/data'));});
   await check('cms.real-login-and-secure-cookie',async()=>{assert.equal((await secured('/api/auth/login','POST',{username:'devone_admin',password:'wrong'})).status,401);const r=await secured('/api/auth/login','POST',{username:'devone_admin',password:b.adminPassword});assert.equal(r.status,200);assert.match(r.headers.get('set-cookie'),/Secure/);cookie=r.headers.get('set-cookie').split(';')[0];csrf=(await r.json()).csrf_token;});
   await check('cms.setup-origin-and-csrf-protection',async()=>{assert.equal((await secured('/api/install','POST',{})).status,403);assert.equal((await secured('/api/auth/login','POST',{username:'devone_admin',password:b.adminPassword},{origin:'https://evil.test'})).status,403);assert.equal((await secured('/api/core/content','POST',{title:'Denied',slug:'denied',content:''},{cookie})).status,403);const r=await secured('/api/core/content','POST',{title:'Persisted page',slug:'persisted',content:'<p>saved</p>'},{cookie,'x-devone-csrf':csrf});assert.equal(r.status,201);});
