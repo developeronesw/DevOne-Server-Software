@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {request as httpRequest} from 'node:http';
 import {readFile,writeFile,mkdir,stat,readdir} from 'node:fs/promises';
 import {randomBytes,createHash} from 'node:crypto';
+import {waitForQaWebsite} from './agent/dist/disposable-qa.js';
 import {SiteManager} from './agent/dist/sites.js';
 import {DatabaseManager} from './agent/dist/databases.js';
 export async function runWordPressChecks(check,command){
@@ -29,6 +30,30 @@ export async function runWordPressChecks(check,command){
   return (await command(c,a)).stdout;
  };
  const manager=new SiteManager({base:'/home/devone-sites',registry:'/var/lib/devone-agent',nginx:'/etc/nginx/conf.d',panelDomain:'panel.example.test',command:commandAdapter});
+ // Exercise real reload signals without the compatibility adapter's delay.
+ const immediateReload=async(c,a)=>{
+  if(c==='systemctl'&&a[0]==='reload'){
+   if(a[1]==='nginx')await command('/usr/sbin/nginx',['-s','reload']);
+   else if(a[1]==='php8.3-fpm')process.kill(Number((await readFile('/run/php/php8.3-fpm.pid','utf8')).trim()),'SIGUSR2');
+   else throw Error('unexpected_service');
+   return '';
+  }
+  return commandAdapter(c,a);
+ };
+ const hosting=new SiteManager({base:'/home/devone-sites',registry:'/var/lib/devone-agent',nginx:'/etc/nginx/conf.d',panelDomain:'panel.example.test',command:immediateReload});
+ for(const type of ['static','php'])await check('hosting.'+type+'-reload-readiness',async()=>{
+  // Repeat immediate provisioning to cover multiple reloads/old-worker handoffs.
+  for(let i=0;i<3;i++){
+   const marker='DEVONE_QA_'+randomBytes(12).toString('hex');
+   const site=await hosting.create({domain:'reload-'+randomBytes(8).toString('hex')+'.invalid',siteType:type,webServer:'nginx',...(type==='php'?{runtimeVersion:'8.3'}:{})});
+   try{
+    await hosting.files({siteId:site.id,operation:'create',path:type==='php'?'index.php':'index.html',content:Buffer.from(type==='php'?"<?php echo '"+marker.slice(0,16)+"'.'"+marker.slice(16)+"';":marker).toString('base64')});
+    const response=await waitForQaWebsite(site.domain,marker);
+    assert.equal(response.status,200);assert.equal(response.matched,true);
+   }finally{await hosting.action({siteId:site.id,action:'delete',confirmDomain:site.domain,expectedRevision:site.revision});}
+   assert.equal((await hosting.list()).some(s=>s.id===site.id),false);
+  }
+ });
  const databases=new DatabaseManager({registry:'/var/lib/devone-agent/databases',sites:()=>manager.list(),withSite:(id,work)=>manager.withReadySite(id,work)});
  const request=domain=>({id:'app_'+randomBytes(8).toString('hex'),databaseId:'db_'+randomBytes(8).toString('hex'),databasePassword:randomBytes(32).toString('hex'),adminPassword:randomBytes(32).toString('hex'),title:'DevOne QA WordPress',email:'qa@example.test',domain});
  const deps={prepare:async()=>{},database:(site,b)=>databases.createForLockedSite({id:b.databaseId,siteId:site.id,engine:'mariadb',password:b.databasePassword},site.id)};

@@ -11,7 +11,7 @@ export type DisposableStatus={id:string;state:"running"|"passed"|"failed";starte
 const fixtures={
  static:{path:"index.html",code:(marker:string)=>"<!doctype html><title>DevOne QA</title>"+marker},
  files:{path:"readme.txt",code:(marker:string)=>"DevOne QA: "+marker},
- php:{path:"index.php",code:(marker:string)=>"<?php header('Content-Type: text/plain'); echo '"+marker+"';"},
+ php:{path:"index.php",code:(marker:string)=>"<?php header('Content-Type: text/plain'); echo '"+marker.slice(0,16)+"'.'"+marker.slice(16)+"';"},
  node:{path:"server.mjs",code:(marker:string)=>"import {createServer} from 'node:http'; createServer((req,res)=>{res.writeHead(200,{'Content-Type':'text/plain'});res.end('"+marker+"');}).listen(Number(process.env.PORT),process.env.HOST);"},
  python:{path:"app.py",code:(marker:string)=>"import os\nfrom wsgiref.simple_server import make_server\n\ndef app(environ,start_response):\n start_response('200 OK',[('Content-Type','text/plain')]); return [b'"+marker+"']\nmake_server(os.environ['HOST'],int(os.environ['PORT']),app).serve_forever()\n"},
  container:{path:"index.html",code:(marker:string)=>"<!doctype html><title>DevOne container QA</title>"+marker}
@@ -20,7 +20,7 @@ const versions={php:"8.3",node:"22",python:"3.12"} as const;
 const types=["static","files","php","node","python","container"] as const;
 // Use node:http: built-in fetch can replace Host with the URL authority.
 // Connect only to loopback; never follow redirects or retain response bodies.
-export function probeQaWebsite(domain:string,marker:string,port=80):Promise<{status:number;matched:boolean}>{
+export function probeQaWebsite(domain:string,marker:string,port=80,timeoutMs=10000):Promise<{status:number;matched:boolean}>{
  return new Promise((resolve,reject)=>{
   const req=request({hostname:"127.0.0.1",port,path:"/",method:"GET",headers:{Host:domain},agent:false},res=>{
    const chunks:Buffer[]=[];let size=0;
@@ -28,15 +28,36 @@ export function probeQaWebsite(domain:string,marker:string,port=80):Promise<{sta
    res.on("error",reject);
    res.on("end",()=>resolve({status:res.statusCode??0,matched:Buffer.concat(chunks).toString("utf8").includes(marker)}));
   });
-  const deadline=setTimeout(()=>req.destroy(Error("qa_http_timeout")),10000);
+  const deadline=setTimeout(()=>req.destroy(Error("qa_http_timeout")),timeoutMs);
   req.on("close",()=>clearTimeout(deadline));
   req.on("error",reject);req.end();
  });
 }
+type QaResponse={status:number;matched:boolean};
+type QaProbe=(domain:string,marker:string,timeoutMs:number)=>Promise<QaResponse>;
+const loopbackProbe:QaProbe=(domain,marker,timeoutMs)=>probeQaWebsite(domain,marker,80,timeoutMs);
+// Reload commands acknowledge the signal before new workers necessarily serve
+// requests. Reconnect on each attempt and require this run's exact marker.
+export async function waitForQaWebsite(domain:string,marker:string,probe:QaProbe=loopbackProbe,budgetMs=10000,intervalMs=250){
+ const deadline=performance.now()+budgetMs;
+ let last:QaResponse|undefined,lastError:unknown,attempts=0;
+ while(performance.now()<deadline){
+  attempts++;
+  try{
+   last=await probe(domain,marker,Math.max(1,Math.ceil(deadline-performance.now())));
+   if(last.status===200&&last.matched)return {...last,attempts};
+  }catch(error){lastError=error;}
+  const remaining=deadline-performance.now();
+  if(remaining<=0)break;
+  await new Promise(resolve=>setTimeout(resolve,Math.min(intervalMs,remaining)));
+ }
+ if(last)return {...last,attempts};
+ throw lastError??Error("qa_http_timeout");
+}
 export class DisposableHostQa {
  private current:DisposableStatus|null=null;
  private busy=false;
- constructor(private sites:SiteManager,private probe=probeQaWebsite){}
+ constructor(private sites:SiteManager,private probe:QaProbe=loopbackProbe){}
  status(){return this.current?{...this.current,results:this.current.results.map(x=>({...x}))}:{state:"not_run",results:[],warning:"Disposable QA has never run."};}
  start(){
   if(this.busy)throw Error("qa_disposable_busy");
@@ -68,9 +89,9 @@ export class DisposableHostQa {
       if(type==="node"||type==="python"||type==="container"){
         await this.sites.action({siteId:created.id,action:"start",expectedRevision:created.revision??1});
       }
-      const response=await this.probe(domain,marker);
+      const response=await waitForQaWebsite(domain,marker,this.probe);
       pass=response.status===200&&response.matched;
-      if(!pass)detail=`Unexpected website response: HTTP ${response.status}; QA marker ${response.matched?"present":"missing"}.`;
+      if(!pass)detail=`Unexpected website response: HTTP ${response.status}; QA marker ${response.matched?"present":"missing"} after ${response.attempts} readiness attempts.`;
     }
     if(pass)detail="Created isolated site, wrote source, verified real response/content.";
     else if(detail==="unverified")detail="Unexpected file contents.";
