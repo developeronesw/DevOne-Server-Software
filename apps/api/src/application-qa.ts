@@ -16,6 +16,6 @@ export function registerApplicationQa(app:FastifyInstance,deps:Deps){
   if(Date.now()-last<5000)return p.code(429).send({error:'application_qa_rate_limited'});last=Date.now();
   p.header('Cache-Control','no-store');
   try{const result=await agent('/v1/qa/applications/check',b);deps.audit(u.id,'qa.application_checked',{siteId:b.siteId,scope:'read-only'});return result;}
-  catch(e){const code=e instanceof Error?e.message:'';return p.code(code==='application_qa_busy'?409:code==='application_qa_not_found'?404:503).send({error:code||'application_qa_unavailable'});}
+  catch(e){const message=e instanceof Error?e.message:'';const code=['application_qa_busy','application_qa_not_found'].includes(message)?message:'application_qa_unavailable';return p.code(code==='application_qa_busy'?409:code==='application_qa_not_found'?404:503).send({error:code});}
  });
 }
