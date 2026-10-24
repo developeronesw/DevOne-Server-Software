@@ -1,6 +1,7 @@
 import {test} from "node:test";
 import assert from "node:assert/strict";
-import {DisposableHostQa} from "../agent/dist/disposable-qa.js";
+import {createServer} from "node:http";
+import {DisposableHostQa,probeQaWebsite} from "../agent/dist/disposable-qa.js";
 import {pythonUnitConfig,dockerRunArgs,managedContainerImage,runtimeNginxLocation} from "../agent/dist/site-runtimes.js";
 const site={id:"site_0123456789abcdef",user:"dvs_0123456789abcdef",siteType:"python",runtimeVersion:"3.12"};
 test("Python 3.12 adapter starts isolated systemd app on private loopback port",()=>{
@@ -61,15 +62,14 @@ test("disposable QA creates, verifies, and deletes only site IDs it created",asy
    return site;
   }
  };
- const oldFetch=globalThis.fetch;
- globalThis.fetch=async(_url,{headers})=>{
-  const site=[...sites.values()].find(x=>x.domain===headers.Host);
+ const probe=async(domain,marker)=>{
+  const site=[...sites.values()].find(x=>x.domain===domain);
   assert.ok(site);
-  const marker=site.fixture.match(/DEVONE_QA_[0-9a-f]+_(?:static|php|node|python|container)/)?.[0];
-  return new Response(marker??"",{status:200});
+  const found=site.fixture.match(/DEVONE_QA_[0-9a-f]+_(?:static|php|node|python|container)/)?.[0];
+  return {status:200,matched:found===marker};
  };
  try{
-  const qa=new DisposableHostQa(fake);
+  const qa=new DisposableHostQa(fake,probe);
   assert.equal(qa.status().state,"not_run");
   const run=qa.start();
   assert.equal(run.state,"running");
@@ -87,5 +87,36 @@ test("disposable QA creates, verifies, and deletes only site IDs it created",asy
   assert.ok(report.results.slice(0,6).every(x=>x.status==="pass"&&x.cleaned===true),JSON.stringify(report.results));
   assert.equal(actions.filter(a=>a.action==="delete").length,6);
   assert.equal(actions.filter(a=>a.action==="start").length,3);
- }finally{globalThis.fetch=oldFetch;}
+ }finally{assert.equal(sites.size,0);}
+});
+
+test("QA HTTP probe sends actual virtual host and does not follow redirects",async()=>{
+ const seen=[];
+ const server=createServer((req,res)=>{
+  seen.push(req.headers.host);
+  if(req.headers.host==="qa-redirect.invalid"){res.writeHead(302,{Location:"http://unreachable.invalid/"});res.end();}
+  else if(req.headers.host==="qa-large.invalid")res.end("x".repeat(70000));
+  else res.end(req.headers.host==="qa-target.invalid"?"unique-qa-marker":"default website");
+ });
+ await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));
+ try{
+  const port=server.address().port;
+  assert.deepEqual(await probeQaWebsite("qa-target.invalid","unique-qa-marker",port),{status:200,matched:true});
+  assert.deepEqual(await probeQaWebsite("qa-wrong.invalid","unique-qa-marker",port),{status:200,matched:false});
+  assert.deepEqual(await probeQaWebsite("qa-redirect.invalid","unique-qa-marker",port),{status:302,matched:false});
+  await assert.rejects(probeQaWebsite("qa-large.invalid","unique-qa-marker",port),/qa_response_too_large/);
+  assert.deepEqual(seen,["qa-target.invalid","qa-wrong.invalid","qa-redirect.invalid","qa-large.invalid"]);
+ }finally{await new Promise(resolve=>server.close(resolve));}
+});
+test("missing Docker blocks QA without claiming an uncreated site needs cleanup",async()=>{
+ const qa=new DisposableHostQa({create:async()=>{throw Error("docker_runtime_not_running");}});
+ qa.start();
+ let report;
+ for(let tries=0;tries<100;tries++){
+  report=qa.status();if(report.state!=="running")break;
+  await new Promise(resolve=>setTimeout(resolve,30));
+ }
+ assert.equal(report.state,"failed");
+ const result=report.results.find(x=>x.name==="site.container");
+ assert.equal(result.status,"blocked");assert.equal(result.cleaned,undefined);assert.equal(result.siteId,undefined);
 });
