@@ -17,7 +17,7 @@ export async function prepareWordPress(){
  if(!checked)throw Error('wordpress_prerequisites_unavailable');
 }
 export function runWordPressWorker(site:Site,stage:string,input:WordPressInstall){
- const data={database:'dv'+input.databaseId.slice(3),databasePassword:input.databasePassword,adminPassword:input.adminPassword,title:input.title,email:input.email,url:(site.tls?'https':'http')+'://'+site.domain};
+ const data={database:'dv'+input.databaseId.slice(3),databasePassword:input.databasePassword,adminPassword:input.adminPassword,adminUsername:input.adminUsername??'devone_admin',title:input.title,email:input.email,url:(site.tls?'https':'http')+'://'+site.domain};
  return new Promise<void>((resolve,reject)=>{
   const child=execFile(process.execPath,[fileURLToPath(new URL('./wordpress-worker.js',import.meta.url))],{timeout:240000,maxBuffer:32768,env:{PATH:'/usr/bin:/bin',DEVONE_SITE_UID:String(site.uid),DEVONE_SITE_GID:String(site.gid),DEVONE_WORDPRESS_STAGE:stage}},(e,out)=>{
    try{const result=JSON.parse(out);if(e||result.ok!==true){console.error('wordpress_worker_failed',{phase:['identity','artifact','extract','configure'].includes(result.phase)?result.phase:'unknown'});throw Error();}resolve();}catch{reject(Error('wordpress_install_requires_inspection'));}

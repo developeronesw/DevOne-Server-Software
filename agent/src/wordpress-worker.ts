@@ -1,3 +1,4 @@
+import {validAdminPassword,validAdminUsername} from './install-account.js';
 import {dropSiteIdentity} from './site-identity.js';
 import {wordpressRelease} from './wordpress-release.js';
 import {createHash} from 'node:crypto';
@@ -12,8 +13,8 @@ async function main(){
  const root=process.env.DEVONE_WORDPRESS_STAGE;
  if(!root||!/^\/home\/devone-sites\/site_[a-f0-9]{16}\/\.wordpress-app_[a-f0-9]{16}$/.test(root))throw Error();
  let input='';for await(const part of process.stdin){input+=part;if(Buffer.byteLength(input)>8192)throw Error();}
- const b=JSON.parse(input) as {database:string;databasePassword:string;adminPassword:string;url:string;email:string;title:string};
- if(Object.keys(b).some(k=>!['database','databasePassword','adminPassword','url','email','title'].includes(k))||!/^dv[a-f0-9]{16}$/.test(b.database)||! /^[a-f0-9]{64}$/.test(b.databasePassword)||! /^[a-f0-9]{64}$/.test(b.adminPassword))throw Error();
+ const b=JSON.parse(input) as {database:string;databasePassword:string;adminPassword:string;adminUsername:string;url:string;email:string;title:string};
+ if(Object.keys(b).some(k=>!['database','databasePassword','adminPassword','adminUsername','url','email','title'].includes(k))||!/^dv[a-f0-9]{16}$/.test(b.database)||! /^[a-f0-9]{64}$/.test(b.databasePassword)||!validAdminPassword(b.adminPassword)||!validAdminUsername(b.adminUsername))throw Error();
  phase='artifact';
  const archive=root+'/.core-download';
  const file=await open(archive,'wx',0o600);

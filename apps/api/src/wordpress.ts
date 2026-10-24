@@ -1,3 +1,4 @@
+import {validInstallAccount,sameInstallPassword} from './install-account.js';
 import type {FastifyInstance} from 'fastify';
 import type {DatabaseSync} from 'node:sqlite';
 import type {JobQueue} from './jobs.js';
@@ -42,17 +43,18 @@ export function registerWordPress(app:FastifyInstance,deps:Deps){
  app.post('/api/apps/wordpress/install',async(r,reply)=>{
   const u=owner(r,reply,true);if(!u)return;
   const b=r.body as Record<string,unknown>|null;
-  if(!b||Array.isArray(b)||Object.keys(b).some(k=>!['siteId','domain','expectedRevision','title','email','confirmed','requestKey','password','mfaCode'].includes(k))||b.confirmed!==true||typeof b.requestKey!=='string'||!/^[a-zA-Z0-9_-]{16,128}$/.test(b.requestKey)||typeof b.title!=='string'||b.title.trim()!==b.title||b.title.length<1||b.title.length>120||/[\x00-\x1f\x7f<>]/.test(b.title)||typeof b.email!=='string'||b.email.length>254||! /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?\.[a-zA-Z]{2,63}$/.test(b.email))return reply.code(400).send({error:'invalid_wordpress_request'});
+  if(!b||Array.isArray(b)||Object.keys(b).some(k=>!['siteId','domain','expectedRevision','title','email','confirmed','requestKey','password','mfaCode','adminUsername','adminPassword','adminPasswordConfirm'].includes(k))||b.confirmed!==true||typeof b.requestKey!=='string'||!/^[a-zA-Z0-9_-]{16,128}$/.test(b.requestKey)||typeof b.title!=='string'||b.title.trim()!==b.title||b.title.length<1||b.title.length>120||/[\x00-\x1f\x7f<>]/.test(b.title)||typeof b.email!=='string'||b.email.length>254||! /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?\.[a-zA-Z]{2,63}$/.test(b.email))return reply.code(400).send({error:'invalid_wordpress_request'});
   if(b.siteId!==undefined?(typeof b.siteId!=='string'||!/^site_[a-f0-9]{16}$/.test(b.siteId)||!Number.isSafeInteger(b.expectedRevision)||Number(b.expectedRevision)<1||b.domain!==undefined):(b.expectedRevision!==undefined||typeof b.domain!=='string'||b.domain.length>253||!b.domain.split('.').every(p=>/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(p))||! /\.[a-z]{2,63}$/.test(b.domain)))return reply.code(400).send({error:'invalid_wordpress_target'});
+  if(!validInstallAccount(b))return reply.code(400).send({error:'invalid_administrator_account'});
   if(!verify(u,b,reply))return;
-  const metadata=JSON.stringify({title:b.title,email:b.email,...(b.siteId?{siteId:b.siteId,expectedRevision:b.expectedRevision}:{domain:b.domain})});
+  const metadata=JSON.stringify({title:b.title,email:b.email,adminUsername:b.adminUsername,...(b.siteId?{siteId:b.siteId,expectedRevision:b.expectedRevision}:{domain:b.domain})});
   let row=db.prepare('SELECT * FROM wordpress_requests WHERE actor=? AND request_key=?').get(u.id,b.requestKey) as Reservation|undefined;
-  if(row&&row.metadata!==metadata)return reply.code(409).send({error:'request_key_conflict'});
+  if(row&&(row.metadata!==metadata||!sameInstallPassword(vault.get(wordpressSecret(row.id)),b.adminPassword as string)))return reply.code(409).send({error:'request_key_conflict'});
   try{
    if(!row){
     const id='app_'+randomBytes(8).toString('hex'),databaseId='db_'+randomBytes(8).toString('hex');
     db.exec('BEGIN IMMEDIATE');try{
-     vault.put(databaseSecret(databaseId),randomBytes(32).toString('hex'),u.id);vault.put(wordpressSecret(id),randomBytes(32).toString('hex'),u.id);
+     vault.put(databaseSecret(databaseId),randomBytes(32).toString('hex'),u.id);vault.put(wordpressSecret(id),b.adminPassword as string,u.id);
      db.prepare('INSERT INTO wordpress_requests VALUES(?,?,?,?,?)').run(id,u.id,b.requestKey,metadata,databaseId);db.exec('COMMIT');
     }catch(e){db.exec('ROLLBACK');throw e;}
     row={id,actor:u.id,request_key:b.requestKey,metadata,database_id:databaseId};
@@ -76,7 +78,9 @@ export function registerWordPress(app:FastifyInstance,deps:Deps){
    if(!site.tls)return reply.code(409).send({error:'wordpress_https_required'});
    const password=vault.get(wordpressSecret(r.params.id));if(!password)throw Error();
    deps.audit(u.id,'wordpress.credentials_revealed',{id:r.params.id,siteId:site.id});
-   return {username:'devone_admin',password,loginUrl:'https://'+site.domain+'/wp-login.php'};
+   const reservation=db.prepare('SELECT metadata FROM wordpress_requests WHERE id=?').get(r.params.id) as {metadata:string}|undefined;
+   if(!reservation)throw Error();
+   return {username:JSON.parse(reservation.metadata).adminUsername??'devone_admin',password,loginUrl:'https://'+site.domain+'/wp-login.php'};
   }catch{return reply.code(503).send({error:'wordpress_credentials_unavailable'});}
  });
 }

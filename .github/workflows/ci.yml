@@ -39,7 +39,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: developeronesw/DevOneCMS-v2
-          ref: 76170ee10e59f1f8fc772951b6796a57a122ed14
+          ref: b9675b1b1f3f4b46f7c7b86709ec9cc55e850bb1
           path: qa-cms-source
       - run: npm ci --ignore-scripts --no-audit --no-fund
         working-directory: qa-cms-source
@@ -47,7 +47,7 @@ jobs:
         working-directory: qa-cms-source
       - run: python3 scripts/package-local.py /tmp/devone-cms-rebuilt.tar.gz
         working-directory: qa-cms-source
-      - run: cmp /tmp/devone-cms-rebuilt.tar.gz distributions/devone-cms-local/2.0.0-alpha.4.tar.gz
+      - run: cmp /tmp/devone-cms-rebuilt.tar.gz distributions/devone-cms-local/2.0.0-alpha.5.tar.gz
 
   validate:
     needs: [isolated-databases, cms-package]

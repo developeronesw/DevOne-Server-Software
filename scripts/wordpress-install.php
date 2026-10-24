@@ -7,7 +7,7 @@ error_reporting(0);
 ob_start();
 try {
     $b = json_decode(stream_get_contents(STDIN, 8193), true, 16, JSON_THROW_ON_ERROR);
-    if (PHP_SAPI !== 'cli' || !is_array($b) || !preg_match('/^[a-f0-9]{64}$/D', $b['databasePassword'] ?? '') || !preg_match('/^[a-f0-9]{64}$/D', $b['adminPassword'] ?? '') || !preg_match('/^dv[a-f0-9]{16}$/D', $b['database'] ?? '')) {
+    if (PHP_SAPI !== 'cli' || !is_array($b) || !preg_match('/^[a-f0-9]{64}$/D', $b['databasePassword'] ?? '') || !is_string($b['adminPassword'] ?? null) || mb_strlen($b['adminPassword'], 'UTF-8') < 12 || mb_strlen($b['adminPassword'], 'UTF-8') > 128 || preg_match('/[\x00-\x1f\x7f]/', $b['adminPassword']) || !preg_match('/^[a-z0-9][a-z0-9._-]{2,59}$/D', $b['adminUsername'] ?? '') || !preg_match('/^dv[a-f0-9]{16}$/D', $b['database'] ?? '')) {
         throw new Exception('invalid_input');
     }
     $root = getcwd();
@@ -40,8 +40,8 @@ try {
     add_filter('pre_wp_mail', '__return_true');
     add_filter('pre_http_request', static fn() => new WP_Error('devone_install_offline'));
     if (is_blog_installed()) { throw new Exception('already_installed'); }
-    $installed = wp_install($b['title'], 'devone_admin', $b['email'], false, '', $b['adminPassword']);
-    $user = get_user_by('login', 'devone_admin');
+    $installed = wp_install($b['title'], $b['adminUsername'], $b['email'], false, '', $b['adminPassword']);
+    $user = get_user_by('login', $b['adminUsername']);
     if (!$user || !wp_check_password($b['adminPassword'], $user->user_pass, $user->ID) || !user_can($user, 'manage_options') || get_option('siteurl') !== $b['url']) {
         throw new Exception('verification_failed');
     }
