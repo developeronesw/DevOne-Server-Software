@@ -4,7 +4,7 @@ import {SiteWafConsole} from "./SiteWafConsole";
 import {OwnerMfaSettings} from "./OwnerMfaSettings";
 import {CrowdSecStatus} from "./CrowdSecStatus";
 
-type CatalogEntry={id:string;name:string;category:"cms"|"framework"|"platform"|"runtime";description:string;sourceUrl:string;docsUrl:string;runtime:string[];featured?:boolean;latestKnownVersion?:string;verifiedAt?:string;releaseChannel:string;deployment:string};
+type CatalogEntry={id:string;name:string;category:"cms"|"framework"|"platform"|"runtime";description:string;sourceUrl:string;docsUrl:string;runtime:string[];featured?:boolean;latestKnownVersion?:string;verifiedAt?:string;releaseChannel:string;deployment:string;managedInstaller?:"wordpress"|"devone-cms-v2"|null};
 type Catalog={items:CatalogEntry[];installAvailable:boolean;notice:string};
 type Discovery={runtimes:{name:string;installed:boolean;version:string|null}[]};
 type Finding={id:string;title:string;severity:"high"|"medium"|"low"|"info";status:"pass"|"warning"|"unknown";detail:string;recommendation:string};
@@ -129,6 +129,13 @@ function RuntimeManager({role}:{role:string}){
  </section>;
 }
 export function AppCatalog({role}:{role:string}){
+ const [installRequest,setInstallRequest]=useState<{appId:"wordpress"|"devone-cms-v2";requestId:number}>();
+ const [installerBusy,setInstallerBusy]=useState(false);
+ function openInstaller(appId:"wordpress"|"devone-cms-v2"){
+  if(role!=="owner"||installerBusy)return;
+  setInstallRequest(previous=>({appId,requestId:(previous?.requestId??0)+1}));
+  requestAnimationFrame(()=>{const panel=document.getElementById("catalog-app-installer");panel?.scrollIntoView({behavior:"smooth",block:"start"});panel?.focus({preventScroll:true});});
+ }
  const [catalog,setCatalog]=useState<Catalog|null>(null);
  const [discovery,setDiscovery]=useState<Discovery|null>(null);
  const [search,setSearch]=useState("");
@@ -146,17 +153,17 @@ export function AppCatalog({role}:{role:string}){
  },[selected]);
  const runtimeNames=new Set(discovery?.runtimes.filter(x=>x.installed).map(x=>x.name.toLowerCase())??[]);
  return <div className="app-catalog">
-   <div className="ops-catalog-intro glass"><div><span className="overline">DEVONE SOFTWARE CENTER</span><h2>Launch your next project.</h2><p>Install the supported Ubuntu host runtimes below. Other catalog applications require their individual deployment adapters.</p></div><span className="catalog-count">{catalog?.items.length??"—"} catalog entries</span></div>
-   {["owner","admin"].includes(role)&&<><AppInstaller/><RuntimeManager role={role}/></>}
+   <div className="ops-catalog-intro glass"><div><span className="overline">DEVONE SOFTWARE CENTER</span><h2>Launch your next project.</h2><p>Install WordPress, the DevOne CMS preview, built-in starters and supported Ubuntu runtimes. Other catalog products show requirements for future support.</p></div><span className="catalog-count">{catalog?.items.length??"—"} catalog entries</span></div>
+   {["owner","admin"].includes(role)&&<><div id="catalog-app-installer" tabIndex={-1} aria-label="Managed application installer"><AppInstaller selectionRequest={installRequest} onBusyChange={setInstallerBusy}/></div><RuntimeManager role={role}/></>}
    <div className="ops-catalog-filters"><input aria-label="Search software and frameworks" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search CMS, frameworks, runtimes…"/><select aria-label="Filter software by category" value={category} onChange={e=>setCategory(e.target.value)}><option value="all">All software</option><option value="cms">CMS platforms</option><option value="framework">Frameworks</option><option value="runtime">Runtimes</option><option value="platform">Platforms</option></select></div>
    {error&&<p role="alert" className="inline-error">{error}</p>}
-   <div className="ops-catalog-grid">{items.map(item=><article key={item.id} className={"catalog-card glass "+(item.featured?"featured":"")}><div className="catalog-card-heading"><div className="catalog-icon">{item.name.slice(0,1)}</div><span className="catalog-type">{item.category}</span></div><h3>{item.name} {item.featured&&<span className="catalog-featured">Featured</span>}</h3><p>{item.description}</p><div className="catalog-meta">{item.latestKnownVersion&&<span>Reference: {item.latestKnownVersion}</span>}<span>{item.releaseChannel}</span></div><div className="catalog-card-actions"><button onClick={()=>{if(item.id==="php"&&["owner","admin"].includes(role)){document.getElementById("managed-runtimes")?.scrollIntoView({behavior:"smooth",block:"start"});}else setSelected(item.id);}}>{item.id==="php"&&["owner","admin"].includes(role)?"Manage PHP 8.3":"View requirements"} <span aria-hidden="true">→</span></button><a href={item.sourceUrl} target="_blank" rel="noopener noreferrer">Official source ↗</a></div></article>)}</div>
+   <div className="ops-catalog-grid">{items.map(item=><article key={item.id} className={"catalog-card glass "+(item.featured?"featured":"")}><div className="catalog-card-heading"><div className="catalog-icon">{item.name.slice(0,1)}</div><span className="catalog-type">{item.category}</span></div><h3>{item.name} {item.featured&&<span className="catalog-featured">Featured</span>}</h3><p>{item.description}</p><div className="catalog-meta">{item.latestKnownVersion&&<span>Reference: {item.latestKnownVersion}</span>}<span>{item.releaseChannel}</span></div><div className="catalog-card-actions"><button disabled={Boolean(item.managedInstaller&&installerBusy)} onClick={()=>{if(item.managedInstaller&&role==="owner"){openInstaller(item.managedInstaller);}else if(item.id==="php"&&["owner","admin"].includes(role)){document.getElementById("managed-runtimes")?.scrollIntoView({behavior:"smooth",block:"start"});}else setSelected(item.id);}}>{item.managedInstaller&&role==="owner"?item.id==="devone-cms-v2"?"Install CMS preview":"Install WordPress":item.id==="php"&&["owner","admin"].includes(role)?"Manage PHP 8.3":"View requirements"} <span aria-hidden="true">→</span></button><a href={item.sourceUrl} target="_blank" rel="noopener noreferrer">Official source ↗</a></div></article>)}</div>
    {!catalog&&!error&&<p className="ops-empty">Loading verified software catalog…</p>}
    {catalog&&items.length===0&&<p className="ops-empty">No software matches your search.</p>}
    {current&&<section id="catalog-details" className="surface-card glass catalog-details" aria-label={"Deployment planning for "+current.name}><div className="section-heading"><div><span className="overline">DEPLOYMENT READINESS</span><h2>{current.name}</h2></div><button className="ops-secondary" onClick={()=>setSelected(null)}>Close</button></div><p>{current.description}</p>
     {current.verifiedAt&&<p className="ops-subtext">Reference verified {current.verifiedAt}. Check upstream for newer releases.</p>}
     <h3>Required technology</h3><div className="catalog-requirements">{current.runtime.map(name=><span key={name}>{runtimeNames.has(name.toLowerCase())?"✓ ":""}{name}</span>)}</div>
-    <p className="ops-warning">Installation not yet enabled. DevOne cannot safely provision this product until its runtime, domain, database, permissions and rollback adapter are implemented. A checked runtime is not proof that the application is deployed.</p>
+    {current.managedInstaller?<div><p className="ops-note">{current.id==="devone-cms-v2"?"The DevOne CMS local preview has a managed installer. Full CMS stable acceptance remains unfinished.":"WordPress has a managed installer with a dedicated database and generated administrator credentials."} Choose a new website or an empty compatible site. Owner password/MFA approval is required.</p>{role==="owner"?<button className="primary-button" disabled={installerBusy} onClick={()=>openInstaller(current.managedInstaller!)}>Open {current.name} installer</button>:<p className="ops-warning">An Owner must approve and run this installer.</p>}</div>:<p className="ops-warning">Installation not yet enabled for this product. Its deployment adapter is still required. An installed runtime does not mean the application is deployed.</p>}
     <div className="catalog-resource-links"><a href={current.docsUrl} rel="noopener noreferrer" target="_blank">Official installation guide ↗</a><a href={current.sourceUrl} rel="noopener noreferrer" target="_blank">Verified source repository ↗</a></div>
    </section>}
    <p className="ops-note">The catalog does not download or execute untrusted software. WordPress release references are version snapshots, not a live-update promise. For static projects, Websites & Files already supports managed hosting.</p>
