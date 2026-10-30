@@ -13,6 +13,7 @@ import {SiteFiles} from '../agent/dist/site-files.js';
 import {soundwerksRelease,soundwerksInput} from '../agent/dist/soundwerks-release.js';
 import {prepareSoundwerks} from '../agent/dist/soundwerks.js';
 import {installSoundwerksMedia,SoftwareInstallFailure} from '../agent/dist/software.js';
+import {assertAgentMutationResult} from '../apps/api/dist/job-agent-result.js';
 
 const credentials={id:'app_0123456789abcdef',databaseId:'db_0123456789abcdef',
  databasePassword:'ab'.repeat(32),adminUsername:'creative_admin',
@@ -161,4 +162,17 @@ test('FFmpeg install retains allowlisted APT reason without forwarding raw stder
  const failing=async()=>{const error=new Error('Private APT details');error.stderr='DEVONE_INSTALL_ERROR:install_lock_busy\nMore private text';throw error;};
  await assert.rejects(installSoundwerksMedia(failing),error=>
   error instanceof SoftwareInstallFailure&&error.reason==='install_lock_busy'&&!error.message.includes('Private'));
+});
+
+test('Soundwerks job API preserves allowlisted prerequisite reason, rejects arbitrary error strings',async()=>{
+ for(const code of ['soundwerks_ffmpeg_install_lock_busy','soundwerks_postgresql_apt_candidate_unavailable',
+  'soundwerks_ffmpeg_apt_transaction_failed']){
+  await assert.rejects(assertAgentMutationResult(
+   new Response(JSON.stringify({error:code}),{status:503}), 'soundwerks.install'
+  ),{message:code});
+ }
+ await assert.rejects(assertAgentMutationResult(
+  new Response(JSON.stringify({error:'soundwerks_ffmpeg_private_details'}),{status:503}),
+  'soundwerks.install'
+ ),{name:'OutcomeUnknown'});
 });
