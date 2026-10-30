@@ -9,9 +9,10 @@ export async function prepareSoundwerks(){
  const status=await softwareStatus();
  const pg=status.packages.find(p=>p.package==='postgresql');
  if(!pg?.installed||!pg.serviceActive)await softwareInstall({package:'postgresql',confirmed:true});
- const binaries=async()=>new Promise<boolean>(resolve=>{
-  execFile('/usr/bin/ffprobe',['-version'],{timeout:6000,env:{PATH:'/usr/bin:/bin'}},e=>resolve(!e));
+ const checkBinary=(name:'ffmpeg'|'ffprobe')=>new Promise<boolean>(resolve=>{
+  execFile('/usr/bin/'+name,['-version'],{timeout:6000,env:{PATH:'/usr/bin:/bin'}},e=>resolve(!e));
  });
+ const binaries=async()=> (await Promise.all([checkBinary('ffmpeg'),checkBinary('ffprobe')])).every(Boolean);
  if(!await binaries()){
   // The reviewed DevOne APT policy script has an explicit ffmpeg allowlist.
   await new Promise<void>((resolve,reject)=>execFile('/usr/bin/bash',[fixedScript,'--managed-install','ffmpeg'],
