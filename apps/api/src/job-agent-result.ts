@@ -6,6 +6,13 @@ import {isSafeInstallFailureReason} from "./software-reasons.js";
 export async function assertAgentMutationResult(response:Response,operation:string):Promise<void>{
  if(response.ok)return;
  const payload=await response.json().catch(()=>({})) as {error?:unknown;reason?:unknown};
+ if(operation==="soundwerks.update"&&[
+  "soundwerks_update_requires_inspection","soundwerks_update_rolled_back",
+  "soundwerks_update_build_failed","soundwerks_update_site_unavailable",
+  "soundwerks_already_current","soundwerks_update_target_changed",
+  "soundwerks_release_checks_not_passed","site_revision_conflict",
+  "github_rate_limited","github_unavailable","soundwerks_ci_unavailable"
+ ].includes(payload.error as string))throw Error(payload.error as string);
  if(operation==="soundwerks.install"){
   const match=/^soundwerks_(ffmpeg|postgresql)_([a-z0-9_]+)$/.exec(String(payload.error??''));
   if(match&&isSafeInstallFailureReason(match[2]))throw Error(payload.error as string);
