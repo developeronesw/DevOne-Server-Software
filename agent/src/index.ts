@@ -3,6 +3,8 @@ import {open} from 'node:fs/promises';
 import {constants} from 'node:fs';
 import type {IncomingMessage,ServerResponse} from 'node:http';
 import {wordpressInput} from "./wordpress-release.js";
+import {soundwerksInput} from "./soundwerks-release.js";
+import {prepareSoundwerks} from "./soundwerks.js";
 import {prepareWordPress} from "./wordpress.js";
 import {DatabaseManager} from "./databases.js";
 import {resourceSnapshot} from "./resources.js";
@@ -63,6 +65,32 @@ async function handle(request:IncomingMessage,response:ServerResponse){
       request.setEncoding('utf8');let body='';for await(const chunk of request){body+=chunk;if(Buffer.byteLength(body)>128){send(413,{error:'body_too_large'});return;}}
       send(200,await applicationQa.check(JSON.parse(body)));
     }catch(e){const code=e instanceof Error?e.message:'';send(code==='invalid_application_qa'?400:code==='application_qa_not_found'?404:code==='application_qa_busy'?409:503,{error:['invalid_application_qa','application_qa_not_found','application_qa_busy'].includes(code)?code:'application_qa_unavailable'});}return;
+  }
+  if(request.method==='POST'&&request.url==='/v1/apps/soundwerks/install'){
+    try{
+      request.setEncoding('utf8');let body='';
+      for await(const chunk of request){body+=chunk;if(Buffer.byteLength(body)>4096){send(413,{error:'body_too_large'});return;}}
+      const input=soundwerksInput(JSON.parse(body));
+      send(200,await sites.installSoundwerks(input,{
+        prepare:prepareSoundwerks,
+        database:(site,details)=>databases.createForLockedSite({
+          id:details.databaseId,siteId:site.id,engine:'postgresql',
+          password:details.databasePassword
+        },site.id)
+      }));
+    }catch(e){
+      const code=e instanceof Error?e.message:'';
+      const allow=['invalid_soundwerks_request','invalid_soundwerks_target','soundwerks_already_recorded',
+        'soundwerks_prerequisites_unavailable','soundwerks_install_requires_inspection',
+        'soundwerks_private_data_exists','soundwerks_runtime_must_be_stopped',
+        'soundwerks_runtime_config_changed','app_target_not_empty','app_target_incompatible',
+        'site_revision_conflict','node22_runtime_not_available','domain_in_use','site_limit',
+        'site_provisioning_requires_inspection','software_install_requires_inspection',
+        'database_engine_unavailable','database_provisioning_requires_inspection'];
+      const safe=allow.includes(code)?code:'soundwerks_install_requires_inspection';
+      send(safe.startsWith('invalid_')?400:safe.endsWith('requires_inspection')?503:409,{error:safe});
+    }
+    return;
   }
   if(request.method==='POST'&&request.url==='/v1/apps/devone-cms/install'){
     try{
