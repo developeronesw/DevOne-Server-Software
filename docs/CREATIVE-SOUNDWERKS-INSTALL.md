@@ -34,6 +34,32 @@
 - This creates a fresh installation; in-place upgrades, full app removal and full media/database restore need separate lifecycle operations.
 - CI covers builds, isolated authorization tests and mock site/DB worker flows. **Real Ubuntu host installation, TLS, reboot and browser acceptance must still be verified** before declaring stable.
 
+## If installation reports missing PostgreSQL or FFmpeg
+
+The former installer showed one combined message for several failures. As of the prerequisite hardening patch, DevOne distinguishes:
+
+- `soundwerks_ffmpeg_<reason>`: FFmpeg/FFprobe installation or binary verification failed.
+- `soundwerks_postgresql_<reason>`: PostgreSQL installation or service verification failed.
+
+The `reason` suffix is an allowlisted APT/host diagnostic such as `install_lock_busy`, `repository_origin_unverified`, `apt_simulation_failed`, `apt_transaction_failed`, or `package_service_inactive`. Raw APT stderr and credentials are **never** sent to the panel or stored in job records. Look for `devone_soundwerks_media_prerequisite_failed` or `devone_software_install_requires_inspection` in the DevOne Agent journal to find its structured failure reason.
+
+Read-only checks on the existing VPS:
+
+```bash
+sudo systemctl is-active postgresql
+command -v ffmpeg
+command -v ffprobe
+ffmpeg -version | head -n 1
+ffprobe -version | head -n 1
+sudo bash /opt/devone/current/scripts/software-runtime-pilot.sh --check ffmpeg
+```
+
+The last command validates Ubuntu's APT package source and simulates dependency changes; it does not install or remove packages. If `ffmpeg` is installed, both binaries should be available. A missing `ffprobe` means media support is not ready.
+
+The managed media installer shares DevOne's fixed-script APT policy and package mutation lock with the other managed runtimes. It now allows a 4 MiB output buffer for FFmpeg's multi-package install and verifies both binaries. It does not require a fictional `ffmpeg.service`.
+
+Do not run the fresh DevOne VPS installer to correct these prerequisites. After a successful in-place update and CI verification, rerun the managed Creative Soundwerks setup on a *new empty domain* or on a confirmed empty compatible site. If a previous attempt has already staged a site/database, inspect the recorded state and preserve partial resources before retrying.
+
 ## Diagnostics
 
 In DevOne, check **Activity & Jobs** for the installation job and **Websites & Files** for the website status. On the VPS, a trusted administrator may inspect the site-specific unit using `systemctl status devone-<SITE_ID>.service` and `journalctl -u devone-<SITE_ID>.service`. Do not copy passwords, environment files, setup tokens or database secrets into support tickets.
