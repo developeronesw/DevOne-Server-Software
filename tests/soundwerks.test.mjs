@@ -174,5 +174,5 @@ test('Soundwerks job API preserves allowlisted prerequisite reason, rejects arbi
  await assert.rejects(assertAgentMutationResult(
   new Response(JSON.stringify({error:'soundwerks_ffmpeg_private_details'}),{status:503}),
   'soundwerks.install'
- ),{name:'OutcomeUnknown'});
+ ),{message:'agent_outcome_unknown'});
 });
