@@ -35,14 +35,14 @@ export class JobQueue {
   }
   enqueue(actor: string, key: string, input: JobInput, operation = "service.action"): Job {
     if (!/^[a-zA-Z0-9_-]{16,128}$/.test(key)) throw new Error("invalid_request_key");
-    if (!["service.action", "site.create", "site.action", "site.tls", "database.create", "app.install", "wordpress.install", "cms.install", "software.install"].includes(operation)) throw new Error("invalid_operation");
+    if (!["service.action", "site.create", "site.action", "site.tls", "database.create", "app.install", "wordpress.install", "cms.install", "soundwerks.install", "software.install"].includes(operation)) throw new Error("invalid_operation");
     if(operation==="software.install" && (!input || !["php8.3-fpm","redis-server","docker.io","mariadb-server","postgresql"].includes((input as SoftwareInstallInput).package) || (input as SoftwareInstallInput).confirmed!==true)) throw Error("invalid_software_install");
-    if(["wordpress.install","cms.install"].includes(operation)&&(!input||!/^app_[a-f0-9]{16}$/.test((input as WordPressJobInput).id)))throw Error("invalid_wordpress_request");
+    if(["wordpress.install","cms.install","soundwerks.install"].includes(operation)&&(!input||!/^app_[a-f0-9]{16}$/.test((input as WordPressJobInput).id)))throw Error("invalid_wordpress_request");
     if(operation==="app.install" && !["static-starter","php-starter","node-starter"].includes((input as AppInstallInput).appId))throw Error("unsupported_app");
     if(operation==="database.create" && (!/^db_[a-f0-9]{16}$/.test((input as DatabaseCreateInput).id)||!/^site_[a-f0-9]{16}$/.test((input as DatabaseCreateInput).siteId)||!["mariadb","postgresql"].includes((input as DatabaseCreateInput).engine)))throw Error("invalid_database_request");
     const serialized = operation === "service.action"
       ? JSON.stringify({ service: (input as ServiceInput).service, action: (input as ServiceInput).action })
-      : ["wordpress.install","cms.install"].includes(operation) ? JSON.stringify({id:(input as WordPressJobInput).id})
+      : ["wordpress.install","cms.install","soundwerks.install"].includes(operation) ? JSON.stringify({id:(input as WordPressJobInput).id})
       : operation === "database.create" ? JSON.stringify({id:(input as DatabaseCreateInput).id,siteId:(input as DatabaseCreateInput).siteId,engine:(input as DatabaseCreateInput).engine})
       : operation === "app.install" ? JSON.stringify({appId:(input as AppInstallInput).appId,siteId:(input as AppInstallInput).siteId,domain:(input as AppInstallInput).domain,expectedRevision:(input as AppInstallInput).expectedRevision})
       : operation === "software.install" ? JSON.stringify({package:(input as SoftwareInstallInput).package,confirmed:(input as SoftwareInstallInput).confirmed})
