@@ -11,6 +11,8 @@ import {JobQueue} from '../apps/api/dist/jobs.js';
 import {SiteManager} from '../agent/dist/sites.js';
 import {SiteFiles} from '../agent/dist/site-files.js';
 import {soundwerksRelease,soundwerksInput} from '../agent/dist/soundwerks-release.js';
+import {prepareSoundwerks} from '../agent/dist/soundwerks.js';
+import {installSoundwerksMedia,SoftwareInstallFailure} from '../agent/dist/software.js';
 
 const credentials={id:'app_0123456789abcdef',databaseId:'db_0123456789abcdef',
  databasePassword:'ab'.repeat(32),adminUsername:'creative_admin',
@@ -103,4 +105,60 @@ test('Soundwerks queued jobs recheck Owner and never persist application credent
   assert.equal(queue.get(job.id).error,'authorization_revoked');
   assert.deepEqual(JSON.parse(job.input),{id:credentials.id});
  }finally{await queue.stop();db.close();}
+});
+
+test('already healthy PostgreSQL and both media tools require no package installation',async()=>{
+ const attempted=[];
+ await prepareSoundwerks({
+  status:async()=>({installAvailable:true,packages:[{package:'postgresql',installed:true,serviceActive:true,version:'16'}]}),
+  postgresInstall:async()=>attempted.push('postgresql'),
+  mediaInstall:async()=>attempted.push('ffmpeg'),
+  checkBinary:async()=>true
+ });
+ assert.deepEqual(attempted,[]);
+});
+test('missing FFprobe alone triggers verified media install, not PostgreSQL',async()=>{
+ let mediaInstalled=false;
+ const attempted=[];
+ await prepareSoundwerks({
+  status:async()=>({installAvailable:true,packages:[{package:'postgresql',installed:true,serviceActive:true,version:'16'}]}),
+  postgresInstall:async()=>attempted.push('postgresql'),
+  mediaInstall:async()=>{attempted.push('ffmpeg');mediaInstalled=true;},
+  checkBinary:async name=>name==='ffmpeg'||mediaInstalled
+ });
+ assert.deepEqual(attempted,['ffmpeg']);
+});
+test('PostgreSQL and FFmpeg failures are identified separately and sanitized',async()=>{
+ const missing={status:async()=>({installAvailable:true,packages:[]}),checkBinary:async()=>false};
+ await assert.rejects(prepareSoundwerks({...missing,
+  postgresInstall:async()=>{throw new SoftwareInstallFailure('apt_candidate_unavailable');}
+ }),{message:'soundwerks_postgresql_apt_candidate_unavailable'});
+ await assert.rejects(prepareSoundwerks({
+  status:async()=>({installAvailable:true,packages:[{package:'postgresql',installed:true,serviceActive:true,version:'16'}]}),
+  checkBinary:async()=>false,
+  mediaInstall:async()=>{throw new SoftwareInstallFailure('repository_origin_unverified');}
+ }),{message:'soundwerks_ffmpeg_repository_origin_unverified'});
+ await assert.rejects(prepareSoundwerks({
+  status:async()=>({installAvailable:true,packages:[{package:'postgresql',installed:true,serviceActive:true,version:'16'}]}),
+  checkBinary:async()=>false,
+  mediaInstall:async()=>{}
+ }),{message:'soundwerks_ffmpeg_package_service_inactive'});
+});
+test('FFmpeg package uses guarded fixed script, 4 MiB output buffer, verifies both media binaries',async()=>{
+ const calls=[];
+ const run=async(binary,args,options)=>{
+  calls.push({binary,args,options});
+  if(binary==='/usr/bin/bash')return {stdout:'Media package installed successfully',stderr:''};
+  if(['/usr/bin/ffmpeg','/usr/bin/ffprobe'].includes(binary))return {stdout:args.length===1?binary.slice(9)+' version 6.1.1': '',stderr:''};
+  throw Error('unapproved binary');
+ };
+ await installSoundwerksMedia(run);
+ assert.deepEqual(calls.map(x=>x.binary),['/usr/bin/bash','/usr/bin/ffmpeg','/usr/bin/ffprobe']);
+ assert.deepEqual(calls[0].args,['/opt/devone/current/scripts/software-runtime-pilot.sh','--managed-install','ffmpeg']);
+ assert.ok(calls[0].options.maxBuffer>=4*1024*1024);
+});
+test('FFmpeg install retains allowlisted APT reason without forwarding raw stderr',async()=>{
+ const failing=async()=>{const error=new Error('Private APT details');error.stderr='DEVONE_INSTALL_ERROR:install_lock_busy\nMore private text';throw error;};
+ await assert.rejects(installSoundwerksMedia(failing),error=>
+  error instanceof SoftwareInstallFailure&&error.reason==='install_lock_busy'&&!error.message.includes('Private'));
 });
