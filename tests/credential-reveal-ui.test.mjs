@@ -13,7 +13,7 @@ test('saved-login form owns visible Owner fields and enables submit without a ne
   const source=await readFile(new URL('../apps/dashboard/src/CredentialReveal.tsx',import.meta.url),'utf8');
   const compiled=ts.transpileModule(source,{compilerOptions:{jsx:ts.JsxEmit.ReactJSX,module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText.replace(/from (["'])(react(?:\/jsx-runtime)?)\1/g,(_,q,name)=>'from '+JSON.stringify(pathToFileURL(require.resolve(name)).href));
   const file=join(dir,'CredentialReveal.mjs');await writeFile(file,compiled);const {CredentialReveal}=await import(pathToFileURL(file).href);
-  for(const product of ['devone-cms','wordpress']){
+  for(const product of ['devone-cms','wordpress','soundwerks']){
    const html=renderToStaticMarkup(React.createElement(CredentialReveal,{product,installationId:'app_0123456789abcdef',domain:'app.example.test',tls:true,onBusy:()=>{}}));
    assert.match(html,/Unlock saved login/);assert.match(html,/Panel Owner password/);assert.match(html,/MFA or recovery code/);
    assert.match(html.match(/<input[^>]*name="reveal-owner-password"[^>]*>/)?.[0]??'',/required/);
