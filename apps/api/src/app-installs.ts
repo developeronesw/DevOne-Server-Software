@@ -9,7 +9,7 @@ export function registerAppInstalls(app:FastifyInstance,deps:{jobs:JobQueue;requ
  app.get("/api/apps",async(request,reply)=>{
   const user=deps.requestUser(request);if(!user)return reply.code(401).send({error:"unauthorized"});
   if(!["owner","admin"].includes(user.role))return reply.code(403).send({error:"forbidden"});
-  return {apps:[...installableApps,...(user.role==="owner"?[{id:"devone-cms-v2",name:"DevOne CMS · preview",siteType:"node",version:"2.0.0-alpha.5"},{id:"wordpress",name:"WordPress",siteType:"php",version:"7.1.3"}]:[])],notice:"Starter apps and Owner-approved WordPress/DevOne CMS preview installers. Existing websites must be empty and use the matching runtime."};
+  return {apps:[...installableApps,...(user.role==="owner"?[{id:"devone-cms-v2",name:"DevOne CMS · preview",siteType:"node",version:"2.0.0-alpha.5"},{id:"wordpress",name:"WordPress",siteType:"php",version:"7.1.3"},{id:"creative-soundwerks",name:"Creative Soundwerks 2 · preview",siteType:"node",version:"0.1.0-preview"}]:[])],notice:"Starter apps and Owner-approved WordPress/DevOne CMS/Creative Soundwerks preview installers. Existing websites must be empty and use the matching runtime."};
  });
  app.post("/api/apps/install",async(request,reply)=>{
   const user=deps.requestUser(request);if(!user)return reply.code(401).send({error:"unauthorized"});
