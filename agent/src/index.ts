@@ -14,7 +14,7 @@ import {ApplicationQa} from "./application-qa.js";
 import {DisposableHostQa} from "./disposable-qa.js";
 import { UpdatesManager } from "./updates.js";
 import { discoverSoftware } from "./discovery.js";
-import { softwareCapabilities, softwarePreflight, softwareStatus, softwareInstall, SoftwareInstallFailure } from "./software.js";
+import { softwareCapabilities, softwarePreflight, softwareStatus, softwareInstall, SoftwareInstallFailure, installFailureReasons } from "./software.js";
 import { inspectSecurity } from "./security.js";
 import { crowdSecReadiness } from "./crowdsec.js";
 import {recentCrowdSecEvents} from "./crowdsec-events.js";
@@ -87,8 +87,12 @@ async function handle(request:IncomingMessage,response:ServerResponse){
         'site_revision_conflict','node22_runtime_not_available','domain_in_use','site_limit',
         'site_provisioning_requires_inspection','software_install_requires_inspection',
         'database_engine_unavailable','database_provisioning_requires_inspection'];
-      const safe=allow.includes(code)?code:'soundwerks_install_requires_inspection';
-      send(safe.startsWith('invalid_')?400:safe.endsWith('requires_inspection')?503:409,{error:safe});
+      const prerequisite=/^soundwerks_(ffmpeg|postgresql)_([a-z0-9_]+)$/.exec(code);
+      const knownPrerequisite=prerequisite&&
+        (installFailureReasons.some(reason=>reason===prerequisite[2])||prerequisite[2]==='unclassified');
+      const safe=(allow.includes(code)||knownPrerequisite)?code:'soundwerks_install_requires_inspection';
+      send(safe.startsWith('invalid_')?400:
+        safe.endsWith('requires_inspection')||knownPrerequisite?503:409,{error:safe});
     }
     return;
   }
