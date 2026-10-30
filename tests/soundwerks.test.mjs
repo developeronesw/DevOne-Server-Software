@@ -89,3 +89,18 @@ test('SiteManager uses isolated site and preserves failed installs',async()=>{
   await assert.rejects(manager.installSoundwerks(credentials,{prepare:async()=>{},database:async()=>{}}),/already_recorded/);
  }finally{await rm(dir,{recursive:true,force:true});}
 });
+
+test('Soundwerks queued jobs recheck Owner and never persist application credentials',async()=>{
+ const db=new DatabaseSync(':memory:');
+ db.exec("CREATE TABLE users(id TEXT PRIMARY KEY,role TEXT);INSERT INTO users VALUES('panel_admin','admin')");
+ let executed=false;
+ const queue=new JobQueue(db,async()=>{executed=true;},()=>{});
+ try{
+  const job=queue.enqueue('panel_admin','soundwerks_owner_revoked_1234',
+   {id:credentials.id,adminPassword:credentials.adminPassword},'soundwerks.install');
+  await queue.idle();
+  assert.equal(executed,false);
+  assert.equal(queue.get(job.id).error,'authorization_revoked');
+  assert.deepEqual(JSON.parse(job.input),{id:credentials.id});
+ }finally{await queue.stop();db.close();}
+});
