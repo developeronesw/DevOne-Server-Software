@@ -23,13 +23,37 @@ const stages:Record<string,string>={
 };
 const help:Record<string,string>={
  soundwerks_install_requires_inspection:'Installation did not complete. Inspect DevOne Jobs and the site Agent logs; partial database or files are preserved. Do not rerun blindly.',
- soundwerks_prerequisites_unavailable:'PostgreSQL or FFmpeg/FFprobe could not be installed or verified.',
+ soundwerks_prerequisites_unavailable:'Legacy media prerequisite failure. Check DevOne Agent logs for the FFmpeg installation reason.',
  soundwerks_runtime_must_be_stopped:'Stop the selected Node website before installation.',
  app_target_not_empty:'Choose a new domain or a completely empty Node.js 22 website.',
  app_target_incompatible:'The target must be an empty DevOne Node.js 22 website.',
  soundwerks_https_required:'Enable HTTPS in Websites & Files to unlock its saved administrator login.',
  invalid_administrator_account:'Use a unique administrator name and matching strong password.'
 };
+const prerequisiteReasons:Record<string,string>={
+ install_lock_busy:'Another managed installation is running. Inspect Activity & Jobs before retrying.',
+ apt_candidate_unavailable:'The Ubuntu package is missing from current APT metadata. Check the Ubuntu repositories and refresh APT metadata.',
+ candidate_sources_unavailable:'The candidate package cannot be matched to verified Ubuntu repository metadata.',
+ repository_origin_unverified:'The package source could not be verified as an approved Ubuntu Noble repository. DevOne correctly refused to install it.',
+ apt_simulation_failed:'Ubuntu could not resolve the package dependencies safely.',
+ protected_package_change:'The proposed APT transaction would affect protected DevOne or system packages.',
+ apt_transaction_failed:'The package manager reported an installation failure. Inspect the Agent journal and APT logs.',
+ package_service_inactive:'The required service or FFmpeg/FFprobe binaries did not pass verification.',
+ disk_space_low:'The VPS has less than 512 MiB free disk space.',
+ agent_permissions:'The Agent lacks permissions required to install Ubuntu packages.',
+ unsupported_ubuntu:'Managed prerequisites require Ubuntu 24.04.',
+ unsupported_architecture:'Managed prerequisites require an amd64 VPS.',
+ unclassified:'The installation failed without a recognized safe reason. Read the DevOne Agent journal for a sanitized diagnostic.'
+};
+function installationErrorMessage(code:string):string{
+ const match=/^soundwerks_(ffmpeg|postgresql)_([a-z0-9_]+)$/.exec(code);
+ if(match){
+  const component=match[1]==='ffmpeg'?'FFmpeg / FFprobe':'PostgreSQL';
+  const details=prerequisiteReasons[match[2]]??'See the sanitized installation reason in the DevOne Agent journal.';
+  return component+' installation failed: '+details;
+ }
+ return help[code]??code;
+}
 export function SoundwerksInstaller({siteId,domain,expectedRevision,onBusy}:{
  siteId?:string;domain?:string;expectedRevision?:number;onBusy:(busy:boolean)=>void
 }){
@@ -109,7 +133,7 @@ export function SoundwerksInstaller({siteId,domain,expectedRevision,onBusy}:{
     {progress&&<p>{progress.domain} · {progress.state}</p>}
    </div><span className={'state-chip '+(job.state==='succeeded'?'good':job.state==='failed'?'bad':'neutral')}>{job.state}</span></div>
    <p className="installer-job-id">Job: {job.id}</p>
-   {job.error&&<p className="inline-error" role="alert">{help[job.error]??job.error}</p>}
+   {job.error&&<p className="inline-error" role="alert">{installationErrorMessage(job.error)}</p>}
   </section>}
   {!busy&&job?.state==='succeeded'&&<CredentialReveal key={id+':'+revealEpoch}
    product="soundwerks" installationId={id} domain={progress?.domain} tls={progress?.tls} onBusy={setUnlockBusy}/>}
@@ -119,6 +143,6 @@ export function SoundwerksInstaller({siteId,domain,expectedRevision,onBusy}:{
      setId(h.id);setJob(h.job);setProgress(null);setRevealEpoch(n=>n+1);
     }}>View installation</button>}</div>)}
   </details>}
-  {error&&<p role="alert" className="inline-error">{help[error]??error}</p>}
+  {error&&<p role="alert" className="inline-error">{installationErrorMessage(error)}</p>}
  </div>;
 }
