@@ -41,3 +41,16 @@ export async function verifySoundwerksTarget(target:unknown,fetcher:GitHubFetche
  if(release.latestSha!==sha)throw Error('soundwerks_update_target_changed');
  return release;
 }
+
+export type SoundwerksUpdateInput={id:string;siteId:string;targetSha:string;expectedRevision:number};
+export function soundwerksUpdateInput(value:unknown):SoundwerksUpdateInput{
+ if(!value||typeof value!=='object'||Array.isArray(value))throw Error('invalid_soundwerks_update');
+ const b=value as Record<string,unknown>;
+ if(Object.keys(b).length!==4||
+  !/^app_[a-f0-9]{16}$/.test(String(b.id??''))||
+  !/^site_[a-f0-9]{16}$/.test(String(b.siteId??''))||
+  !Number.isSafeInteger(b.expectedRevision)||Number(b.expectedRevision)<1)
+  throw Error('invalid_soundwerks_update');
+ return {id:b.id as string,siteId:b.siteId as string,
+  targetSha:assertSoundwerksTarget(b.targetSha),expectedRevision:b.expectedRevision as number};
+}
