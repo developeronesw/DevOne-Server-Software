@@ -1,4 +1,5 @@
 import {CredentialReveal} from './CredentialReveal';
+import {SoundwerksUpdates} from './SoundwerksUpdates';
 import {AdminAccountFields,adminAccountReady} from './AdminAccountFields';
 import {useEffect,useRef,useState} from 'react';
 
@@ -141,7 +142,9 @@ export function SoundwerksInstaller({siteId,domain,expectedRevision,onBusy}:{
    {history.map(h=><div className="installer-history-row" key={h.id}>{h.title} · {h.domain??h.id} · {h.job?.state??'reserved'}
     {h.job&&<button disabled={actionBusy||running} onClick={()=>{
      setId(h.id);setJob(h.job);setProgress(null);setRevealEpoch(n=>n+1);
-    }}>View installation</button>}</div>)}
+    }}>View installation</button>}
+    {h.job?.state==='succeeded'&&<SoundwerksUpdates installationId={h.id}/>}
+   </div>)}
   </details>}
   {error&&<p role="alert" className="inline-error">{installationErrorMessage(error)}</p>}
  </div>;
