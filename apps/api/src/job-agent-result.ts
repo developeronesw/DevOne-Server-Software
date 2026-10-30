@@ -6,6 +6,10 @@ import {isSafeInstallFailureReason} from "./software-reasons.js";
 export async function assertAgentMutationResult(response:Response,operation:string):Promise<void>{
  if(response.ok)return;
  const payload=await response.json().catch(()=>({})) as {error?:unknown;reason?:unknown};
+ if(operation==="soundwerks.install"){
+  const match=/^soundwerks_(ffmpeg|postgresql)_([a-z0-9_]+)$/.exec(String(payload.error??''));
+  if(match&&isSafeInstallFailureReason(match[2]))throw Error(payload.error as string);
+ }
  if(operation==="soundwerks.install"&&["soundwerks_install_requires_inspection","soundwerks_already_recorded","soundwerks_private_data_exists","soundwerks_runtime_must_be_stopped","soundwerks_runtime_config_changed","soundwerks_prerequisites_unavailable","database_engine_unavailable","database_provisioning_requires_inspection","app_target_not_empty","app_target_incompatible","site_revision_conflict","node22_runtime_not_available","domain_in_use","site_limit","site_provisioning_requires_inspection"].includes(payload.error as string))throw Error(payload.error as string);
  if(operation==="cms.install"&&["cms_install_requires_inspection","cms_already_recorded","cms_private_data_exists","cms_runtime_must_be_stopped","cms_runtime_config_changed","app_target_not_empty","app_target_incompatible","site_revision_conflict","node22_runtime_not_available","domain_in_use","site_limit","site_provisioning_requires_inspection"].includes(payload.error as string))throw Error(payload.error as string);
  if(operation==="wordpress.install"&&["software_install_requires_inspection","site_provisioning_requires_inspection","domain_in_use","site_limit","php83_runtime_not_running","wordpress_install_requires_inspection","wordpress_prerequisites_unavailable","wordpress_artifact_unavailable","wordpress_already_recorded","app_target_not_empty","app_target_incompatible","site_revision_conflict"].includes(payload.error as string))throw Error(payload.error as string);
