@@ -4,6 +4,7 @@ import {constants} from 'node:fs';
 import type {IncomingMessage,ServerResponse} from 'node:http';
 import {wordpressInput} from "./wordpress-release.js";
 import {soundwerksInput} from "./soundwerks-release.js";
+import {soundwerksUpdateInput} from './soundwerks-updates.js';
 import {prepareSoundwerks} from "./soundwerks.js";
 import {prepareWordPress} from "./wordpress.js";
 import {DatabaseManager} from "./databases.js";
@@ -65,6 +66,44 @@ async function handle(request:IncomingMessage,response:ServerResponse){
       request.setEncoding('utf8');let body='';for await(const chunk of request){body+=chunk;if(Buffer.byteLength(body)>128){send(413,{error:'body_too_large'});return;}}
       send(200,await applicationQa.check(JSON.parse(body)));
     }catch(e){const code=e instanceof Error?e.message:'';send(code==='invalid_application_qa'?400:code==='application_qa_not_found'?404:code==='application_qa_busy'?409:503,{error:['invalid_application_qa','application_qa_not_found','application_qa_busy'].includes(code)?code:'application_qa_unavailable'});}return;
+  }
+  if(request.method==='POST'&&request.url==='/v1/apps/soundwerks/updates/check'){
+    try{
+      request.setEncoding('utf8');let body='';
+      for await(const chunk of request){body+=chunk;if(Buffer.byteLength(body)>512){send(413,{error:'body_too_large'});return;}}
+      const data=JSON.parse(body) as Record<string,unknown>;
+      if(!data||Object.keys(data).length!==1||!/^app_[a-f0-9]{16}$/.test(String(data.id??'')))
+       throw Error('invalid_soundwerks_update');
+      send(200,await sites.soundwerksUpdateStatus(data.id as string));
+    }catch(error){
+      const code=error instanceof Error?error.message:'';
+      const safe=['invalid_soundwerks_update','soundwerks_installation_not_found',
+       'github_rate_limited','github_unavailable','soundwerks_ci_unavailable','soundwerks_invalid_remote_revision'];
+      send(code==='invalid_soundwerks_update'?400:code==='soundwerks_installation_not_found'?404:503,
+       {error:safe.includes(code)?code:'soundwerks_update_check_unavailable'});
+    }
+    return;
+  }
+  if(request.method==='POST'&&request.url==='/v1/apps/soundwerks/update'){
+    try{
+      request.setEncoding('utf8');let body='';
+      for await(const chunk of request){body+=chunk;if(Buffer.byteLength(body)>1024){send(413,{error:'body_too_large'});return;}}
+      send(200,await sites.updateSoundwerks(soundwerksUpdateInput(JSON.parse(body))));
+    }catch(error){
+      const code=error instanceof Error?error.message:'';
+      const safe=['invalid_soundwerks_update','invalid_soundwerks_update_target',
+        'soundwerks_update_site_unavailable','site_revision_conflict',
+        'soundwerks_already_current','soundwerks_update_target_changed',
+        'soundwerks_release_checks_not_passed','github_rate_limited','github_unavailable',
+        'soundwerks_ci_unavailable','soundwerks_invalid_remote_revision',
+        'soundwerks_update_build_failed','soundwerks_update_rolled_back',
+        'soundwerks_update_requires_inspection','unsafe_soundwerks_update_path',
+        'unsafe_soundwerks_config','soundwerks_runtime_config_changed'];
+      send(code.startsWith('invalid_')?400:
+        code==='soundwerks_update_requires_inspection'?503:409,
+        {error:safe.includes(code)?code:'soundwerks_update_requires_inspection'});
+    }
+    return;
   }
   if(request.method==='POST'&&request.url==='/v1/apps/soundwerks/install'){
     try{
