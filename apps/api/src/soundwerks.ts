@@ -23,9 +23,19 @@ export function soundwerksJobPayload(db:DatabaseSync,vault:Vault,id:string){
  if(!databasePassword||!adminPassword)throw Error('soundwerks_credentials_missing');
  return {id,databaseId:row.database_id,...JSON.parse(row.metadata),databasePassword,adminPassword};
 }
+type UpdateReservation={id:string;installation_id:string;actor:string;request_key:string;
+ target_sha:string;site_id:string;expected_revision:number};
+export function soundwerksUpdateJobPayload(db:DatabaseSync,id:string){
+ if(!/^app_[a-f0-9]{16}$/.test(id))throw Error('invalid_soundwerks_update');
+ const row=db.prepare('SELECT * FROM soundwerks_updates WHERE id=?').get(id) as UpdateReservation|undefined;
+ if(!row)throw Error('soundwerks_update_request_missing');
+ return {id:row.installation_id,siteId:row.site_id,
+  expectedRevision:row.expected_revision,targetSha:row.target_sha};
+}
 export function registerSoundwerks(app:FastifyInstance,deps:Deps){
  const {db,vault,jobs}=deps;
  db.exec('CREATE TABLE IF NOT EXISTS soundwerks_requests(id TEXT PRIMARY KEY,actor TEXT NOT NULL REFERENCES users(id),request_key TEXT NOT NULL,metadata TEXT NOT NULL,database_id TEXT NOT NULL,UNIQUE(actor,request_key));');
+ db.exec('CREATE TABLE IF NOT EXISTS soundwerks_updates(id TEXT PRIMARY KEY,installation_id TEXT NOT NULL REFERENCES soundwerks_requests(id),actor TEXT NOT NULL REFERENCES users(id),request_key TEXT NOT NULL,target_sha TEXT NOT NULL,site_id TEXT NOT NULL,expected_revision INTEGER NOT NULL,UNIQUE(actor,request_key));');
  const attempts=new Map<string,{n:number;until:number}>();
  const timer=setInterval(()=>{for(const [id,a] of attempts)if(a.until<Date.now())attempts.delete(id);},60000);
  timer.unref();app.addHook('onClose',async()=>clearInterval(timer));
@@ -48,6 +58,17 @@ export function registerSoundwerks(app:FastifyInstance,deps:Deps){
   const checked=deps.stepUp(user.id,b.password,b.mfaCode);
   if(checked!=='ok'){reply.code(403).send({error:checked==='password_invalid'?'owner_password_invalid':checked});return false;}
   return true;
+ }
+ async function agentUpdateCheck(id:string){
+  if(!deps.agentToken)throw Error('agent_not_configured');
+  const response=await fetch(deps.agentUrl+'/v1/apps/soundwerks/updates/check',{
+   method:'POST',headers:{'Authorization':'Bearer '+deps.agentToken,'Content-Type':'application/json'},
+   body:JSON.stringify({id}),redirect:'error',signal:AbortSignal.timeout(25000)
+  });
+  if(!response.ok)throw Error('soundwerks_update_check_unavailable');
+  return response.json() as Promise<{siteId:string;domain:string;state:string;revision:number;
+   currentSha:string;latestSha:string;approved:boolean;updateAvailable:boolean;
+   checks:string;workflowUrl:string|null}>;
  }
  async function inventory(){
   if(!deps.agentToken)throw Error();
@@ -115,6 +136,55 @@ export function registerSoundwerks(app:FastifyInstance,deps:Deps){
    const site=(await inventory()).find(s=>s.application?.id===req.params.id&&s.application.appId==='creative-soundwerks');
    return {installation:site?{id:req.params.id,siteId:site.id,domain:site.domain,state:site.state,stage:site.application!.stage,tls:site.tls===true}:null};
   }catch{return reply.code(503).send({error:'soundwerks_status_unavailable'});}
+ });
+ app.get<{Params:{id:string}}>('/api/apps/soundwerks/:id/updates',async(req,reply)=>{
+  if(!owner(req,reply))return;
+  if(!/^app_[a-f0-9]{16}$/.test(req.params.id))return reply.code(400).send({error:'invalid_soundwerks_update'});
+  if(!db.prepare('SELECT 1 FROM soundwerks_requests WHERE id=?').get(req.params.id))
+   return reply.code(404).send({error:'installation_not_found'});
+  try{return {update:await agentUpdateCheck(req.params.id)};}
+  catch{return reply.code(503).send({error:'soundwerks_update_check_unavailable'});}
+ });
+ app.post<{Params:{id:string}}>('/api/apps/soundwerks/:id/update',async(req,reply)=>{
+  const user=owner(req,reply,true);if(!user)return;
+  const b=req.body as Record<string,unknown>|null;
+  if(!/^app_[a-f0-9]{16}$/.test(req.params.id)||!b||Array.isArray(b)||
+   Object.keys(b).some(k=>!['targetSha','confirmed','requestKey','password','mfaCode'].includes(k))||
+   b.confirmed!==true||typeof b.targetSha!=='string'||!/^[a-f0-9]{40}$/.test(b.targetSha)||
+   typeof b.requestKey!=='string'||!/^[a-zA-Z0-9_-]{16,128}$/.test(b.requestKey))
+   return reply.code(400).send({error:'invalid_soundwerks_update'});
+  if(!db.prepare('SELECT 1 FROM soundwerks_requests WHERE id=?').get(req.params.id))
+   return reply.code(404).send({error:'installation_not_found'});
+  if(!verify(user,b,reply))return;
+  let latest;
+  try{latest=await agentUpdateCheck(req.params.id);}
+  catch{return reply.code(503).send({error:'soundwerks_update_check_unavailable'});}
+  if(!latest.approved)return reply.code(409).send({error:'soundwerks_release_checks_not_passed'});
+  if(!latest.updateAvailable)return reply.code(409).send({error:'soundwerks_already_current'});
+  if(latest.latestSha!==b.targetSha)return reply.code(409).send({error:'soundwerks_update_target_changed'});
+  if(latest.state!=='ready')return reply.code(409).send({error:'soundwerks_update_site_unavailable'});
+  const existing=db.prepare('SELECT * FROM soundwerks_updates WHERE actor=? AND request_key=?')
+   .get(user.id,b.requestKey) as UpdateReservation|undefined;
+  if(existing&&(existing.installation_id!==req.params.id||existing.target_sha!==b.targetSha||
+   existing.site_id!==latest.siteId||existing.expected_revision!==latest.revision))
+   return reply.code(409).send({error:'request_key_conflict'});
+  try{
+   const row=existing??{
+    id:'app_'+randomBytes(8).toString('hex'),installation_id:req.params.id,
+    actor:user.id,request_key:b.requestKey,target_sha:b.targetSha,site_id:latest.siteId,
+    expected_revision:latest.revision
+   } as UpdateReservation;
+   if(!existing)db.prepare('INSERT INTO soundwerks_updates VALUES(?,?,?,?,?,?,?)').run(
+    row.id,row.installation_id,row.actor,row.request_key,row.target_sha,row.site_id,row.expected_revision);
+   const job=jobs.enqueue(user.id,b.requestKey,{id:row.id},'soundwerks.update');
+   deps.audit(user.id,'soundwerks.update_authorized',{
+    id:req.params.id,jobId:job.id,siteId:latest.siteId,targetSha:b.targetSha
+   });
+   return reply.code(202).send({job,installationId:req.params.id,targetSha:b.targetSha});
+  }catch(error){
+   const conflict=error instanceof Error&&error.message==='request_key_conflict';
+   return reply.code(conflict?409:503).send({error:conflict?'request_key_conflict':'soundwerks_update_request_unavailable'});
+  }
  });
  app.post<{Params:{id:string}}>('/api/apps/soundwerks/:id/credentials',async(req,reply)=>{
   const user=owner(req,reply,true);if(!user)return;
