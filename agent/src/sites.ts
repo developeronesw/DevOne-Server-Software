@@ -1,6 +1,7 @@
 import {cmsInput,cmsRelease,type CmsInstall} from './cms-release.js';
 import {soundwerksInput,soundwerksRelease,type SoundwerksInstall} from './soundwerks-release.js';
-import {runSoundwerksWorker} from './soundwerks.js';
+import {runSoundwerksWorker,runSoundwerksUpdateWorker,type SoundwerksUpdateMode} from './soundwerks.js';
+import {soundwerksUpdateInput,verifySoundwerksTarget,type SoundwerksUpdateInput} from './soundwerks-updates.js';
 import {runCmsWorker} from './cms.js';
 import {wordpressInput,wordpressRelease,type WordPressInstall} from './wordpress-release.js';
 import {runWordPressWorker} from './wordpress.js';
@@ -17,9 +18,9 @@ import { defaultWafPolicy, validateWaf, isValidWaf, nginxWafZone, nginxWafLocati
 import {nodeSitePort,phpPoolPath,phpPoolConfig,nodeUnitPath,nodeUnitName,nodeUnitConfig,pythonUnitConfig,runtimeContainerName,dockerRunArgs,runtimeNginxLocation} from './site-runtimes.js';
 
 const exec = promisify(execFile);
-export type Application={id:string;appId:'wordpress'|'devone-cms-v2'|'creative-soundwerks';version:string;databaseId?:string;stage:'database'|'installing'|'publishing'|'verifying'|'complete'};
+export type Application={id:string;appId:'wordpress'|'devone-cms-v2'|'creative-soundwerks';version:string;databaseId?:string;sourceRevision?:string;stage:'database'|'installing'|'publishing'|'verifying'|'complete'};
 export type Site = { application?:Application; id: string; domain: string; user: string; uid?: number; gid?: number; siteType?: 'static' | 'files' | 'php' | 'node' | 'python' | 'container'; runtimeVersion?:'8.3'|'22'|'3.12'; appActive?:boolean; waf?:WafPolicy; webServer: 'nginx' | 'none'; state: 'provisioning' | 'ready' | 'disabled' | 'updating' | 'needs_inspection'; createdAt: string; aliases?: string[]; revision?: number; configHash?: string; tls?: boolean; certificateIssued?: boolean };
-type Options = { registry: string; base: string; nginx: string; panelDomain: string; requireRoot?: boolean; certificates?: string; phpPoolDir?:string; nodeUnitDir?:string; ownership?: typeof chown; worker?: (site: Site,request: Record<string,unknown>) => Promise<unknown>; command?: (command: string, args: string[]) => Promise<string>; cmsWorker?:typeof runCmsWorker;cmsHealth?:(site:Site)=>Promise<void>;wordpressWorker?:typeof runWordPressWorker; wordpressHealth?:(site:Site)=>Promise<void>;soundwerksWorker?:typeof runSoundwerksWorker;soundwerksHealth?:(site:Site)=>Promise<void>;soundwerksBootstrap?:(site:Site,input:SoundwerksInstall,token:string)=>Promise<void> };
+type Options = { registry: string; base: string; nginx: string; panelDomain: string; requireRoot?: boolean; certificates?: string; phpPoolDir?:string; nodeUnitDir?:string; ownership?: typeof chown; worker?: (site: Site,request: Record<string,unknown>) => Promise<unknown>; command?: (command: string, args: string[]) => Promise<string>; cmsWorker?:typeof runCmsWorker;cmsHealth?:(site:Site)=>Promise<void>;wordpressWorker?:typeof runWordPressWorker; wordpressHealth?:(site:Site)=>Promise<void>;soundwerksUpdateWorker?:(site:Site,stage:string,data:string,backup:string,target:string,mode:SoundwerksUpdateMode)=>Promise<void>;soundwerksUpdateHealth?:(site:Site)=>Promise<void>;soundwerksWorker?:typeof runSoundwerksWorker;soundwerksHealth?:(site:Site)=>Promise<void>;soundwerksBootstrap?:(site:Site,input:SoundwerksInstall,token:string)=>Promise<void> };
 export function siteInput(input: unknown): { domain: string; webServer: 'nginx' | 'none'; siteType: 'static' | 'files' | 'php' | 'node' | 'python' | 'container'; runtimeVersion?:'8.3'|'22'|'3.12' } {
   if (!input || typeof input !== 'object') throw new Error('invalid_site');
   const body = input as Record<string,unknown>;
@@ -35,7 +36,7 @@ export function siteInput(input: unknown): { domain: string; webServer: 'nginx' 
     ...((siteType==='php'||siteType==='node'||siteType==='python')?{runtimeVersion:version as '8.3'|'22'|'3.12'}:{}) };
 }
 export function validRecord(site: Site) {
-  return (site.application===undefined||( /^app_[a-f0-9]{16}$/.test(site.application.id)&&['wordpress','devone-cms-v2','creative-soundwerks'].includes(site.application.appId)&&/^\d+\.\d+\.\d+(?:-[a-z0-9.]+)?$/.test(site.application.version)&&(['wordpress','creative-soundwerks'].includes(site.application.appId)?/^db_[a-f0-9]{16}$/.test(site.application.databaseId??''):site.application.databaseId===undefined)&&['database','installing','publishing','verifying','complete'].includes(site.application.stage))) && /^site_[a-f0-9]{16}$/.test(site.id) && site.user === `dvs_${site.id.slice(5)}` && validateDomain(site.domain) === site.domain && ['nginx','none'].includes(site.webServer) && (site.siteType === undefined || (site.siteType === 'static' && site.webServer === 'nginx') || (site.siteType === 'files' && site.webServer === 'none') || (['php','node','python','container'].includes(site.siteType) && site.webServer === 'nginx')) && (site.siteType === 'php' ? site.runtimeVersion === '8.3' : site.siteType === 'node' ? site.runtimeVersion === '22' : site.siteType === 'python' ? site.runtimeVersion === '3.12' : site.runtimeVersion === undefined) && ['provisioning','ready','disabled','updating','needs_inspection'].includes(site.state) && (site.aliases === undefined || Array.isArray(site.aliases) && site.aliases.length <= 20 && site.aliases.every(alias => validateDomain(alias) === alias)) && (site.revision === undefined || Number.isSafeInteger(site.revision) && site.revision >= 1) && (site.tls === undefined || typeof site.tls === 'boolean') && (site.certificateIssued === undefined || typeof site.certificateIssued === 'boolean') && (site.configHash === undefined || /^[a-f0-9]{64}$/.test(site.configHash)) && (site.waf === undefined || isValidWaf(site.waf)) && (site.appActive === undefined || typeof site.appActive === 'boolean') && (site.uid === undefined || Number.isInteger(site.uid) && site.uid >= 1000) && (site.gid === undefined || Number.isInteger(site.gid) && site.gid >= 1000);
+  return (site.application===undefined||( /^app_[a-f0-9]{16}$/.test(site.application.id)&&['wordpress','devone-cms-v2','creative-soundwerks'].includes(site.application.appId)&&/^\d+\.\d+\.\d+(?:-[a-z0-9.]+)?$/.test(site.application.version)&&(['wordpress','creative-soundwerks'].includes(site.application.appId)?/^db_[a-f0-9]{16}$/.test(site.application.databaseId??''):site.application.databaseId===undefined)&&(site.application.sourceRevision===undefined||/^[a-f0-9]{40}$/.test(site.application.sourceRevision))&&['database','installing','publishing','verifying','complete'].includes(site.application.stage))) && /^site_[a-f0-9]{16}$/.test(site.id) && site.user === `dvs_${site.id.slice(5)}` && validateDomain(site.domain) === site.domain && ['nginx','none'].includes(site.webServer) && (site.siteType === undefined || (site.siteType === 'static' && site.webServer === 'nginx') || (site.siteType === 'files' && site.webServer === 'none') || (['php','node','python','container'].includes(site.siteType) && site.webServer === 'nginx')) && (site.siteType === 'php' ? site.runtimeVersion === '8.3' : site.siteType === 'node' ? site.runtimeVersion === '22' : site.siteType === 'python' ? site.runtimeVersion === '3.12' : site.runtimeVersion === undefined) && ['provisioning','ready','disabled','updating','needs_inspection'].includes(site.state) && (site.aliases === undefined || Array.isArray(site.aliases) && site.aliases.length <= 20 && site.aliases.every(alias => validateDomain(alias) === alias)) && (site.revision === undefined || Number.isSafeInteger(site.revision) && site.revision >= 1) && (site.tls === undefined || typeof site.tls === 'boolean') && (site.certificateIssued === undefined || typeof site.certificateIssued === 'boolean') && (site.configHash === undefined || /^[a-f0-9]{64}$/.test(site.configHash)) && (site.waf === undefined || isValidWaf(site.waf)) && (site.appActive === undefined || typeof site.appActive === 'boolean') && (site.uid === undefined || Number.isInteger(site.uid) && site.uid >= 1000) && (site.gid === undefined || Number.isInteger(site.gid) && site.gid >= 1000);
 }
 export class SiteManager {
   private runningSite: string | null = null;
@@ -239,7 +240,7 @@ export class SiteManager {
       if(passwd[0]!==site.user||Number(passwd[2])!==site.uid||Number(passwd[3])!==site.gid||passwd[5]!==join(this.options.base,site.id)||passwd[6]!=='/usr/sbin/nologin')throw Error('site_identity_changed');
       const records=await this.registry(),record=records.find(s=>s.id===site!.id)!;
       const home=join(this.options.base,site.id),publicRoot=join(home,'public'),stage=join(home,'.wordpress-'+input.id),backup=join(home,'.wordpress-empty-'+input.id);
-      record.application={id:input.id,appId:'wordpress',version:wordpressRelease.version,databaseId:input.databaseId,stage:'database'};
+      record.application={id:input.id,appId:'wordpress',version:wordpressRelease.version,databaseId:input.databaseId,sourceRevision:soundwerksRelease.commit,stage:'database'};
       record.state='updating';await this.save(records);
       let moved=false,published=false;
       let previousConfig:string|undefined,previousHash:string|undefined;
@@ -461,6 +462,130 @@ export class SiteManager {
       if(siteId&&this.fileQueues.get(siteId)===operation)this.fileQueues.delete(siteId);
     });
   }
+  async soundwerksUpdateStatus(id:string){
+    if(!/^app_[a-f0-9]{16}$/.test(id))throw Error('invalid_soundwerks_update');
+    const registry=await this.registry();
+    const site=registry.find(s=>s.application?.id===id&&s.application.appId==='creative-soundwerks');
+    if(!site)throw Error('soundwerks_installation_not_found');
+    const currentSha=site.application!.sourceRevision??soundwerksRelease.commit;
+    const {checkSoundwerksRelease}=await import('./soundwerks-updates.js');
+    const remote=await checkSoundwerksRelease();
+    return {siteId:site.id,domain:site.domain,state:site.state,
+      revision:site.revision??1,currentSha,latestSha:remote.latestSha,
+      updateAvailable:currentSha!==remote.latestSha,approved:remote.approved,
+      checks:remote.checks,workflowUrl:remote.workflowUrl};
+  }
+
+  async updateSoundwerks(value:unknown,deps:{
+    verify?:(sha:string)=>Promise<unknown>;
+  }={}){
+    const input=soundwerksUpdateInput(value);
+    // The same serialization lock used for site operations prevents concurrent
+    // updates, migrations and file mutations on this hosted website.
+    return this.serial(async()=>{
+      const records=await this.registry();
+      const site=records.find(s=>s.id===input.siteId&&s.application?.id===input.id);
+      if(!site||site.state!=='ready'||site.application?.appId!=='creative-soundwerks'||
+       site.application.stage!=='complete'||site.siteType!=='node'||site.runtimeVersion!=='22'||
+       !site.uid||!site.gid)throw Error('soundwerks_update_site_unavailable');
+      if((site.revision??1)!==input.expectedRevision)throw Error('site_revision_conflict');
+      const previousSha=site.application.sourceRevision??soundwerksRelease.commit;
+      if(previousSha===input.targetSha)throw Error('soundwerks_already_current');
+      await (deps.verify??verifySoundwerksTarget)(input.targetSha);
+      const home=join(this.options.base,site.id);
+      const data=join(home,'data');
+      const current=join(home,'public');
+      const now=Date.now();
+      const stage=join(home,'.soundwerks-update-'+input.targetSha.slice(0,12)+'-'+now);
+      const retained=join(home,'.soundwerks-previous-'+previousSha.slice(0,12)+'-'+now);
+      const dumpDir=join(data,'update-backups');
+      const backup=join(dumpDir,'db-'+input.targetSha.slice(0,12)+'-'+now+'.dump');
+      const unit=nodeUnitName(site.id);
+      this.runningSite=site.id;
+      const passwd=(await this.command('getent',['passwd',site.user])).trim().split(':');
+      if(passwd[0]!==site.user||Number(passwd[2])!==site.uid||Number(passwd[3])!==site.gid||
+       passwd[5]!==home||passwd[6]!=='/usr/sbin/nologin')throw Error('site_identity_changed');
+      const stat=await lstat(home);
+      const appStat=await lstat(current);
+      const dataStat=await lstat(data);
+      if(!stat.isDirectory()||stat.isSymbolicLink()||(stat.mode&0o022)||
+       !appStat.isDirectory()||appStat.isSymbolicLink()||
+       !dataStat.isDirectory()||dataStat.isSymbolicLink())throw Error('unsafe_soundwerks_update_path');
+      const cfg=await lstat(join(data,'.env'));
+      if(!cfg.isFile()||cfg.isSymbolicLink()||(cfg.mode&0o077))throw Error('unsafe_soundwerks_config');
+      const unitPath=nodeUnitPath(site.id,this.options.nodeUnitDir);
+      if(await readFile(unitPath,'utf8')!==nodeUnitConfig(site,this.options.base))
+       throw Error('soundwerks_runtime_config_changed');
+      const installWorker=this.options.soundwerksUpdateWorker??runSoundwerksUpdateWorker;
+      // Existing media and .env stay in /data and are NEVER copied into the source tree.
+      await mkdir(dumpDir,{mode:0o700});
+      await (this.options.ownership??chown)(dumpDir,site.uid,site.gid);
+      const dumpInfo=await lstat(dumpDir);
+      if(!dumpInfo.isDirectory()||dumpInfo.isSymbolicLink())throw Error('unsafe_soundwerks_backup_path');
+      await mkdir(stage,{mode:0o750});
+      await (this.options.ownership??chown)(stage,site.uid,site.gid);
+      site.state='updating';await this.save(records);
+      let stopped=false,dumped=false,migrationStarted=false,renamed=false,published=false;
+      try{
+       await installWorker(site,stage,data,backup,input.targetSha,'build');
+       // Stop writes BEFORE pg_dump; this is a maintenance window for staging.
+       await this.command('systemctl',['stop',unit]);stopped=true;
+       await installWorker(site,stage,data,backup,input.targetSha,'backup');dumped=true;
+       migrationStarted=true;
+       await installWorker(site,stage,data,backup,input.targetSha,'migrate');
+       await rename(current,retained);renamed=true;
+       await rename(stage,current);published=true;
+       await this.command('systemctl',['start',unit]);
+       if(this.options.soundwerksUpdateHealth)await this.options.soundwerksUpdateHealth(site);
+       else{
+        const base='http://127.0.0.1:'+nodeSitePort(site.id);
+        let healthy=false;
+        for(let i=0;i<35;i++){
+         try{
+          const [api,page]=await Promise.all([
+            fetch(base+'/api/setup/status',{signal:AbortSignal.timeout(3000)}),
+            fetch(base+'/',{signal:AbortSignal.timeout(3000)})
+          ]);
+          if(api.ok&&page.ok&&(await api.json() as {stage?:string}).stage==='complete'&&
+            (await page.text()).includes('Creative Soundwerks')&&
+            (await this.command('systemctl',['is-active',unit])).trim()==='active'){healthy=true;break;}
+         }catch{}
+         await new Promise(resolve=>setTimeout(resolve,700));
+        }
+        if(!healthy)throw Error('soundwerks_update_health_failed');
+       }
+       site.application.sourceRevision=input.targetSha;
+       site.state='ready';site.revision=(site.revision??1)+1;
+       await this.save(records);
+       return {id:site.application.id,siteId:site.id,domain:site.domain,
+        currentSha:input.targetSha,previousSha,backupAvailable:dumped};
+      }catch(error){
+       let recovered=true;
+       if(stopped){
+        try{await this.command('systemctl',['stop',unit]);}catch{recovered=false;}
+        if(renamed){
+         try{
+          if(published)await rename(current,stage);
+          await rename(retained,current);
+         }catch{recovered=false;}
+        }
+        if(dumped&&migrationStarted){
+         try{await installWorker(site,stage,data,backup,input.targetSha,'restore');}catch{recovered=false;}
+        }
+        try{await this.command('systemctl',['start',unit]);}catch{recovered=false;}
+        if(this.options.soundwerksUpdateHealth){
+         try{await this.options.soundwerksUpdateHealth(site);}catch{recovered=false;}
+        }
+       }
+       site.state=recovered?'ready':'needs_inspection';
+       await this.save(records);
+       if(!recovered)throw Error('soundwerks_update_requires_inspection');
+       if(!stopped)throw Error('soundwerks_update_build_failed');
+       throw Error('soundwerks_update_rolled_back');
+      }
+    },input.siteId);
+  }
+
   create(input: unknown) { return this.serial(()=>this.provision(input)); }
   private async provision(input: unknown,restore?:Site) {
     const {domain,webServer,siteType,runtimeVersion} = siteInput(input);
