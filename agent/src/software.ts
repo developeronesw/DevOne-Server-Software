@@ -110,3 +110,35 @@ export async function softwareInstall(input:unknown,run:Runner=exec):Promise<Run
   throw new SoftwareInstallFailure(reason);
  }finally{installing=false;}
 }
+
+/**
+ * Internal Creative Soundwerks media prerequisite. This deliberately does not
+ * extend the user-facing /api/software/install package allowlist. The host
+ * script accepts a fixed 'ffmpeg' profile and applies the same Ubuntu-source
+ * and APT simulation safeguards used by PostgreSQL/WordPress installers.
+ *
+ * 4 MiB is important: FFmpeg's Ubuntu dependency output may exceed the former
+ * 32 KiB child-process limit, spuriously failing otherwise successful installs.
+ */
+export async function installSoundwerksMedia(run:Runner=exec):Promise<void>{
+ if(installing)throw new SoftwareInstallFailure("install_lock_busy");
+ installing=true;
+ let phase="apt_install";
+ try{
+  await run("/usr/bin/bash",[SCRIPT,"--managed-install","ffmpeg"],{timeout:300000,maxBuffer:4194304});
+  phase="verify_media_binaries";
+  for(const name of ["ffmpeg","ffprobe"] as const){
+   const {stdout}=await run("/usr/bin/"+name,["-version"],{timeout:7000,maxBuffer:65536});
+   if(!stdout.startsWith(name+" version "))throw Error("media_binary_verification_failed");
+  }
+ }catch(error){
+  const cause=error as Error&{code?:string|number;signal?:string;stderr?:string};
+  const reason=phase==="verify_media_binaries"?"package_service_inactive":parseInstallFailure(cause.stderr);
+  console.error("devone_soundwerks_media_prerequisite_failed",{
+   prerequisite:"ffmpeg",phase,reason,
+   exitCode:typeof cause.code==="number"?cause.code:null,
+   timedOut:cause.signal==="SIGTERM"
+  });
+  throw new SoftwareInstallFailure(reason);
+ }finally{installing=false;}
+}
