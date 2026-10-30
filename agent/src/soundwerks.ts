@@ -2,23 +2,41 @@ import {execFile} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import type {Site} from './sites.js';
 import {soundwerksRelease,type SoundwerksInstall} from './soundwerks-release.js';
-import {softwareInstall,softwareStatus} from './software.js';
-const fixedScript='/opt/devone/current/scripts/software-runtime-pilot.sh';
+import {softwareInstall,softwareStatus,installSoundwerksMedia,SoftwareInstallFailure} from './software.js';
 
-export async function prepareSoundwerks(){
- const status=await softwareStatus();
- const pg=status.packages.find(p=>p.package==='postgresql');
- if(!pg?.installed||!pg.serviceActive)await softwareInstall({package:'postgresql',confirmed:true});
- const checkBinary=(name:'ffmpeg'|'ffprobe')=>new Promise<boolean>(resolve=>{
-  execFile('/usr/bin/'+name,['-version'],{timeout:6000,env:{PATH:'/usr/bin:/bin'}},e=>resolve(!e));
- });
- const binaries=async()=> (await Promise.all([checkBinary('ffmpeg'),checkBinary('ffprobe')])).every(Boolean);
- if(!await binaries()){
-  // The reviewed DevOne APT policy script has an explicit ffmpeg allowlist.
-  await new Promise<void>((resolve,reject)=>execFile('/usr/bin/bash',[fixedScript,'--managed-install','ffmpeg'],
-   {timeout:300000,maxBuffer:32768,env:{PATH:'/usr/sbin:/usr/bin:/sbin:/bin'}},e=>e?reject(Error('soundwerks_prerequisites_unavailable')):resolve()));
+type MediaBinary='ffmpeg'|'ffprobe';
+type PrerequisiteDependencies={
+ status?:typeof softwareStatus;
+ postgresInstall?:()=>Promise<unknown>;
+ mediaInstall?:()=>Promise<unknown>;
+ checkBinary?:(name:MediaBinary)=>Promise<boolean>;
+};
+function mediaBinaryReady(name:MediaBinary):Promise<boolean>{
+ return new Promise(resolve=>execFile('/usr/bin/'+name,['-version'],
+  {timeout:7000,maxBuffer:65536,env:{PATH:'/usr/bin:/bin'}},(error,stdout)=>
+    resolve(!error&&stdout.startsWith(name+' version '))));
+}
+function reasonFor(error:unknown):string{
+ if(error instanceof SoftwareInstallFailure)return error.reason;
+ if(error instanceof Error&&error.message==='software_install_busy')return 'install_lock_busy';
+ return 'unclassified';
+}
+
+/** Preparing a new site never creates a site or database before these checks finish. */
+export async function prepareSoundwerks(deps:PrerequisiteDependencies={}):Promise<void>{
+ const status=await (deps.status??softwareStatus)();
+ const postgres=status.packages.find(p=>p.package==='postgresql');
+ if(!postgres?.installed||!postgres.serviceActive){
+  try{await (deps.postgresInstall??(()=>softwareInstall({package:'postgresql',confirmed:true})))();}
+  catch(error){throw Error('soundwerks_postgresql_'+reasonFor(error));}
  }
- if(!await binaries())throw Error('soundwerks_prerequisites_unavailable');
+ const check=deps.checkBinary??mediaBinaryReady;
+ const both=async()=> (await Promise.all([check('ffmpeg'),check('ffprobe')])).every(Boolean);
+ if(!await both()){
+  try{await (deps.mediaInstall??installSoundwerksMedia)();}
+  catch(error){throw Error('soundwerks_ffmpeg_'+reasonFor(error));}
+ }
+ if(!await both())throw Error('soundwerks_ffmpeg_package_service_inactive');
 }
 export function runSoundwerksWorker(site:Site,stage:string,data:string,input:SoundwerksInstall,setupToken:string,port:number){
  return new Promise<void>((resolve,reject)=>{
