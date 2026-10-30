@@ -133,7 +133,7 @@ export function registerSoundwerks(app:FastifyInstance,deps:Deps){
    const reservation=db.prepare('SELECT metadata FROM soundwerks_requests WHERE id=?').get(req.params.id) as {metadata:string}|undefined;
    if(!reservation)throw Error();
    deps.audit(user.id,'soundwerks.credentials_revealed',{id:req.params.id,siteId:site.id});
-   return {username:JSON.parse(reservation.metadata).adminUsername,password:adminPassword,loginUrl:'https://'+site.domain+'/login'};
+   return {username:JSON.parse(reservation.metadata).email,password:adminPassword,loginUrl:'https://'+site.domain+'/login'};
   }catch{return reply.code(503).send({error:'soundwerks_credentials_unavailable'});}
  });
 }
