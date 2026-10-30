@@ -37,6 +37,12 @@ Phase 2 port; the remaining roadmap is not claimed complete.
 
 The current developer preview includes the foundation, managed hosting and initial software/AI operations. The first stable release still requires the full roadmap and release acceptance. See [current progress and stable blockers](docs/STABLE-1.0-STATUS.md). Completed changes ship through `main` and the standard installer/updater.
 
+## Managed Creative Soundwerks 2 installer
+
+DevOne's **Software Center → Creative Soundwerks 2 → Install** now includes an Owner-approved Node.js streaming application workflow (developer preview). Choose a new domain or an empty Node.js 22 website, enter a Creative Soundwerks administrator name/email/password, and approve installation with the panel Owner password and MFA (if enabled). DevOne provisions PostgreSQL and FFmpeg/FFprobe as needed, creates isolated site files and a site-linked database, builds a reviewed/pinned Creative Soundwerks revision under the dedicated website Linux identity, starts the Node.js service and verifies the initial admin and application health. Enable HTTPS from **Websites & Files** before logging into the streaming platform or revealing the saved login.
+
+This is **source-delivered through main** and does not automatically update an existing DevOne VPS. Update the panel to a reviewed commit through its in-place updater; **do not rerun the fresh server installer on an existing panel**. Failed installations retain staging and SQL for inspection rather than silently deleting data. See [managed Creative Soundwerks installation](docs/CREATIVE-SOUNDWERKS-INSTALL.md) for prerequisites, security boundaries, validation limits, and staging guidance.
+
 ## Development
 
 Requirements:
