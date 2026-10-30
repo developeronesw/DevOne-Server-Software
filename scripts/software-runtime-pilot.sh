@@ -5,12 +5,12 @@
 set -Eeuo pipefail
 umask 077
 fail() { local code="$1"; shift; printf >&2 "DEVONE_INSTALL_ERROR:%s\n" "$code"; printf >&2 "%s\n" "$*"; exit 1; }
-usage() { echo "Usage: $0 [--check|--install|--managed-install] [php8.3-fpm|redis-server|docker.io|mariadb-server|postgresql]" >&2; exit 2; }
+usage() { echo "Usage: $0 [--check|--install|--managed-install] [php8.3-fpm|redis-server|docker.io|mariadb-server|postgresql|ffmpeg]" >&2; exit 2; }
 [[ $# -le 2 ]] || usage
 mode="${1:---check}"
 package="${2:-php8.3-fpm}"
 [[ "$mode" == "--check" || "$mode" == "--install" || "$mode" == "--managed-install" ]] || usage
-case "$package" in php8.3-fpm|redis-server|docker.io|mariadb-server|postgresql) ;; *) usage ;; esac
+case "$package" in php8.3-fpm|redis-server|docker.io|mariadb-server|postgresql|ffmpeg) ;; *) usage ;; esac
 [[ "$EUID" -eq 0 ]] || fail "agent_permissions" "Installation requires the privileged DevOne Agent."
 . /etc/os-release
 [[ "${ID:-}" == "ubuntu" && "${VERSION_ID:-}" == "24.04" ]] || fail "unsupported_ubuntu" "Managed packages require Ubuntu 24.04."
@@ -111,7 +111,11 @@ done
 service="$package"
 [[ "$package" != "docker.io" ]] || service=docker
 [[ "$package" != "mariadb-server" ]] || service=mariadb
-systemctl is-active --quiet "$service" || fail "package_service_inactive" "Installed package service is not active."
+if [[ "$package" == "ffmpeg" ]]; then
+  [[ -x /usr/bin/ffmpeg && -x /usr/bin/ffprobe ]] || fail "package_service_inactive" "FFmpeg and FFprobe binaries are unavailable."
+else
+  systemctl is-active --quiet "$service" || fail "package_service_inactive" "Installed package service is not active."
+fi
 if [[ "$package" == "redis-server" ]]; then
   redis_listeners="$(ss -ltnH)" || fail "redis_socket_check_failed" "Unable to validate Redis listening sockets."
   # Here-string parsing avoids another potential SIGPIPE from grep -q + pipefail.
@@ -127,4 +131,4 @@ if [[ "$package" == "mariadb-server" || "$package" == "postgresql" ]]; then
     fail "database_exposed" "Database is listening outside loopback. Review its network configuration before use."
   fi
 fi
-echo "Managed package installed and service active. Site integration and package-level rollback are separate capabilities."
+echo "Managed package installed and verified. Site integration and package-level rollback are separate capabilities."
