@@ -1,6 +1,5 @@
 import {dropSiteIdentity} from './site-identity.js';
 import {soundwerksRelease} from './soundwerks-release.js';
-import {createHash,randomBytes} from 'node:crypto';
 import {execFile} from 'node:child_process';
 import {mkdir,writeFile,lstat,rm} from 'node:fs/promises';
 import {join} from 'node:path';
