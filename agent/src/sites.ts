@@ -341,6 +341,126 @@ export class SiteManager {
     if(siteId)this.fileQueues.set(siteId,operation);
     return operation.finally(()=>{if(siteId&&this.fileQueues.get(siteId)===operation)this.fileQueues.delete(siteId);});
   }
+  installSoundwerks(value:unknown,deps:{
+    prepare:()=>Promise<void>;
+    database:(site:Site,input:SoundwerksInstall)=>Promise<unknown>;
+  }){
+    const input=soundwerksInput(value),siteId=input.siteId;
+    const previous=siteId?this.fileQueues.get(siteId):undefined;
+    const operation=(previous??Promise.resolve()).catch(()=>{}).then(()=>this.serial(async()=>{
+      const all=await this.registry();
+      if(all.some(s=>s.application?.id===input.id))throw Error('soundwerks_already_recorded');
+      let site=siteId?all.find(s=>s.id===siteId):undefined;
+      if(siteId){
+        if(!site||site.state!=='ready'||site.siteType!=='node'||site.runtimeVersion!=='22'||
+          site.webServer!=='nginx'||site.application)throw Error('app_target_incompatible');
+        if((site.revision??1)!==input.expectedRevision)throw Error('site_revision_conflict');
+        const entries=await this.invokeWorker(site,{operation:'list',path:''});
+        if(!Array.isArray(entries)||entries.length)throw Error('app_target_not_empty');
+      }else await this.preflight({domain:input.domain,webServer:'nginx',siteType:'node',runtimeVersion:'22'});
+      await deps.prepare();
+      if(!site)site=await this.provision({domain:input.domain,webServer:'nginx',siteType:'node',runtimeVersion:'22'});
+      if(!site||!site.uid||!site.gid)throw Error('app_target_incompatible');
+      this.runningSite=site.id;
+      const passwd=(await this.command('getent',['passwd',site.user])).trim().split(':');
+      if(passwd[0]!==site.user||Number(passwd[2])!==site.uid||Number(passwd[3])!==site.gid||
+        passwd[5]!==join(this.options.base,site.id)||passwd[6]!=='/usr/sbin/nologin')throw Error('site_identity_changed');
+      if(await this.command('systemctl',['is-active',nodeUnitName(site.id)]).then(v=>v.trim()==='active').catch(()=>false))
+        throw Error('soundwerks_runtime_must_be_stopped');
+      const home=join(this.options.base,site.id),data=join(home,'data');
+      const stage=join(home,'.soundwerks-'+input.id),publicRoot=join(home,'public'),backup=join(home,'.soundwerks-empty-'+input.id);
+      if(await lstat(data).then(()=>true).catch(e=>{if((e as NodeJS.ErrnoException).code==='ENOENT')return false;throw e;}))
+        throw Error('soundwerks_private_data_exists');
+      const unit=nodeUnitPath(site.id,this.options.nodeUnitDir);
+      const file=await open(unit,constants.O_RDONLY|constants.O_NOFOLLOW);
+      let previousUnit:string;
+      try{
+        const info=await file.stat();
+        if(!info.isFile()||info.nlink!==1||info.size>65536||
+          (this.options.requireRoot!==false&&info.uid!==0))throw Error('unsafe_site_config');
+        previousUnit=await file.readFile('utf8');
+        if(previousUnit!==nodeUnitConfig(site,this.options.base))throw Error('soundwerks_runtime_config_changed');
+      }finally{await file.close();}
+      const records=await this.registry(),record=records.find(r=>r.id===site!.id)!;
+      record.application={id:input.id,appId:'creative-soundwerks',version:soundwerksRelease.version,
+        databaseId:input.databaseId,stage:'database'};
+      record.state='updating';await this.save(records);
+      const token=randomBytes(32).toString('hex');
+      let moved=false,published=false,unitChanged=false;
+      try{
+        const homeInfo=await lstat(home);
+        if(!homeInfo.isDirectory()||homeInfo.isSymbolicLink()||(homeInfo.mode&0o022)||
+          (this.options.requireRoot!==false&&homeInfo.uid!==0))throw Error('unsafe_site_home');
+        await deps.database(site,input);
+        await mkdir(data,{mode:0o700});
+        await (this.options.ownership??chown)(data,site.uid,site.gid);
+        await mkdir(stage,{mode:0o750});
+        await (this.options.ownership??chown)(stage,site.uid,site.gid);
+        record.application.stage='installing';await this.save(records);
+        await (this.options.soundwerksWorker??runSoundwerksWorker)(site,stage,data,input,token,nodeSitePort(site.id));
+        record.application.stage='publishing';await this.save(records);
+        const rootInfo=await lstat(publicRoot);
+        if(!rootInfo.isDirectory()||rootInfo.isSymbolicLink()||(await readdir(publicRoot)).length)
+          throw Error('app_target_not_empty');
+        await rename(publicRoot,backup);moved=true;
+        await rename(stage,publicRoot);published=true;
+        if(await readFile(unit,'utf8')!==previousUnit)throw Error('soundwerks_runtime_config_changed');
+        await this.writeConfig(unit,nodeUnitConfig({...site,application:record.application},this.options.base));
+        unitChanged=true;await this.command('systemctl',['daemon-reload']);
+        record.application.stage='verifying';await this.save(records);
+        await this.command('systemctl',['enable','--now',nodeUnitName(site.id)]);
+        if(this.options.soundwerksBootstrap)await this.options.soundwerksBootstrap(site,input,token);
+        else{
+          const local='http://127.0.0.1:'+nodeSitePort(site.id);
+          let healthy=false;
+          for(let i=0;i<40;i++){
+            try{
+              const response=await fetch(local+'/api/health',{signal:AbortSignal.timeout(3000)});
+              if(response.ok&&(await response.json() as {ok?:boolean}).ok===true){healthy=true;break;}
+            }catch{}
+            await new Promise(resolve=>setTimeout(resolve,500));
+          }
+          if(!healthy)throw Error('soundwerks_health_failed');
+          const response=await fetch(local+'/api/setup/initialize',{
+            method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({displayName:input.adminUsername,email:input.email,
+              password:input.adminPassword,setupToken:token}),
+            signal:AbortSignal.timeout(10000)
+          });
+          if(!response.ok)throw Error('soundwerks_admin_setup_failed');
+        }
+        if(this.options.soundwerksHealth)await this.options.soundwerksHealth(site);
+        else{
+          const local='http://127.0.0.1:'+nodeSitePort(site.id);
+          const response=await fetch(local+'/api/setup/status',{signal:AbortSignal.timeout(5000)});
+          if(!response.ok)throw Error('soundwerks_health_failed');
+          const status=await response.json() as {required?:boolean;stage?:string};
+          if(status.required!==false||status.stage!=='complete')throw Error('soundwerks_health_failed');
+          const page=await fetch(local+'/',{signal:AbortSignal.timeout(5000)});
+          if(!page.ok||!(await page.text()).includes('Creative Soundwerks'))throw Error('soundwerks_health_failed');
+          if((await this.command('systemctl',['is-active',nodeUnitName(site.id)])).trim()!=='active')
+            throw Error('soundwerks_health_failed');
+        }
+        record.application.stage='complete';record.state='ready';
+        record.revision=(record.revision??1)+1;await this.save(records);
+        await rmdir(backup).catch(()=>{});
+        return {id:input.id,siteId:site.id,domain:site.domain,appId:'creative-soundwerks',
+          version:soundwerksRelease.version,preview:true};
+      }catch{
+        if(unitChanged){
+          await this.command('systemctl',['disable','--now',nodeUnitName(site.id)]).catch(()=>{});
+          try{await this.writeConfig(unit,previousUnit);await this.command('systemctl',['daemon-reload']);}catch{}
+        }
+        if(moved){try{if(published)await rename(publicRoot,stage);await rename(backup,publicRoot);}catch{}}
+        record.state='needs_inspection';await this.save(records);
+        throw Error('soundwerks_install_requires_inspection');
+      }
+    },siteId));
+    if(siteId)this.fileQueues.set(siteId,operation);
+    return operation.finally(()=>{
+      if(siteId&&this.fileQueues.get(siteId)===operation)this.fileQueues.delete(siteId);
+    });
+  }
   create(input: unknown) { return this.serial(()=>this.provision(input)); }
   private async provision(input: unknown,restore?:Site) {
     const {domain,webServer,siteType,runtimeVersion} = siteInput(input);
