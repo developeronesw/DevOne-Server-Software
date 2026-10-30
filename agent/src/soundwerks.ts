@@ -52,3 +52,24 @@ export function runSoundwerksWorker(site:Site,stage:string,data:string,input:Sou
    domain:site.domain,setupToken,sitePort:port}));
  });
 }
+
+export type SoundwerksUpdateMode='build'|'backup'|'migrate'|'restore';
+export function runSoundwerksUpdateWorker(site:Site,stage:string,data:string,backup:string,
+ target:string,mode:SoundwerksUpdateMode):Promise<void>{
+ return new Promise((resolve,reject)=>{
+  const child=execFile(process.execPath,[fileURLToPath(new URL('./soundwerks-update-worker.js',import.meta.url))],
+   {timeout:mode==='build'?1150000:240000,maxBuffer:32768,
+    env:{PATH:'/usr/bin:/bin',
+     DEVONE_SITE_UID:String(site.uid),DEVONE_SITE_GID:String(site.gid),
+     DEVONE_CSW_MODE:mode,DEVONE_CSW_STAGE:stage,DEVONE_CSW_DATA:data,
+     DEVONE_CSW_BACKUP:backup,DEVONE_CSW_TARGET:target}},(error,stdout)=>{
+    try{
+     const result=JSON.parse(stdout);
+     if(error||result.ok!==true||result.mode!==mode||result.revision!==target)throw Error();
+     resolve();
+    }catch{reject(Error('soundwerks_update_'+mode+'_failed'));}
+   });
+  child.stdin?.on('error',()=>{});
+  child.stdin?.end();
+ });
+}
